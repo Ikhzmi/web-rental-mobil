@@ -1,0 +1,173 @@
+// KerenTal Kita — Prisma schema
+// Mengikuti §9 PRD v1.1.
+//
+// CATATAN PENTING (lihat §8 PRD): `profiles.id` secara logis sama dengan
+// `auth.users.id` milik Supabase Auth, tapi TIDAK dideklarasikan sebagai
+// hard foreign key di sini. Prisma tidak mendukung FK constraint lintas
+// schema Postgres (public -> auth) — https://github.com/prisma/prisma/issues/16585.
+// Konsistensi id dijamin oleh trigger `on_auth_user_created`
+// (lihat prisma/sql/001_on_auth_user_created_trigger.sql), bukan oleh
+// constraint database. Perlakukan sebagai soft reference.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+enum Role {
+  customer
+  admin
+}
+
+enum KategoriMobil {
+  city_car
+  suv
+  mpv
+  mewah
+}
+
+enum Transmisi {
+  manual
+  matic
+}
+
+enum TipeSewa {
+  lepas_kunci
+  dengan_sopir
+  keduanya
+}
+
+enum StatusMobil {
+  tersedia
+  maintenance
+  nonaktif
+}
+
+enum StatusBooking {
+  pending
+  dikonfirmasi
+  berjalan
+  selesai
+  dibatalkan
+}
+
+enum JenisAddon {
+  sopir
+  asuransi
+  antar_jemput
+}
+
+/// Memperluas auth.users bawaan Supabase — 1:1, id sama persis dengan
+/// auth.users.id (soft reference, lihat catatan di atas berkas ini).
+model Profile {
+  id              String   @id @db.Uuid
+  nama            String
+  email           String   @unique
+  noHp            String   @map("no_hp")
+  role            Role     @default(customer)
+  noKtp           String?  @map("no_ktp")
+  noSim           String?  @map("no_sim")
+  dokumenKtpUrl   String?  @map("dokumen_ktp_url")
+  dokumenSimUrl   String?  @map("dokumen_sim_url")
+  dokumenVerified Boolean  @default(false) @map("dokumen_verified")
+  /// Ditambahkan setelah F12 diimplementasikan — sebelumnya endpoint
+  /// nonaktifkan-akun tidak punya kolom untuk disimpan (lihat README backend).
+  aktif           Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  bookings          Booking[]
+  statusLogsDiubah  BookingStatusLog[] @relation("StatusLogDiubahOleh")
+
+  @@map("profiles")
+}
+
+model Car {
+  id                 String        @id @default(uuid()) @db.Uuid
+  nama               String
+  kategori           KategoriMobil
+  transmisi          Transmisi
+  tipeSewa           TipeSewa      @map("tipe_sewa")
+  hargaSopirPerHari  Decimal?      @map("harga_sopir_per_hari") @db.Decimal(12, 2)
+  kapasitasKursi     Int           @map("kapasitas_kursi")
+  hargaPerHari       Decimal       @map("harga_per_hari") @db.Decimal(12, 2)
+  status             StatusMobil   @default(tersedia)
+  deskripsi          String?
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  images   CarImage[]
+  bookings Booking[]
+
+  @@map("cars")
+}
+
+model CarImage {
+  id     String @id @default(uuid()) @db.Uuid
+  carId  String @map("car_id") @db.Uuid
+  url    String
+  urutan Int    @default(0)
+
+  car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  @@map("car_images")
+  @@index([carId])
+}
+
+model Booking {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  carId          String        @map("car_id") @db.Uuid
+  tanggalMulai   DateTime      @map("tanggal_mulai") @db.Date
+  tanggalSelesai DateTime      @map("tanggal_selesai") @db.Date
+  lokasiAmbil    String        @map("lokasi_ambil")
+  /// Ditambahkan di v1.1 PRD — sebelumnya hilang padahal F6 sudah
+  /// menjanjikan pilihan lokasi kembali terpisah dari lokasi ambil.
+  lokasiKembali  String        @map("lokasi_kembali")
+  hargaDasar     Decimal       @map("harga_dasar") @db.Decimal(12, 2)
+  totalAddon     Decimal       @default(0) @map("total_addon") @db.Decimal(12, 2)
+  totalHarga     Decimal       @map("total_harga") @db.Decimal(12, 2)
+  status         StatusBooking @default(pending)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  /// Ditambahkan di v1.1 PRD — dipercepat query tanpa perlu join ke
+  /// booking_status_log untuk kebutuhan sederhana (sort by last update).
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  profile    Profile            @relation(fields: [userId], references: [id])
+  car        Car                @relation(fields: [carId], references: [id])
+  addons     BookingAddon[]
+  statusLogs BookingStatusLog[]
+
+  @@map("bookings")
+  @@index([carId, tanggalMulai, tanggalSelesai])
+  @@index([userId])
+}
+
+model BookingAddon {
+  id        String     @id @default(uuid()) @db.Uuid
+  bookingId String     @map("booking_id") @db.Uuid
+  jenis     JenisAddon
+  harga     Decimal    @db.Decimal(12, 2)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_addons")
+  @@index([bookingId])
+}
+
+/// Audit trail perubahan status booking.
+model BookingStatusLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  bookingId   String   @map("booking_id") @db.Uuid
+  statusLama  String   @map("status_lama")
+  statusBaru  String   @map("status_baru")
+  diubahOleh  String   @map("diubah_oleh") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  admin   Profile @relation("StatusLogDiubahOleh", fields: [diubahOleh], references: [id])
+
+  @@map("booking_status_log")
+  @@index([bookingId])
+}
