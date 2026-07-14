@@ -1,4 +1,7 @@
 node_modules/
 .env
+ERD.md
+FLOWCHART.md
+USECASE-DIAGRAM.md
 .env.*
 !.env.example

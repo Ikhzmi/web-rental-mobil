@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
 import ComingSoonPage from './components/ComingSoonPage';
+import RequireAdmin from './components/RequireAdmin';
 
 import HomePage from './pages/HomePage';
 import ArmadaPage from './pages/ArmadaPage';
@@ -14,6 +15,7 @@ import KontakPage from './pages/KontakPage';
 import FaqPage from './pages/FaqPage';
 import LoginPage from './pages/LoginPage';
 import DaftarPage from './pages/DaftarPage';
+
 
 const BookingPage = lazy(() => import('./pages/BookingPage'));
 const BookingConfirmationPage = lazy(() => import('./pages/BookingConfirmationPage'));
@@ -89,66 +91,68 @@ function App() {
             </Route>
 
             {/* Admin — F9-F12, dijadwalkan Minggu 5 (§13 PRD) */}
-            <Route
-              path="admin"
-              element={
-                <ComingSoonPage
-                  title="Dashboard Admin"
-                  description="Ringkasan pendapatan, pesanan aktif, dan okupansi armada."
-                  week={5}
-                />
-              }
-            />
-            <Route
-              path="admin/armada"
-              element={
-                <ComingSoonPage
-                  title="Kelola Armada"
-                  description="CRUD mobil, upload foto, dan status armada."
-                  week={5}
-                />
-              }
-            />
-            <Route
-              path="admin/armada/:id/edit"
-              element={
-                <ComingSoonPage
-                  title="Edit Mobil"
-                  description="Form edit detail satu mobil."
-                  week={5}
-                />
-              }
-            />
-            <Route
-              path="admin/pesanan"
-              element={
-                <ComingSoonPage
-                  title="Kelola Pesanan"
-                  description="List pesanan, filter status, dan verifikasi pembayaran."
-                  week={5}
-                />
-              }
-            />
-            <Route
-              path="admin/pesanan/:id"
-              element={
-                <ComingSoonPage
-                  title="Detail Pesanan (Admin)"
-                  description="Ubah status pesanan & lihat riwayat perubahan."
-                  week={5}
-                />
-              }
-            />
-            <Route
-              path="admin/pengguna"
-              element={
-                <ComingSoonPage
-                  title="Kelola Pengguna"
-                  description="List customer & admin, nonaktifkan akun bermasalah."
-                  week={5}
-                />
-              }
-            />
+            <Route element={<RequireAdmin />}>
+              <Route
+                path="admin"
+                element={
+                  <ComingSoonPage
+                    title="Dashboard Admin"
+                    description="Ringkasan pendapatan, pesanan aktif, dan okupansi armada."
+                    week={5}
+                  />
+                }
+              />
+              <Route
+                path="admin/armada"
+                element={
+                  <ComingSoonPage
+                    title="Kelola Armada"
+                    description="CRUD mobil, upload foto, dan status armada."
+                    week={5}
+                  />
+                }
+              />
+              <Route
+                path="admin/armada/:id/edit"
+                element={
+                  <ComingSoonPage
+                    title="Edit Mobil"
+                    description="Form edit detail satu mobil."
+                    week={5}
+                  />
+                }
+              />
+              <Route
+                path="admin/pesanan"
+                element={
+                  <ComingSoonPage
+                    title="Kelola Pesanan"
+                    description="List pesanan, filter status, dan verifikasi pembayaran."
+                    week={5}
+                  />
+                }
+              />
+              <Route
+                path="admin/pesanan/:id"
+                element={
+                  <ComingSoonPage
+                    title="Detail Pesanan (Admin)"
+                    description="Ubah status pesanan & lihat riwayat perubahan."
+                    week={5}
+                  />
+                }
+              />
+              <Route
+                path="admin/pengguna"
+                element={
+                  <ComingSoonPage
+                    title="Kelola Pengguna"
+                    description="List customer & admin, nonaktifkan akun bermasalah."
+                    week={5}
+                  />
+                }
+              />
+            </Route>
 
             {/* 404 */}
             <Route
