@@ -1,4 +1,4 @@
-import carSolidImg from '../assets/car-solid.webp';
+import armadaHondaMockImg from '../assets/armada-honda-mock.webp';
 
 export interface FleetCar {
   id: string;
@@ -23,7 +23,7 @@ export const FLEET_CARS: FleetCar[] = [
     model: 'VR-4 Concept',
     tagline: 'Sport / Turbo',
     pricePerDay: '$129',
-    image: carSolidImg,
+    image: armadaHondaMockImg,
   },
   {
     id: 'runner',
@@ -31,7 +31,7 @@ export const FLEET_CARS: FleetCar[] = [
     model: 'City Runner',
     tagline: 'Economy / Hatchback',
     pricePerDay: '$45',
-    image: carSolidImg,
+    image: armadaHondaMockImg,
   },
   {
     id: 'tourer',
@@ -39,7 +39,7 @@ export const FLEET_CARS: FleetCar[] = [
     model: 'Grand Tourer',
     tagline: 'Luxury / Sedan',
     pricePerDay: '$189',
-    image: carSolidImg,
+    image: armadaHondaMockImg,
   },
   {
     id: 'nomad',
@@ -47,7 +47,7 @@ export const FLEET_CARS: FleetCar[] = [
     model: 'Nomad SUV',
     tagline: 'Family / SUV',
     pricePerDay: '$95',
-    image: carSolidImg,
+    image: armadaHondaMockImg,
   },
   {
     id: 'volt',
@@ -55,7 +55,7 @@ export const FLEET_CARS: FleetCar[] = [
     model: 'Volt EV',
     tagline: 'Electric / Sedan',
     pricePerDay: '$110',
-    image: carSolidImg,
+    image: armadaHondaMockImg,
   },
   {
     id: 'apex',
@@ -63,6 +63,6 @@ export const FLEET_CARS: FleetCar[] = [
     model: 'Apex Coupe',
     tagline: 'Sport / Coupe',
     pricePerDay: '$155',
-    image: carSolidImg,
+    image: armadaHondaMockImg,
   },
 ];
