@@ -66,7 +66,7 @@ adminCarsRouter.post('/', async (req, res) => {
     return;
   }
 
-  const car = await prisma.car.create({ data: parsed.data });
+  const car = await prisma.car.create({ data: parsed.data, include: { images: true } });
   res.status(201).json({ data: car });
 });
 

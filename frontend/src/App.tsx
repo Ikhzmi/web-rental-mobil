@@ -18,7 +18,16 @@ import DaftarPage from './pages/DaftarPage';
 
 
 const BookingPage = lazy(() => import('./pages/BookingPage'));
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
+const AdminArmadaPage = lazy(() => import('./pages/admin/AdminArmadaPage'));
+const AdminPesananPage = lazy(() => import('./pages/admin/AdminPesananPage'));
+const AdminPesananDetailPage = lazy(() => import('./pages/admin/AdminPesananDetailPage'));
+const AdminPenggunaPage = lazy(() => import('./pages/admin/AdminPenggunaPage'));
 const BookingConfirmationPage = lazy(() => import('./pages/BookingConfirmationPage'));
+const AkunPesananPage = lazy(() => import('./pages/AkunPesananPage'));
+const AkunPesananDetailPage = lazy(() => import('./pages/AkunPesananDetailPage'));
+const AkunProfilPage = lazy(() => import('./pages/AkunProfilPage'));
 
 function RouteFallback() {
   return (
@@ -58,100 +67,30 @@ function App() {
             <Route element={<RequireAuth />}>
               <Route path="booking/:carId" element={<BookingPage />} />
               <Route path="booking/:id/konfirmasi" element={<BookingConfirmationPage />} />
-              <Route
-                path="akun/pesanan"
-                element={
-                  <ComingSoonPage
-                    title="Riwayat Pesanan"
-                    description="Daftar pesanan kamu akan tampil di sini."
-                    week={6}
-                  />
-                }
-              />
-              <Route
-                path="akun/pesanan/:id"
-                element={
-                  <ComingSoonPage
-                    title="Detail Pesanan"
-                    description="Rincian satu pesanan akan tampil di sini."
-                    week={6}
-                  />
-                }
-              />
-              <Route
-                path="akun/profil"
-                element={
-                  <ComingSoonPage
-                    title="Profil Saya"
-                    description="Edit data diri & unggah dokumen KTP/SIM akan ada di sini."
-                    week={6}
-                  />
-                }
-              />
+              <Route path="akun/pesanan" element={<AkunPesananPage />} />
+              <Route path="akun/pesanan/:id" element={<AkunPesananDetailPage />} />
+              <Route path="akun/profil" element={<AkunProfilPage />} />
             </Route>
 
-            {/* Admin — F9-F12, dijadwalkan Minggu 5 (§13 PRD) */}
+            {/* Admin */}
             <Route element={<RequireAdmin />}>
-              <Route
-                path="admin"
-                element={
-                  <ComingSoonPage
-                    title="Dashboard Admin"
-                    description="Ringkasan pendapatan, pesanan aktif, dan okupansi armada."
-                    week={5}
-                  />
-                }
-              />
-              <Route
-                path="admin/armada"
-                element={
-                  <ComingSoonPage
-                    title="Kelola Armada"
-                    description="CRUD mobil, upload foto, dan status armada."
-                    week={5}
-                  />
-                }
-              />
-              <Route
-                path="admin/armada/:id/edit"
-                element={
-                  <ComingSoonPage
-                    title="Edit Mobil"
-                    description="Form edit detail satu mobil."
-                    week={5}
-                  />
-                }
-              />
-              <Route
-                path="admin/pesanan"
-                element={
-                  <ComingSoonPage
-                    title="Kelola Pesanan"
-                    description="List pesanan, filter status, dan verifikasi pembayaran."
-                    week={5}
-                  />
-                }
-              />
-              <Route
-                path="admin/pesanan/:id"
-                element={
-                  <ComingSoonPage
-                    title="Detail Pesanan (Admin)"
-                    description="Ubah status pesanan & lihat riwayat perubahan."
-                    week={5}
-                  />
-                }
-              />
-              <Route
-                path="admin/pengguna"
-                element={
-                  <ComingSoonPage
-                    title="Kelola Pengguna"
-                    description="List customer & admin, nonaktifkan akun bermasalah."
-                    week={5}
-                  />
-                }
-              />
+              <Route element={<AdminLayout />}>
+                <Route path="admin" element={<AdminDashboardPage />} />
+                <Route path="admin/armada" element={<AdminArmadaPage />} />
+                <Route
+                  path="admin/armada/:id/edit"
+                  element={
+                    <ComingSoonPage
+                      title="Edit Mobil (form penuh)"
+                      description="Form edit mobil saat ini ada sebagai modal di halaman Kelola Armada. Halaman terpisah ini (dengan upload foto) belum dibangun."
+                      week={5}
+                    />
+                  }
+                />
+                <Route path="admin/pesanan" element={<AdminPesananPage />} />
+                <Route path="admin/pesanan/:id" element={<AdminPesananDetailPage />} />
+                <Route path="admin/pengguna" element={<AdminPenggunaPage />} />
+              </Route>
             </Route>
 
             {/* 404 */}

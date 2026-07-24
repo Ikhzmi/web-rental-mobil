@@ -55,6 +55,13 @@ export interface BookingAddonRecord {
   harga: string;
 }
 
+export interface BookingStatusLogEntry {
+  id: string;
+  statusLama: string;
+  statusBaru: string;
+  diubahOleh: string;
+  createdAt: string;
+}
 export interface Booking {
   id: string;
   userId: string;
@@ -70,6 +77,12 @@ export interface Booking {
   createdAt: string;
   car?: Car;
   addons?: BookingAddonRecord[];
+  // GET /api/bookings/:id (dipakai admin juga) sudah mengirim ini dari
+  // dulu di backend -- cuma belum pernah diakui di tipe frontend.
+  statusLogs?: BookingStatusLogEntry[];
+  // Ditambahkan ke include backend supaya admin bisa lihat data penyewa
+  // dari endpoint yang sama (lihat AdminPesananDetailPage.tsx).
+  profile?: { nama: string; email: string; noHp: string };
 }
 
 export interface CreateBookingInput {
@@ -79,6 +92,43 @@ export interface CreateBookingInput {
   lokasiAmbil: string;
   lokasiKembali: string;
   addons: { jenis: JenisAddon; harga?: number }[];
+}
+
+export interface DashboardSummary {
+  totalPendapatanBulanIni: number;
+  jumlahPesananAktif: number;
+  tingkatOkupansiArmada: number;
+  mobilSedangBerjalan: number;
+  totalMobilTersedia: number;
+  mobilTerlaris: { id: string; nama: string; jumlahBooking: number } | null;
+}
+
+export interface AdminUser {
+  id: string;
+  nama: string;
+  email: string;
+  noHp: string;
+  role: 'customer' | 'admin';
+  aktif: boolean;
+  dokumenVerified: boolean;
+  createdAt: string;
+}
+
+export interface AdminBooking extends Booking {
+  car: Car;
+  profile: { nama: string; email: string; noHp: string };
+}
+
+export interface CarInput {
+  nama: string;
+  kategori: Kategori;
+  transmisi: Transmisi;
+  tipeSewa: TipeSewa;
+  hargaSopirPerHari?: number | null;
+  kapasitasKursi: number;
+  hargaPerHari: number;
+  status: StatusMobil;
+  deskripsi?: string;
 }
 
 export interface ListCarsParams {
@@ -152,6 +202,66 @@ export const api = {
     }),
 
   getBooking: (id: string) => apiFetch<Booking>(`/api/bookings/${id}`),
+
+  // ── Admin: Dashboard (F9) ──
+  getDashboardSummary: () => apiFetch<DashboardSummary>('/api/admin/dashboard/summary'),
+
+  // ── Admin: Armada (F10) ──
+  listAdminCars: () => apiFetch<Car[]>('/api/admin/cars'),
+  getAdminCar: (id: string) => apiFetch<Car>(`/api/admin/cars/${id}`),
+  createAdminCar: (input: CarInput) =>
+    apiFetch<Car>('/api/admin/cars', { method: 'POST', body: JSON.stringify(input) }),
+  updateAdminCar: (id: string, input: Partial<CarInput>) =>
+    apiFetch<Car>(`/api/admin/cars/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteAdminCar: (id: string) => apiFetch<Car>(`/api/admin/cars/${id}`, { method: 'DELETE' }),
+  addCarImage: (carId: string, input: { url: string; urutan?: number }) =>
+    apiFetch<CarImage>(`/api/admin/cars/${carId}/images`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  deleteCarImage: (carId: string, imageId: string) =>
+    apiFetch<CarImage>(`/api/admin/cars/${carId}/images/${imageId}`, { method: 'DELETE' }),
+
+  // ── Admin: Pesanan (F11) ──
+  listAdminBookings: (params: { status?: StatusBooking } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    const query = qs.toString();
+    return apiFetch<AdminBooking[]>(`/api/admin/bookings${query ? `?${query}` : ''}`);
+  },
+  updateBookingStatus: (id: string, status: StatusBooking) =>
+    apiFetch<Booking>(`/api/admin/bookings/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  // ── Admin: Pengguna (F12) ──
+  listAdminUsers: () => apiFetch<AdminUser[]>('/api/admin/users'),
+  updateUserStatus: (id: string, aktif: boolean) =>
+    apiFetch<AdminUser>(`/api/admin/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ aktif }),
+    }),
+
+    // ── Admin: Verifikasi dokumen (bagian dari F11) ──
+  getDokumenSignedUrl: (userId: string, tipe: 'ktp' | 'sim') =>
+    apiFetch<{ signedUrl: string; expiresInSeconds: number }>(
+      `/api/admin/dokumen/${userId}/signed-url?tipe=${tipe}`
+    ),
+
+    // ── Customer: Riwayat Pesanan (F7) ──
+  listMyBookings: () => apiFetch<Booking[]>('/api/bookings/mine'),
+  cancelBooking: (id: string) =>
+    apiFetch<Booking>(`/api/bookings/${id}/cancel`, { method: 'PATCH' }),
+
+  // ── Customer: Profil (F8) ──
+  updateMyProfile: (input: Partial<Pick<Profile, 'nama' | 'noHp' | 'noKtp' | 'noSim'>>) =>
+    apiFetch<Profile>('/api/profiles/me', { method: 'PATCH', body: JSON.stringify(input) }),
+  saveDokumenReference: (tipe: 'ktp' | 'sim', storagePath: string) =>
+    apiFetch<Profile>('/api/profiles/me/dokumen', {
+      method: 'POST',
+      body: JSON.stringify({ tipe, storagePath }),
+    }),
 };
 
 export { ApiError };

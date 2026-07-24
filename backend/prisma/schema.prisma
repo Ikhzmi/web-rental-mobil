@@ -15,11 +15,17 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
+  // CATATAN PRISMA 7: url & directUrl TIDAK BOLEH lagi ditaruh di sini
+  // sejak Prisma 7 (breaking change per Nov 2025) — sekarang wajib
+  // pindah ke prisma.config.ts (untuk CLI/migration) dan ke driver
+  // adapter di src/lib/prisma.ts (untuk runtime). Lihat kedua file itu.
 }
 
 enum Role {
   customer
   admin
+
+  @@map("role")
 }
 
 enum KategoriMobil {
@@ -27,23 +33,31 @@ enum KategoriMobil {
   suv
   mpv
   mewah
+
+  @@map("kategori_mobil")
 }
 
 enum Transmisi {
   manual
   matic
+
+  @@map("transmisi")
 }
 
 enum TipeSewa {
   lepas_kunci
   dengan_sopir
   keduanya
+
+  @@map("tipe_sewa")
 }
 
 enum StatusMobil {
   tersedia
   maintenance
   nonaktif
+
+  @@map("status_mobil")
 }
 
 enum StatusBooking {
@@ -52,12 +66,16 @@ enum StatusBooking {
   berjalan
   selesai
   dibatalkan
+
+  @@map("status_booking")
 }
 
 enum JenisAddon {
   sopir
   asuransi
   antar_jemput
+
+  @@map("jenis_addon")
 }
 
 /// Memperluas auth.users bawaan Supabase — 1:1, id sama persis dengan

@@ -3,5 +3,8 @@ node_modules/
 ERD.md
 FLOWCHART.md
 USECASE-DIAGRAM.md
+PRD-KerenTal-Kita-v1.2.md
+PRD-KerenTal-Kita-v1.3.md
+PROGRESS-v1.3.md
 .env.*
 !.env.example

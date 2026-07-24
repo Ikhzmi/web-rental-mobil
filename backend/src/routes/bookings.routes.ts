@@ -112,7 +112,12 @@ bookingsRouter.get('/mine', async (req, res) => {
 bookingsRouter.get('/:id', async (req, res) => {
   const booking = await prisma.booking.findUnique({
     where: { id: req.params.id },
-    include: { car: true, addons: true, statusLogs: { orderBy: { createdAt: 'asc' } } },
+    include: {
+      car: true,
+      addons: true,
+      statusLogs: { orderBy: { createdAt: 'asc' } },
+      profile: { select: { nama: true, email: true, noHp: true } },
+    },
   });
 
   if (!booking) {

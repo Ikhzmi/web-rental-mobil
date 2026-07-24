@@ -8,6 +8,7 @@ import { profilesRouter } from './routes/profiles.routes';
 import { adminCarsRouter } from './routes/adminCars.routes';
 import { adminBookingsRouter } from './routes/adminBookings.routes';
 import { adminUsersRouter, adminDokumenRouter } from './routes/adminUsers.routes';
+import { adminDashboardRouter } from './routes/adminDashboard.routes';
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
@@ -35,6 +36,7 @@ app.use('/api/admin/cars', adminCarsRouter);
 app.use('/api/admin/bookings', adminBookingsRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/dokumen', adminDokumenRouter);
+app.use('/api/admin/dashboard', adminDashboardRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: `Endpoint tidak ditemukan: ${req.method} ${req.path}` });
