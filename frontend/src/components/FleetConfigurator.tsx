@@ -1,15 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
-import { FLEET_CARS } from '../data/fleet';
+import { api, type Kategori } from '../lib/api';
+import { formatRupiah } from '../lib/pricing';
 import FleetArcMenu from './FleetArcMenu';
 import FleetGrid from './FleetGrid';
+import { useTheme } from '../hooks/useTheme';
 
 gsap.registerPlugin(useGSAP);
 
-const ANGLE_STEP = 26;
+const KATEGORI_LABEL: Record<Kategori, string> = {
+  city_car: 'City Car',
+  hatchback: 'Hatchback',
+  suv: 'SUV',
+  mpv: 'MPV',
+  minibus: 'Minibus',
+  pickup: 'Pickup',
+  mewah: 'Mewah',
+  electric: 'Electric',
+};
 
 function SteeringWheelIcon({ className }: { className?: string }) {
   return (
@@ -34,10 +46,21 @@ export default function FleetConfigurator() {
   const rafRef = useRef<number | null>(null);
 
   const carLayerRef = useRef<HTMLDivElement>(null);
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const wheelContainerRef = useRef<HTMLDivElement>(null);
   const isFirstRender = useRef(true);
-  const activeCar = FLEET_CARS[activeIndex];
+
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const { data: allCars } = useQuery({
+    queryKey: ['cars', 'all'],
+    queryFn: () => api.listCars({}),
+  });
+
+  // Filter hanya yang tersedia
+  const availableCars = allCars?.filter(car => car.status === 'tersedia') || [];
+  const activeCar = availableCars[activeIndex];
 
   useGSAP(
     () => {
@@ -74,7 +97,6 @@ export default function FleetConfigurator() {
     { dependencies: [activeIndex], scope: sectionRef }
   );
 
-  // Smooth easing loop toward the target wheel rotation (inertia feel).
   const animate = useCallback(() => {
     const diff = targetRef.current - rotationRef.current;
     if (Math.abs(diff) > 0.05) {
@@ -97,17 +119,37 @@ export default function FleetConfigurator() {
   );
 
   useEffect(() => {
-    const el = scrollContainerRef.current;
+    const el = wheelContainerRef.current;
     if (!el) return;
 
-    const handleWheelNative = (e: WheelEvent) => {
+    let isHovering = false;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!isHovering) return;
       e.preventDefault();
-      bumpTarget(-e.deltaY * 0.08); 
+      e.stopPropagation();
+      bumpTarget(-e.deltaY * 0.1);
     };
 
-    el.addEventListener('wheel', handleWheelNative, { passive: false });
+    const handleMouseEnter = () => {
+      isHovering = true;
+      document.body.style.overflow = 'hidden';
+    };
+
+    const handleMouseLeave = () => {
+      isHovering = false;
+      document.body.style.overflow = '';
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    el.addEventListener('mouseenter', handleMouseEnter);
+    el.addEventListener('mouseleave', handleMouseLeave);
+
     return () => {
-      el.removeEventListener('wheel', handleWheelNative);
+      el.removeEventListener('wheel', handleWheel);
+      el.removeEventListener('mouseenter', handleMouseEnter);
+      el.removeEventListener('mouseleave', handleMouseLeave);
+      document.body.style.overflow = '';
     };
   }, [bumpTarget]);
 
@@ -120,7 +162,7 @@ export default function FleetConfigurator() {
 
   const openMenu = () => {
     setMenuOpen(true);
-    const target = -activeIndex * ANGLE_STEP;
+    const target = -activeIndex * 26;
     targetRef.current = target;
     rotationRef.current = target;
     setRotation(target);
@@ -131,43 +173,70 @@ export default function FleetConfigurator() {
     setShowGrid(false);
   };
 
-  const goPrev = () => setActiveIndex((i) => (i - 1 + FLEET_CARS.length) % FLEET_CARS.length);
-  const goNext = () => setActiveIndex((i) => (i + 1) % FLEET_CARS.length);
+  const goPrev = () => {
+    if (availableCars.length === 0) return;
+    setActiveIndex((i) => (i - 1 + availableCars.length) % availableCars.length);
+  };
+  const goNext = () => {
+    if (availableCars.length === 0) return;
+    setActiveIndex((i) => (i + 1) % availableCars.length);
+  };
+
+  if (!activeCar) {
+    return (
+      <section
+        ref={sectionRef}
+        className={`relative w-full min-h-[60vh] overflow-hidden py-20 ${
+          isDark
+            ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+            : 'bg-gradient-to-b from-zinc-100 via-zinc-50 to-white'
+        }`}
+      >
+        <div className="flex items-center justify-center h-full">
+          <p className={isDark ? 'text-white/50' : 'text-zinc-500'}>Memuat armada...</p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
       ref={sectionRef}
-      className="relative w-full min-h-[100vh] bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10] overflow-hidden py-20"
+      className={`relative w-full min-h-[100vh] overflow-hidden py-20 ${
+        isDark
+          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          : 'bg-gradient-to-b from-zinc-100 via-zinc-50 to-white'
+      }`}
     >
-      {/* soft radial glow behind the car for silhouette contrast */}
+      {/* Soft radial glow behind the car */}
       <div
         className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
         style={{
           width: '70%',
           height: '55%',
-          background:
-            'radial-gradient(ellipse at center, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 70%)',
+          background: isDark
+            ? 'radial-gradient(ellipse at center, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 70%)'
+            : 'radial-gradient(ellipse at center, rgba(37,99,235,0.08) 0%, rgba(37,99,235,0) 70%)',
         }}
       />
 
-      {/* Padded content wrapper — kept separate from the section's own box
-          so the icon stack / arc menu below can measure "right" from the
-          section's true edge, unaffected by this inner padding. */}
       <div className="px-5 sm:px-10 md:px-14">
         {/* Top bar: model info + price */}
         <div className="relative z-20 flex items-start justify-between max-w-6xl mx-auto mb-6">
           <div>
-            <p className="text-white/40 text-xs uppercase tracking-[0.2em] mb-2">Our Fleet</p>
-            <h2 className="font-playfair italic text-white text-3xl sm:text-4xl md:text-5xl">
-              {activeCar.model}
+            <p className={`text-xs uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/40' : 'text-zinc-500'}`}>Armada Tersedia</p>
+            <h2 className={`font-playfair italic text-3xl sm:text-4xl md:text-5xl ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+              {activeCar.nama}
             </h2>
-            <p className="text-white/50 text-sm mt-1">
-              {activeCar.brand} &middot; {activeCar.tagline}
+            <p className={`text-sm mt-1 ${isDark ? 'text-white/50' : 'text-zinc-500'}`}>
+              {KATEGORI_LABEL[activeCar.kategori]}
             </p>
           </div>
           <div className="text-right">
-            <p className="text-white text-2xl sm:text-3xl font-medium">{activeCar.pricePerDay}</p>
-            <p className="text-white/40 text-xs">per day</p>
+            <p className={`text-2xl sm:text-3xl font-medium ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+              {formatRupiah(Number(activeCar.hargaPerHari))}
+            </p>
+            <p className={`text-xs ${isDark ? 'text-white/40' : 'text-zinc-500'}`}>per day</p>
           </div>
         </div>
 
@@ -175,20 +244,23 @@ export default function FleetConfigurator() {
           <>
             {/* Car stage */}
             <div className="relative z-10 h-[38vh] sm:h-[46vh] md:h-[52vh] max-w-6xl mx-auto">
-              {/* Static round platform — does NOT slide with the car */}
+              {/* Static round platform */}
               <div
                 className="absolute left-1/2 bottom-[4%] -translate-x-1/2 pointer-events-none"
                 style={{
                   width: '58%',
                   maxWidth: 520,
                   aspectRatio: '3.2 / 1',
-                  background:
-                    'radial-gradient(ellipse at center, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 45%, rgba(255,255,255,0) 75%)',
+                  background: isDark
+                    ? 'radial-gradient(ellipse at center, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 45%, rgba(255,255,255,0) 75%)'
+                    : 'radial-gradient(ellipse at center, rgba(37,99,235,0.08) 0%, rgba(37,99,235,0.02) 45%, rgba(37,99,235,0) 75%)',
                   borderRadius: '50%',
                 }}
               />
               <div
-                className="absolute left-1/2 bottom-[4%] -translate-x-1/2 pointer-events-none border border-white/10"
+                className={`absolute left-1/2 bottom-[4%] -translate-x-1/2 pointer-events-none border ${
+                  isDark ? 'border-white/10' : 'border-zinc-200/50'
+                }`}
                 style={{
                   width: '58%',
                   maxWidth: 520,
@@ -197,10 +269,15 @@ export default function FleetConfigurator() {
                 }}
               />
 
+              {/* Car image */}
               <div
                 ref={carLayerRef}
                 className="absolute inset-0 bg-contain bg-bottom bg-no-repeat"
-                style={{ backgroundImage: `url(${activeCar.image})` }}
+                style={{
+                  backgroundImage: activeCar.images && activeCar.images.length > 0
+                    ? `url(${activeCar.images[0].url})`
+                    : 'none',
+                }}
               />
             </div>
 
@@ -208,38 +285,37 @@ export default function FleetConfigurator() {
             <div className="relative z-20 flex items-center justify-center gap-6 mt-4">
               <button
                 onClick={goPrev}
-                className="text-white/50 hover:text-white transition-colors"
+                className={`transition-colors ${isDark ? 'text-white/50 hover:text-white' : 'text-zinc-400 hover:text-zinc-600'}`}
                 aria-label="Previous car"
               >
                 <ChevronLeft size={22} />
               </button>
               <div className="flex items-center gap-1.5">
-                {FLEET_CARS.map((car, i) => (
+                {availableCars.map((_, i) => (
                   <span
-                    key={car.id}
+                    key={i}
                     className={`h-1.5 rounded-full transition-all duration-300 ${
-                      i === activeIndex ? 'w-5 bg-[#2563eb]' : 'w-1.5 bg-white/25'
+                      i === activeIndex
+                        ? 'w-5 bg-blue-500'
+                        : isDark ? 'w-1.5 bg-white/25' : 'w-1.5 bg-zinc-300'
                     }`}
                   />
                 ))}
               </div>
               <button
                 onClick={goNext}
-                className="text-white/50 hover:text-white transition-colors"
+                className={`transition-colors ${isDark ? 'text-white/50 hover:text-white' : 'text-zinc-400 hover:text-zinc-600'}`}
                 aria-label="Next car"
               >
                 <ChevronRight size={22} />
               </button>
             </div>
 
-            {/* CTA — arah ke /armada (bukan /armada/:id) karena FLEET_CARS
-                di src/data/fleet.ts masih data mock untuk showcase, id-nya
-                belum tentu match dengan record asli di database. Lihat
-                catatan di HomePage soal keputusan showcase vs katalog. */}
+            {/* CTA */}
             <div className="relative z-20 flex justify-center mt-8">
               <Link
-                to="/armada"
-                className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium px-9 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-[#2563eb]/30"
+                to={`/armada/${activeCar.id}`}
+                className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium px-9 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-blue-500/30"
               >
                 Booking Sekarang
               </Link>
@@ -247,11 +323,11 @@ export default function FleetConfigurator() {
           </>
         ) : (
           <div className="relative z-20 py-6">
-            <FleetGrid cars={FLEET_CARS} activeIndex={activeIndex} onSelect={selectCar} />
+            <FleetGrid cars={availableCars} activeIndex={activeIndex} onSelect={selectCar} />
             <div className="flex justify-center mt-8">
               <Link
                 to="/armada"
-                className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium px-9 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-[#2563eb]/30"
+                className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium px-9 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-blue-500/30"
               >
                 Booking Sekarang
               </Link>
@@ -260,31 +336,38 @@ export default function FleetConfigurator() {
         )}
       </div>
 
-      {/* Icon stack + arc menu — direct children of the section (not the
-          padded wrapper above), positioned absolute so they stay scoped to
-          THIS section only and scroll away with it. A shared wheel handler
-          covers both the icon and the revealed menu, so scrolling here
-          always rotates the wheel and never scrolls the page. */}
-      <div className="absolute right-5 md:right-8 top-1/2 -translate-y-1/2 z-[95] flex flex-col items-center gap-5">
-        {/* Arc menu & steering wheel wrap */}
+      {/* Icon stack + arc menu */}
+      <div className={`absolute right-5 md:right-8 top-1/2 -translate-y-1/2 z-[95] flex flex-col items-center gap-5 ${
+        isDark ? 'text-white' : 'text-zinc-700'
+      }`}>
         <div
-          ref={scrollContainerRef}
+          ref={wheelContainerRef}
           onMouseEnter={openMenu}
           onMouseLeave={() => setMenuOpen(false)}
-          className="relative flex flex-col items-center"
+          onClick={() => {
+            if (menuOpen) {
+              setMenuOpen(false);
+            } else {
+              openMenu();
+            }
+          }}
+          className="relative flex flex-col items-center cursor-pointer"
         >
           <div className="relative flex items-center">
             <span
-              className={`absolute right-full mr-2.5 whitespace-nowrap rounded-full bg-white/10 backdrop-blur-md border border-white/15 px-3.5 py-1.5 text-xs font-medium text-white transition-all duration-300 ${
-                menuOpen
-                  ? 'opacity-100 translate-x-0'
-                  : 'opacity-0 translate-x-2 pointer-events-none'
+              className={`absolute right-full mr-2.5 whitespace-nowrap rounded-full backdrop-blur-md border px-3.5 py-1.5 text-xs font-medium transition-all duration-300 ${
+                isDark
+                  ? 'bg-white/10 border-white/15 text-white'
+                  : 'bg-white/80 border-zinc-200/50 text-zinc-700'
+              } ${
+                menuOpen ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2 pointer-events-none'
               }`}
             >
               Pilih Armada
             </span>
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 if (menuOpen) {
                   setMenuOpen(false);
                 } else {
@@ -293,8 +376,12 @@ export default function FleetConfigurator() {
               }}
               className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors ${
                 menuOpen
-                  ? 'bg-white/15 border-white/30 text-white'
-                  : 'bg-white/5 border-white/15 text-white/70 hover:text-white'
+                  ? isDark
+                    ? 'bg-white/15 border-white/30 text-white'
+                    : 'bg-white/50 border-zinc-300/50 text-zinc-800'
+                  : isDark
+                    ? 'bg-white/5 border-white/15 text-white/70 hover:text-white'
+                    : 'bg-white/30 border-zinc-200/30 text-zinc-600 hover:text-zinc-800'
               }`}
               aria-label="Pilih armada"
             >
@@ -303,7 +390,7 @@ export default function FleetConfigurator() {
           </div>
 
           <FleetArcMenu
-            cars={FLEET_CARS}
+            cars={availableCars}
             activeIndex={activeIndex}
             visible={menuOpen}
             rotation={rotation}
@@ -311,7 +398,6 @@ export default function FleetConfigurator() {
           />
         </div>
 
-        {/* 3-dot menu button - outside the hover area of the steering wheel */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -319,13 +405,39 @@ export default function FleetConfigurator() {
           }}
           className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center transition-colors z-50 ${
             showGrid
-              ? 'bg-white/15 border-white/30 text-white'
-              : 'bg-white/5 border-white/15 text-white/70 hover:text-white'
+              ? isDark
+                ? 'bg-white/15 border-white/30 text-white'
+                : 'bg-white/50 border-zinc-300/50 text-zinc-800'
+              : isDark
+                ? 'bg-white/5 border-white/15 text-white/70 hover:text-white'
+                : 'bg-white/30 border-zinc-200/30 text-zinc-600 hover:text-zinc-800'
           }`}
           aria-label="Tampilkan seluruh armada"
         >
           <MoreVertical className="w-5 h-5" />
         </button>
+      </div>
+
+      {/* Mobile: Show car selector at bottom */}
+      <div className="md:hidden fixed bottom-24 left-4 right-4 z-[95]">
+        <div className="flex items-center justify-center gap-3 overflow-x-auto pb-2">
+          {availableCars.map((car, i) => (
+            <button
+              key={car.id}
+              onClick={() => selectCar(i)}
+              className={`shrink-0 px-4 py-2 rounded-full text-xs font-medium transition-all ${
+                i === activeIndex
+                  ? 'bg-blue-500 text-white'
+                  : isDark
+                    ? 'bg-white/10 text-white/60 hover:bg-white/20'
+                    : 'bg-white/80 text-zinc-600 hover:bg-white'
+              }`}
+            >
+              {car.nama}
+            </button>
+          ))}
+        </div>
+        <p className={`text-center text-xs mt-2 ${isDark ? 'text-white/40' : 'text-zinc-500'}`}>Tap tombol kemudi untuk pilih armada</p>
       </div>
     </section>
   );

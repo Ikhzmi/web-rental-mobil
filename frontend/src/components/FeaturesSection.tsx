@@ -3,57 +3,62 @@ import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ShieldCheck, Clock, MapPin, Sparkles } from 'lucide-react';
+import { useTheme } from '../hooks/useTheme';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 const STATS = [
-  { value: 500, suffix: '+', label: 'Vehicles' },
-  { value: 24, suffix: '/7', label: 'Support' },
-  { value: 40, suffix: '+', label: 'Locations' },
-  { value: 98, suffix: '%', label: 'Satisfaction' },
+  { value: 500, suffix: '+', label: 'Armada' },
+  { value: 24, suffix: '/7', label: 'Dukungan' },
+  { value: 40, suffix: '+', label: 'Lokasi' },
+  { value: 98, suffix: '%', label: 'Kepuasan' },
 ];
 
 const FEATURES = [
   {
     icon: ShieldCheck,
-    title: 'Fully Insured',
-    desc: 'Every rental includes comprehensive coverage, no hidden fees.',
+    title: 'Asuransi Lengkap',
+    desc: 'Setiap sewa sudah termasuk asuransi komprehensif, tanpa biaya tersembunyi.',
   },
   {
     icon: Clock,
-    title: 'Instant Booking',
-    desc: 'Reserve in under two minutes, pick up the same day.',
+    title: 'Booking Instan',
+    desc: 'Pesan dalam 2 menit, mobil siap diambil di hari yang sama.',
   },
   {
     icon: MapPin,
-    title: 'Flexible Pickup',
-    desc: 'Grab your car from any of our 40+ city locations.',
+    title: 'Lokasi Fleksibel',
+    desc: 'Ambil mobil di 40+ lokasi strategis di berbagai kota.',
   },
   {
     icon: Sparkles,
-    title: 'Detailed & Inspected',
-    desc: 'Every vehicle is cleaned and mechanically checked pre-rental.',
+    title: 'Periksa Detail',
+    desc: 'Setiap kendaraan dibersihkan dan dicek mesin sebelum disewa.',
   },
 ];
 
 export default function FeaturesSection() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const statRefs = useRef<(HTMLSpanElement | null)[]>([]);
-  const featureRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   useGSAP(
     () => {
+      // Counter animation
       statRefs.current.forEach((el, i) => {
         if (!el) return;
         const target = STATS[i].value;
         const counter = { val: 0 };
         gsap.to(counter, {
           val: target,
-          duration: 1.6,
+          duration: 1.8,
           ease: 'power2.out',
           scrollTrigger: {
             trigger: sectionRef.current,
             start: 'top 80%',
+            once: true,
           },
           onUpdate: () => {
             el.textContent = Math.round(counter.val).toString();
@@ -61,18 +66,20 @@ export default function FeaturesSection() {
         });
       });
 
+      // Feature cards animation
       gsap.fromTo(
-        featureRefs.current,
-        { y: 40, opacity: 0 },
+        '.feature-card',
+        { opacity: 0, y: 30 },
         {
-          y: 0,
           opacity: 1,
-          duration: 0.8,
-          stagger: 0.12,
-          ease: 'power3.out',
+          y: 0,
+          duration: 0.5,
+          stagger: 0.1,
+          ease: 'power2.out',
           scrollTrigger: {
             trigger: sectionRef.current,
-            start: 'top 70%',
+            start: 'top 75%',
+            once: true,
           },
         }
       );
@@ -81,46 +88,117 @@ export default function FeaturesSection() {
   );
 
   return (
-    <section ref={sectionRef} className="relative bg-black py-24 px-5 sm:px-10 md:px-16">
-      <div className="max-w-6xl mx-auto">
-        {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-20 rounded-3xl bg-white/[0.04] backdrop-blur-md border border-white/10 p-8 sm:p-10">
-          {STATS.map((stat, i) => (
-            <div key={stat.label} className="text-center">
-              <div className="text-white text-3xl sm:text-4xl font-playfair italic">
-                <span
-                  ref={(el) => {
-                    statRefs.current[i] = el;
-                  }}
-                >
-                  0
-                </span>
-                {stat.suffix}
-              </div>
-              <p className="text-white/50 text-xs sm:text-sm mt-2 uppercase tracking-wider">
-                {stat.label}
-              </p>
-            </div>
-          ))}
+    <section ref={sectionRef} className={`relative py-24 md:py-32 px-5 sm:px-10 md:px-16 ${
+      isDark ? 'bg-zinc-950' : 'bg-white'
+    }`}>
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div
+          className="absolute inset-0 opacity-[0.015]"
+          style={{
+            backgroundImage: `linear-gradient(${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'} 1px, transparent 1px), linear-gradient(90deg, ${isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'} 1px, transparent 1px)`,
+            backgroundSize: '64px 64px'
+          }}
+        />
+      </div>
+
+      <div className="relative max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-14">
+          <h2 className={`text-3xl md:text-4xl font-bold mb-3 ${
+            isDark ? 'text-white' : 'text-zinc-900'
+          }`}>
+            Mengapa KerenTal?
+          </h2>
+          <p className={`text-base max-w-md mx-auto ${
+            isDark ? 'text-zinc-400' : 'text-zinc-600'
+          }`}>
+            Komitmen kami untuk pengalaman sewa mobil terbaik
+          </p>
         </div>
 
-        {/* Feature cards */}
+        {/* Stats - Glass card */}
+        <div className={`relative mb-14 p-8 rounded-2xl overflow-hidden ${
+          isDark
+            ? 'bg-white/[0.03] backdrop-blur-xl border border-white/[0.08]'
+            : 'bg-white/80 backdrop-blur-xl border border-white/80 shadow-sm'
+        }`}>
+          {/* Top highlight */}
+          <div className={`
+            absolute top-0 left-4 right-4 h-px
+            ${isDark
+              ? 'bg-gradient-to-r from-transparent via-white/20 to-transparent'
+              : 'bg-gradient-to-r from-transparent via-white/90 to-transparent'
+            }
+          `} />
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            {STATS.map((stat, i) => (
+              <div key={stat.label} className="text-center">
+                <div className={`text-4xl md:text-5xl font-bold ${
+                  isDark ? 'text-white' : 'text-zinc-900'
+                }`}>
+                  <span ref={(el) => { statRefs.current[i] = el; }}>0</span>
+                  <span className="text-zinc-500">{stat.suffix}</span>
+                </div>
+                <p className={`text-sm mt-2 ${
+                  isDark ? 'text-zinc-500' : 'text-zinc-500'
+                }`}>
+                  {stat.label}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Features - Glass cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {FEATURES.map((feature, i) => {
+          {FEATURES.map((feature) => {
             const Icon = feature.icon;
             return (
-              <div
-                key={feature.title}
-                ref={(el) => {
-                  featureRefs.current[i] = el;
-                }}
-                className="rounded-2xl bg-white/[0.03] backdrop-blur-md border border-white/10 p-6 hover:bg-white/[0.06] hover:-translate-y-1 transition-all duration-300"
-              >
-                <div className="w-10 h-10 rounded-full bg-[#2563eb]/15 flex items-center justify-center mb-4">
-                  <Icon size={18} className="text-[#2563eb]" />
+              <div key={feature.title} className="feature-card">
+                <div className={`
+                  relative p-6 rounded-2xl overflow-hidden
+                  transition-transform duration-200 hover:-translate-y-1
+                  ${isDark
+                    ? 'bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] hover:border-white/[0.12]'
+                    : 'bg-white/70 backdrop-blur-xl border border-white/80 shadow-sm hover:shadow-md'
+                  }
+                `}>
+                  {/* Top highlight */}
+                  <div className={`
+                    absolute top-0 left-4 right-4 h-px
+                    ${isDark
+                      ? 'bg-gradient-to-r from-transparent via-white/20 to-transparent'
+                      : 'bg-gradient-to-r from-transparent via-white/90 to-transparent'
+                    }
+                  `} />
+
+                  {/* Icon */}
+                  <div className={`
+                    w-12 h-12 rounded-xl flex items-center justify-center mb-5
+                    ${isDark
+                      ? 'bg-white/5 border border-white/10'
+                      : 'bg-zinc-50 border border-zinc-200'
+                    }
+                  `}>
+                    <Icon size={22} className={isDark ? 'text-zinc-400' : 'text-zinc-600'} />
+                  </div>
+
+                  {/* Title */}
+                  <h3 className={`font-semibold mb-2 ${
+                    isDark ? 'text-white' : 'text-zinc-900'
+                  }`}>
+                    {feature.title}
+                  </h3>
+
+                  {/* Description */}
+                  <p className={`text-sm leading-relaxed ${
+                    isDark ? 'text-zinc-500' : 'text-zinc-500'
+                  }`}>
+                    {feature.desc}
+                  </p>
                 </div>
-                <h3 className="text-white font-medium mb-1.5">{feature.title}</h3>
-                <p className="text-white/50 text-sm leading-relaxed">{feature.desc}</p>
               </div>
             );
           })}

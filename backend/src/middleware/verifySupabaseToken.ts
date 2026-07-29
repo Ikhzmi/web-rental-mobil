@@ -23,9 +23,12 @@ const supabaseAuthClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
  * Supabase yang dikirim frontend lewat middleware ini sebelum memproses
  * request apa pun.
  *
- * Setelah token valid, `role` diambil dari tabel `profiles` (lewat
- * Prisma) — bukan dari token itu sendiri — supaya perubahan role oleh
- * admin langsung berlaku tanpa menunggu token lama expire.
+ * Setelah token valid, `role` dan `instansiId` diambil dari tabel `profiles`
+ * (lewat Prisma) — bukan dari token itu sendiri — supaya perubahan role
+ * oleh admin langsung berlaku tanpa menunggu token lama expire.
+ *
+ * Updated v1.3: - role diperluas dengan 'super_admin'
+ *               - instansiId ditambahkan untuk scoping admin ke instansi
  */
 export async function verifySupabaseToken(
   req: Request,
@@ -48,9 +51,10 @@ export async function verifySupabaseToken(
     return;
   }
 
+  // Updated v1.3: select juga instansiId
   const profile = await prisma.profile.findUnique({
     where: { id: data.user.id },
-    select: { id: true, email: true, role: true, aktif: true },
+    select: { id: true, email: true, role: true, aktif: true, instansiId: true },
   });
 
   if (!profile) {
@@ -67,14 +71,36 @@ export async function verifySupabaseToken(
     return;
   }
 
-  req.user = { id: profile.id, email: profile.email, role: profile.role };
+  // Updated v1.3: include instansiId di req.user
+  req.user = {
+    id: profile.id,
+    email: profile.email,
+    role: profile.role,
+    instansiId: profile.instansiId ?? undefined,
+  };
   next();
 }
 
-/** Dipasang setelah verifySupabaseToken — menolak request non-admin. */
+/**
+ * Dipasang setelah verifySupabaseToken — menolak request non-admin.
+ * Updated v1.3: sekarang juga menolak super_admin (khusus admin instansi).
+ * Jika butuh akses untuk super_admin, gunakan requireSuperAdmin.
+ */
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Endpoint ini khusus admin' });
+    res.status(403).json({ error: 'Endpoint ini khusus admin instansi' });
+    return;
+  }
+  next();
+}
+
+/**
+ * Dipasang setelah verifySupabaseToken — menolak request non-super_admin.
+ * Updated v1.3: untuk endpoint yang hanya bisa diakses Super Admin platform.
+ */
+export function requireSuperAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (req.user?.role !== 'super_admin') {
+    res.status(403).json({ error: 'Endpoint ini khusus Super Admin' });
     return;
   }
   next();

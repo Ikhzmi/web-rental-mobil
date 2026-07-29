@@ -9,6 +9,9 @@ import { adminCarsRouter } from './routes/adminCars.routes';
 import { adminBookingsRouter } from './routes/adminBookings.routes';
 import { adminUsersRouter, adminDokumenRouter } from './routes/adminUsers.routes';
 import { adminDashboardRouter } from './routes/adminDashboard.routes';
+import { superadminRouter } from './routes/superadmin.routes';
+import { instansiRouter } from './routes/instansi.routes';
+import { webhooksRouter } from './routes/webhooks.routes';
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
@@ -37,6 +40,15 @@ app.use('/api/admin/bookings', adminBookingsRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/dokumen', adminDokumenRouter);
 app.use('/api/admin/dashboard', adminDashboardRouter);
+
+// Super Admin (verifySupabaseToken + requireSuperAdmin dipasang di dalam router)
+app.use('/api/superadmin', superadminRouter);
+
+// Instansi routes (public + admin scoped)
+app.use('/api/instansi', instansiRouter);
+
+// Webhooks (Xendit)
+app.use('/api/webhooks', webhooksRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: `Endpoint tidak ditemukan: ${req.method} ${req.path}` });

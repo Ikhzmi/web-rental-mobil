@@ -21,18 +21,29 @@ datasource db {
   // adapter di src/lib/prisma.ts (untuk runtime). Lihat kedua file itu.
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// ENUMS v1.3
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Peran pengguna: customer (penyewa), admin (admin instansi), super_admin (platform)
 enum Role {
   customer
   admin
+  super_admin
 
   @@map("role")
 }
 
+/// Kategori mobil - diperluas dari 4 ke 8 di v1.3
 enum KategoriMobil {
   city_car
+  hatchback  // BARU v1.3
   suv
   mpv
+  minibus    // BARU v1.3
+  pickup     // BARU v1.3
   mewah
+  electric   // BARU v1.3 - Electric Vehicle
 
   @@map("kategori_mobil")
 }
@@ -52,6 +63,7 @@ enum TipeSewa {
   @@map("tipe_sewa")
 }
 
+/// Status operasional mobil
 enum StatusMobil {
   tersedia
   maintenance
@@ -60,14 +72,63 @@ enum StatusMobil {
   @@map("status_mobil")
 }
 
+/// Status approval mobil oleh Super Admin - BARU v1.3
+enum StatusApproval {
+  menunggu_persetujuan  // Mobil baru, belum disetujui Super Admin
+  disetujui             // Sudah disetujui, bisa tayang di katalog
+  ditolak               // Ditolak dengan alasan
+
+  @@map("status_approval")
+}
+
+/// Status instansi rental - BARU v1.3
+enum StatusInstansi {
+  menunggu_verifikasi  // Baru daftar, menunggu verifikasi Super Admin
+  aktif               // Sudah diverifikasi, aktif
+  nonaktif             // Dinonaktifkan
+
+  @@map("instansi_status")
+}
+
+/// Status booking dengan payment gateway - updated v1.3
+/// 'pending' diubah menjadi 'menunggu_pembayaran' karena payment via Xendit
 enum StatusBooking {
-  pending
-  dikonfirmasi
-  berjalan
-  selesai
-  dibatalkan
+  menunggu_pembayaran  // Baru dibuat, menunggu pembayaran Xendit
+  dikonfirmasi         // Pembayaran berhasil
+  berjalan             // Sedang disewa
+  selesai              // Sewa selesai
+  dibatalkan           // Dibatalkan (dari menunggu_pembayaran)
 
   @@map("status_booking")
+}
+
+/// Metode pembayaran Xendit - BARU v1.3
+enum MetodeBayar {
+  virtual_account
+  qris
+  ewallet
+  kartu_kredit
+
+  @@map("metode_bayar")
+}
+
+/// Status payment Xendit - BARU v1.3
+enum StatusPayment {
+  pending   // Invoice dibuat, belum dibayar
+  paid      // Pembayaran berhasil
+  expired   // Invoice kedaluwarsa
+  failed    // Pembayaran gagal
+
+  @@map("status_payment")
+}
+
+/// Status disbursement ke instansi - BARU v1.3
+enum StatusDisbursement {
+  diproses   // Sedang diproses oleh Xendit
+  berhasil    // Dana berhasil ditransfer
+  gagal       // Transfer gagal
+
+  @@map("status_disbursement")
 }
 
 enum JenisAddon {
@@ -80,21 +141,26 @@ enum JenisAddon {
 
 /// Memperluas auth.users bawaan Supabase — 1:1, id sama persis dengan
 /// auth.users.id (soft reference, lihat catatan di atas berkas ini).
+/// Updated v1.3:
+/// - noKtp dan noSim dihapus (verifikasi cukup via dokumen upload)
+/// - instansiId ditambahkan (FK ke instansi untuk role admin)
 model Profile {
   id              String   @id @db.Uuid
   nama            String
   email           String   @unique
   noHp            String   @map("no_hp")
   role            Role     @default(customer)
-  noKtp           String?  @map("no_ktp")
-  noSim           String?  @map("no_sim")
+  /// noKtp dan noSim DIHAPUS di v1.3 - verifikasi cukup via dokumen upload
   dokumenKtpUrl   String?  @map("dokumen_ktp_url")
   dokumenSimUrl   String?  @map("dokumen_sim_url")
   dokumenVerified Boolean  @default(false) @map("dokumen_verified")
-  /// Ditambahkan setelah F12 diimplementasikan — sebelumnya endpoint
-  /// nonaktifkan-akun tidak punya kolom untuk disimpan (lihat README backend).
   aktif           Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
+
+  /// BARU v1.3: Relasi ke instansi untuk admin
+  /// Admin terikat ke satu instansi; customer dan super_admin null
+  instansiId      String?  @map("instansi_id") @db.Uuid
+  instansi       Instansi? @relation(fields: [instansiId], references: [id])
 
   bookings          Booking[]
   statusLogsDiubah  BookingStatusLog[] @relation("StatusLogDiubahOleh")
@@ -102,6 +168,10 @@ model Profile {
   @@map("profiles")
 }
 
+/// Model mobil/armada rental.
+/// Updated v1.3:
+/// - instansiId ditambahkan (FK ke instansi)
+/// - statusApproval ditambahkan (approval oleh Super Admin)
 model Car {
   id                 String        @id @default(uuid()) @db.Uuid
   nama               String
@@ -114,6 +184,16 @@ model Car {
   status             StatusMobil   @default(tersedia)
   deskripsi          String?
   createdAt          DateTime      @default(now()) @map("created_at")
+
+  /// BARU v1.3: Relasi ke instansi
+  /// Setiap mobil milik satu instansi rental
+  instansiId          String        @map("instansi_id") @db.Uuid
+  instansi           Instansi      @relation(fields: [instansiId], references: [id])
+
+  /// BARU v1.3: Status approval oleh Super Admin
+  /// Mobil tidak bisa tayang di katalog sebelum disetujui
+  statusApproval     StatusApproval @default(menunggu_persetujuan) @map("status_approval")
+  alasanPenolakan     String?        @map("alasan_penolakan")
 
   images   CarImage[]
   bookings Booking[]
@@ -133,6 +213,11 @@ model CarImage {
   @@index([carId])
 }
 
+/// Model booking/pemesanan sewa mobil.
+/// Updated v1.3:
+/// - Status default diubah dari 'pending' ke 'menunggu_pembayaran'
+/// - Relasi ke Payment (Xendit)
+/// - Relasi ke DisbursementItem (untuk tracking pencairan)
 model Booking {
   id             String        @id @default(uuid()) @db.Uuid
   userId         String        @map("user_id") @db.Uuid
@@ -140,22 +225,24 @@ model Booking {
   tanggalMulai   DateTime      @map("tanggal_mulai") @db.Date
   tanggalSelesai DateTime      @map("tanggal_selesai") @db.Date
   lokasiAmbil    String        @map("lokasi_ambil")
-  /// Ditambahkan di v1.1 PRD — sebelumnya hilang padahal F6 sudah
-  /// menjanjikan pilihan lokasi kembali terpisah dari lokasi ambil.
   lokasiKembali  String        @map("lokasi_kembali")
   hargaDasar     Decimal       @map("harga_dasar") @db.Decimal(12, 2)
   totalAddon     Decimal       @default(0) @map("total_addon") @db.Decimal(12, 2)
   totalHarga     Decimal       @map("total_harga") @db.Decimal(12, 2)
-  status         StatusBooking @default(pending)
+  /// Updated v1.3: default berubah dari 'pending' ke 'menunggu_pembayaran'
+  /// karena sekarang menunggu konfirmasi dari Xendit, bukan verifikasi manual
+  status         StatusBooking @default(menunggu_pembayaran)
   createdAt      DateTime      @default(now()) @map("created_at")
-  /// Ditambahkan di v1.1 PRD — dipercepat query tanpa perlu join ke
-  /// booking_status_log untuk kebutuhan sederhana (sort by last update).
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
   profile    Profile            @relation(fields: [userId], references: [id])
   car        Car                @relation(fields: [carId], references: [id])
   addons     BookingAddon[]
   statusLogs BookingStatusLog[]
+
+  /// BARU v1.3: Relasi ke Payment (Xendit)
+  payment    Payment?
+  disbursementItems DisbursementItem[]
 
   @@map("bookings")
   @@index([carId, tanggalMulai, tanggalSelesai])
@@ -188,4 +275,125 @@ model BookingStatusLog {
 
   @@map("booking_status_log")
   @@index([bookingId])
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MODELS BARU v1.3 - Marketplace Multi-Instansi
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Model instansi rental yang terdaftar di platform.
+/// Setiap instansi punya admin sendiri dan mengelola armadanya.
+/// Super Admin memverifikasi instansi sebelum bisa aktif.
+model Instansi {
+  id                    String         @id @default(uuid()) @db.Uuid
+  namaInstansi          String         @map("nama_instansi")
+  alamat                String
+  noHpPic               String         @map("no_hp_pic")
+  emailPic              String         @map("email_pic")
+  dokumenLegalitasUrl   String?        @map("dokumen_legalitas_url")
+  status                StatusInstansi @default(menunggu_verifikasi) @map("status")
+  /// Persentase komisi platform dari total harga sewa
+  /// Default 10%, bisa berbeda per instansi yang disepakati
+  komisiPlatformPersen  Decimal        @default(10) @map("komisi_platform_persen") @db.Decimal(5, 2)
+  /// Format: "BANK_CODE-ACCOUNT_NUMBER" (contoh: "BCA-1234567890")
+  /// Untuk pencairan dana via Xendit Disbursement
+  rekeningBank          String?        @map("rekening_bank")
+  createdAt             DateTime       @default(now()) @map("created_at")
+
+  /// Relasi
+  profiles       Profile[]
+  cars          Car[]
+  disbursements Disbursement[]
+
+  @@map("instansi")
+}
+
+/// Model payment untuk mencatat transaksi Xendit.
+/// Setiap booking memiliki satu payment record.
+model Payment {
+  id               String         @id @default(uuid()) @db.Uuid
+  bookingId        String         @unique @map("booking_id") @db.Uuid
+  /// ID dari Xendit untuk referensi
+  xenditInvoiceId String?        @map("xendit_invoice_id")
+  metodeBayar      MetodeBayar    @map("metode_bayar")
+  jumlah           Decimal        @db.Decimal(12, 2)
+  status           StatusPayment  @default(pending)
+  paidAt           DateTime?      @map("paid_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("payments")
+}
+
+/// Model disbursement untuk mencatat pencairan dana ke instansi.
+/// Dana dicairkan dalam batch mingguan (setiap Senin).
+model Disbursement {
+  id                     String             @id @default(uuid()) @db.Uuid
+  instansiId             String             @map("instansi_id") @db.Uuid
+  /// Total harga dari semua booking dalam batch ini
+  jumlahKotor            Decimal            @map("jumlah_kotor") @db.Decimal(12, 2)
+  /// Komisi platform yang dipotong
+  komisiPlatform         Decimal            @map("komisi_platform") @db.Decimal(12, 2)
+  /// Jumlah bersih yang ditransfer ke rekening instansi
+  jumlahBersih           Decimal            @map("jumlah_bersih") @db.Decimal(12, 2)
+  status                 StatusDisbursement @default(diproses)
+  /// ID dari Xendit Disbursement API
+  xenditDisbursementId  String?           @map("xendit_disbursement_id")
+  /// Timestamp saat dana berhasil dicairkan
+  dicairkanPada          DateTime?         @map("dicairkan_pada")
+  createdAt              DateTime          @default(now()) @map("created_at")
+
+  instansi Instansi           @relation(fields: [instansiId], references: [id])
+  items     DisbursementItem[]
+
+  @@map("disbursements")
+}
+
+/// Junction table untuk menghubungkan disbursement dengan booking.
+/// Satu disbursement bisa mencakup banyak booking (batch).
+model DisbursementItem {
+  id             String    @id @default(uuid()) @db.Uuid
+  disbursementId String    @map("disbursement_id") @db.Uuid
+  bookingId      String    @map("booking_id") @db.Uuid
+  /// Kontribusi harga booking ini ke total disbursement
+  jumlahKotor   Decimal   @map("jumlah_kotor") @db.Decimal(12, 2)
+
+  disbursement Disbursement @relation(fields: [disbursementId], references: [id])
+  booking     Booking     @relation(fields: [bookingId], references: [id])
+
+  @@map("disbursement_items")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// DASHBOARD ANALYTICS MODELS (v1.3 Enhancement)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Notifikasi untuk Super Admin dashboard
+model Notification {
+  id         String   @id @default(uuid()) @db.Uuid
+  type       String   // 'booking', 'approval', 'payment', 'system', 'user', 'commission'
+  title      String
+  message    String
+  data       Json?    // extra metadata
+  isRead     Boolean  @default(false) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+  @@index([createdAt(sort: Desc)])
+  @@index([isRead])
+}
+
+/// Log aktivitas untuk timeline di dashboard Super Admin
+model DashboardActivity {
+  id          String    @id @default(uuid()) @db.Uuid
+  type        String    // 'booking_confirmed', 'payment_received', 'instansi_registered', 'vehicle_approved', 'customer_registered', 'refund_processed'
+  title       String
+  description String?
+  metadata    Json?     // extra data
+  createdBy   String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("dashboard_activities")
+  @@index([createdAt(sort: Desc)])
+  @@index([type])
 }

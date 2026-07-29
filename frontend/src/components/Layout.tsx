@@ -1,29 +1,38 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { motion, AnimatePresence } from 'framer-motion';
 import Nav from './Nav';
 
-/**
- * Nav dirender sekali di sini (bukan di dalam Hero) supaya konsisten di
- * semua halaman — Nav memakai `position: fixed` jadi aman dirender di
- * root layout terlepas dari struktur halaman di bawahnya.
- */
 export default function Layout() {
   const { pathname } = useLocation();
 
-  // Scroll to top instan & refresh ScrollTrigger setiap kali route berubah
-  // untuk mencegah lag koordinat scroll & tumpukan trigger menggantung di SPA.
+  // Scroll to top and refresh ScrollTrigger on route change
   useEffect(() => {
     window.scrollTo(0, 0);
     setTimeout(() => {
-      ScrollTrigger.refresh();
+      try {
+        ScrollTrigger.refresh();
+      } catch (e) {
+        // Ignore refresh errors during device switching
+      }
     }, 100);
   }, [pathname]);
 
   return (
-    <div className="bg-black min-h-screen">
+    <div className="min-h-screen bg-[var(--bg-primary)] transition-colors duration-300">
       <Nav />
-      <Outlet />
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={pathname}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Outlet />
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

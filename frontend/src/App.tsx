@@ -2,10 +2,12 @@ import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
 import ComingSoonPage from './components/ComingSoonPage';
 import RequireAdmin from './components/RequireAdmin';
+import RequireSuperAdmin from './components/RequireSuperAdmin';
 
 import HomePage from './pages/HomePage';
 import ArmadaPage from './pages/ArmadaPage';
@@ -18,16 +20,31 @@ import DaftarPage from './pages/DaftarPage';
 
 
 const BookingPage = lazy(() => import('./pages/BookingPage'));
-const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
-const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
-const AdminArmadaPage = lazy(() => import('./pages/admin/AdminArmadaPage'));
-const AdminPesananPage = lazy(() => import('./pages/admin/AdminPesananPage'));
-const AdminPesananDetailPage = lazy(() => import('./pages/admin/AdminPesananDetailPage'));
-const AdminPenggunaPage = lazy(() => import('./pages/admin/AdminPenggunaPage'));
 const BookingConfirmationPage = lazy(() => import('./pages/BookingConfirmationPage'));
 const AkunPesananPage = lazy(() => import('./pages/AkunPesananPage'));
 const AkunPesananDetailPage = lazy(() => import('./pages/AkunPesananDetailPage'));
 const AkunProfilPage = lazy(() => import('./pages/AkunProfilPage'));
+
+// Admin Pages - Direct import (same as SuperAdmin for smooth navigation)
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import AdminArmadaPage from './pages/admin/AdminArmadaPage';
+import AdminPesananPage from './pages/admin/AdminPesananPage';
+import AdminPesananDetailPage from './pages/admin/AdminPesananDetailPage';
+
+// Super Admin Pages (direct import for debugging)
+// const SuperAdminLayout = lazy(() => import('./pages/superadmin/SuperAdminLayout'));
+// const SuperAdminDashboardPage = lazy(() => import('./pages/superadmin/SuperAdminDashboardPage'));
+// const SuperAdminInstansiPage = lazy(() => import('./pages/superadmin/SuperAdminInstansiPage'));
+// const SuperAdminAdminPage = lazy(() => import('./pages/superadmin/SuperAdminAdminPage'));
+// const SuperAdminApprovalPage = lazy(() => import('./pages/superadmin/SuperAdminApprovalPage'));
+// const SuperAdminPencairanPage = lazy(() => import('./pages/superadmin/SuperAdminPencairanPage'));
+import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
+import SuperAdminDashboardPage from './pages/superadmin/SuperAdminDashboardPage';
+import SuperAdminInstansiPage from './pages/superadmin/SuperAdminInstansiPage';
+import SuperAdminAdminPage from './pages/superadmin/SuperAdminAdminPage';
+import SuperAdminApprovalPage from './pages/superadmin/SuperAdminApprovalPage';
+import SuperAdminPencairanPage from './pages/superadmin/SuperAdminPencairanPage';
 
 function RouteFallback() {
   return (
@@ -49,9 +66,42 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <ThemeProvider>
+        <BrowserRouter>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
+          {/* Admin — layout sendiri, OUTSIDE Layout untuk smooth navigation */}
+          <Route element={<RequireAdmin />}>
+            <Route element={<AdminLayout />}>
+              <Route path="admin" element={<AdminDashboardPage />} />
+              <Route path="admin/armada" element={<AdminArmadaPage />} />
+              <Route
+                path="admin/armada/:id/edit"
+                element={
+                  <ComingSoonPage
+                    title="Edit Mobil (form penuh)"
+                    description="Form edit mobil saat ini ada sebagai modal di halaman Kelola Armada. Halaman terpisah ini (dengan upload foto) belum dibangun."
+                    week={5}
+                  />
+                }
+              />
+              <Route path="admin/pesanan" element={<AdminPesananPage />} />
+              <Route path="admin/pesanan/:id" element={<AdminPesananDetailPage />} />
+            </Route>
+          </Route>
+
+          {/* Super Admin — layout sendiri, OUTSIDE Layout */}
+          <Route element={<RequireSuperAdmin />}>
+            <Route element={<SuperAdminLayout />}>
+              <Route path="superadmin" element={<SuperAdminDashboardPage />} />
+              <Route path="superadmin/instansi" element={<SuperAdminInstansiPage />} />
+              <Route path="superadmin/admin" element={<SuperAdminAdminPage />} />
+              <Route path="superadmin/armada/approval" element={<SuperAdminApprovalPage />} />
+              <Route path="superadmin/pencairan" element={<SuperAdminPencairanPage />} />
+            </Route>
+          </Route>
+
+          {/* Public Layout dengan Nav */}
           <Route element={<Layout />}>
             {/* Publik */}
             <Route index element={<HomePage />} />
@@ -63,34 +113,13 @@ function App() {
             <Route path="login" element={<LoginPage />} />
             <Route path="daftar" element={<DaftarPage />} />
 
-            {/* Customer — F6 sudah dibangun; F7/F8 masih Minggu 6 (§13 PRD) */}
+            {/* Customer */}
             <Route element={<RequireAuth />}>
               <Route path="booking/:carId" element={<BookingPage />} />
               <Route path="booking/:id/konfirmasi" element={<BookingConfirmationPage />} />
               <Route path="akun/pesanan" element={<AkunPesananPage />} />
               <Route path="akun/pesanan/:id" element={<AkunPesananDetailPage />} />
               <Route path="akun/profil" element={<AkunProfilPage />} />
-            </Route>
-
-            {/* Admin */}
-            <Route element={<RequireAdmin />}>
-              <Route element={<AdminLayout />}>
-                <Route path="admin" element={<AdminDashboardPage />} />
-                <Route path="admin/armada" element={<AdminArmadaPage />} />
-                <Route
-                  path="admin/armada/:id/edit"
-                  element={
-                    <ComingSoonPage
-                      title="Edit Mobil (form penuh)"
-                      description="Form edit mobil saat ini ada sebagai modal di halaman Kelola Armada. Halaman terpisah ini (dengan upload foto) belum dibangun."
-                      week={5}
-                    />
-                  }
-                />
-                <Route path="admin/pesanan" element={<AdminPesananPage />} />
-                <Route path="admin/pesanan/:id" element={<AdminPesananDetailPage />} />
-                <Route path="admin/pengguna" element={<AdminPenggunaPage />} />
-              </Route>
             </Route>
 
             {/* 404 */}
@@ -107,6 +136,7 @@ function App() {
         </Routes>
         </Suspense>
       </BrowserRouter>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

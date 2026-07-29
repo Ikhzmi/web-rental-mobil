@@ -6,5 +6,7 @@ USECASE-DIAGRAM.md
 PRD-KerenTal-Kita-v1.2.md
 PRD-KerenTal-Kita-v1.3.md
 PROGRESS-v1.3.md
+TESTING-CHECKLIST.md
+HERO-SETTINGS.md
 .env.*
 !.env.example

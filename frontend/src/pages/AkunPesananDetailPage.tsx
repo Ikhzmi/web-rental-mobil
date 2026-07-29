@@ -2,15 +2,33 @@ import { useState, Fragment } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, ArrowLeft } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { api, ApiError, type StatusBooking } from '../lib/api';
 import { formatRupiah } from '../lib/pricing';
+import { useTheme } from '../hooks/useTheme';
 
 const STATUS_LABEL: Record<StatusBooking, string> = {
-  pending: 'Menunggu Pembayaran',
+  menunggu_pembayaran: 'Menunggu Pembayaran',
   dikonfirmasi: 'Dikonfirmasi',
-  berjalan: 'Berjalan',
+  berjalan: 'Berlangsung',
   selesai: 'Selesai',
   dibatalkan: 'Dibatalkan',
+};
+
+const STATUS_BADGE_DARK: Record<StatusBooking, string> = {
+  menunggu_pembayaran: 'bg-amber-500/15 text-amber-400',
+  dikonfirmasi: 'bg-blue-500/15 text-blue-400',
+  berjalan: 'bg-purple-500/15 text-purple-400',
+  selesai: 'bg-emerald-500/15 text-emerald-400',
+  dibatalkan: 'bg-white/10 text-white/40',
+};
+
+const STATUS_BADGE_LIGHT: Record<StatusBooking, string> = {
+  menunggu_pembayaran: 'bg-amber-100 text-amber-700',
+  dikonfirmasi: 'bg-blue-100 text-blue-700',
+  berjalan: 'bg-purple-100 text-purple-700',
+  selesai: 'bg-emerald-100 text-emerald-700',
+  dibatalkan: 'bg-slate-100 text-slate-500',
 };
 
 function formatTanggal(iso: string): string {
@@ -22,6 +40,9 @@ function formatTanggal(iso: string): string {
 }
 
 export default function AkunPesananDetailPage() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -46,20 +67,34 @@ export default function AkunPesananDetailPage() {
     },
   });
 
+  const cardClass = isDark
+    ? 'rounded-2xl bg-white/[0.04] border border-white/10 p-5'
+    : 'rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 p-5';
+
+  const statusBadge = isDark ? STATUS_BADGE_DARK : STATUS_BADGE_LIGHT;
+
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10] pt-28 pb-20 flex items-center justify-center gap-2 text-white/50">
+      <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
+        isDark
+          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
+      }`}>
         <Loader2 size={18} className="animate-spin" />
-        Memuat pesanan...
+        <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Memuat pesanan...</span>
       </main>
     );
   }
 
   if (isError || !booking) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10] pt-28 pb-20 flex flex-col items-center justify-center gap-3 text-center px-5">
-        <p className="text-white/60 text-sm">Pesanan tidak ditemukan.</p>
-        <Link to="/akun/pesanan" className="text-[#2563eb] text-sm hover:underline">
+      <main className={`min-h-screen flex flex-col items-center justify-center gap-3 text-center px-5 transition-colors duration-300 ${
+        isDark
+          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
+      }`}>
+        <p className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Pesanan tidak ditemukan.</p>
+        <Link to="/akun/pesanan" className={isDark ? 'text-blue-400 text-sm hover:underline' : 'text-blue-600 text-sm hover:underline'}>
           Kembali ke Riwayat Pesanan
         </Link>
       </main>
@@ -67,82 +102,116 @@ export default function AkunPesananDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10] pt-24 pb-20 px-5 sm:px-10 md:px-14">
+    <main className={`min-h-screen pt-24 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
+      isDark
+        ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+        : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
+    }`}>
       <div className="max-w-lg mx-auto">
-        <button
+        <motion.button
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
           onClick={() => navigate('/akun/pesanan')}
-          className="flex items-center gap-1.5 text-white/50 hover:text-white text-sm mb-6 transition-colors"
+          className={`flex items-center gap-1.5 text-sm mb-6 transition-colors ${
+            isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+          }`}
         >
           <ArrowLeft size={16} />
           Kembali ke Riwayat Pesanan
-        </button>
+        </motion.button>
 
-        <div className="flex items-center gap-3 mb-1">
-          <h1 className="font-playfair italic text-white text-3xl">{booking.car?.nama ?? '-'}</h1>
-          <span className="text-xs px-2.5 py-1 rounded-full bg-white/10 text-white/70">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="flex items-center gap-3 mb-1"
+        >
+          <h1 className={`font-playfair italic text-3xl ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.car?.nama ?? '-'}</h1>
+          <span className={`text-xs px-2.5 py-1 rounded-full ${statusBadge[booking.status]}`}>
             {STATUS_LABEL[booking.status]}
           </span>
-        </div>
-        <p className="text-white/40 text-xs mb-6">ID Pesanan: {booking.id}</p>
+        </motion.div>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.15 }}
+          className={`text-xs mb-6 ${isDark ? 'text-white/40' : 'text-slate-500'}`}
+        >
+          ID Pesanan: {booking.id}
+        </motion.p>
 
-        <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-5 mb-5">
-          <h2 className="text-white/50 text-xs uppercase tracking-wider mb-3">Ringkasan</h2>
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className={cardClass}
+        >
+          <h2 className={`text-xs uppercase tracking-wider mb-3 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Ringkasan</h2>
           <div className="grid grid-cols-2 gap-y-2.5 text-sm">
-            <span className="text-white/50">Tanggal Ambil</span>
-            <span className="text-white text-right">{formatTanggal(booking.tanggalMulai)}</span>
-            <span className="text-white/50">Tanggal Kembali</span>
-            <span className="text-white text-right">{formatTanggal(booking.tanggalSelesai)}</span>
-            <span className="text-white/50">Lokasi Ambil</span>
-            <span className="text-white text-right">{booking.lokasiAmbil}</span>
-            <span className="text-white/50">Lokasi Kembali</span>
-            <span className="text-white text-right">{booking.lokasiKembali}</span>
-            <span className="text-white/50">Harga Dasar</span>
-            <span className="text-white text-right">{formatRupiah(Number(booking.hargaDasar))}</span>
+            <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Tanggal Ambil</span>
+            <span className={`text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatTanggal(booking.tanggalMulai)}</span>
+            <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Tanggal Kembali</span>
+            <span className={`text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatTanggal(booking.tanggalSelesai)}</span>
+            <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Lokasi Ambil</span>
+            <span className={`text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.lokasiAmbil}</span>
+            <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Lokasi Kembali</span>
+            <span className={`text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.lokasiKembali}</span>
+            <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Harga Dasar</span>
+            <span className={`text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatRupiah(Number(booking.hargaDasar))}</span>
             {booking.addons?.map((addon) => (
               <Fragment key={addon.id}>
-                <span className="text-white/50">Add-on: {addon.jenis}</span>
-                <span className="text-white text-right">{formatRupiah(Number(addon.harga))}</span>
+                <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Add-on: {addon.jenis}</span>
+                <span className={`text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatRupiah(Number(addon.harga))}</span>
               </Fragment>
             ))}
-            <span className="text-white font-medium pt-2 border-t border-white/10">Total</span>
-            <span className="text-[#2563eb] font-medium text-right pt-2 border-t border-white/10">
+            <span className={`font-medium pt-2 border-t ${isDark ? 'text-white border-white/10' : 'text-slate-900 border-slate-200'}`}>Total</span>
+            <span className={`font-medium text-right pt-2 border-t ${isDark ? 'text-blue-400 border-white/10' : 'text-blue-600 border-slate-200'}`}>
               {formatRupiah(Number(booking.totalHarga))}
             </span>
           </div>
-        </div>
+        </motion.div>
 
-        {booking.status === 'pending' && (
-          <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-5">
+        {booking.status === 'menunggu_pembayaran' && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className={`mt-5 rounded-2xl p-5 ${isDark ? 'bg-white/[0.04] border border-white/10' : 'bg-white/60 backdrop-blur-xl border border-white/80'}`}
+          >
             {!confirmingCancel ? (
               <button
                 onClick={() => setConfirmingCancel(true)}
-                className="text-red-400 hover:text-red-300 text-sm font-medium"
+                className="text-red-500 hover:text-red-400 text-sm font-medium transition-colors"
               >
                 Batalkan Pesanan
               </button>
             ) : (
               <div>
-                <p className="text-white/70 text-sm mb-3">Yakin batalkan pesanan ini?</p>
+                <p className={`text-sm mb-3 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Yakin batalkan pesanan ini?</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => cancelMutation.mutate()}
                     disabled={cancelMutation.isPending}
-                    className="flex items-center gap-2 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-sm font-medium px-4 py-2 rounded-full transition-colors disabled:opacity-60"
+                    className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-colors disabled:opacity-60 ${
+                      isDark
+                        ? 'bg-red-500/15 hover:bg-red-500/25 text-red-400'
+                        : 'bg-red-100 hover:bg-red-200 text-red-600'
+                    }`}
                   >
                     {cancelMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                     Ya, Batalkan
                   </button>
                   <button
                     onClick={() => setConfirmingCancel(false)}
-                    className="text-white/50 hover:text-white text-sm px-4 py-2"
+                    className={`text-sm px-4 py-2 transition-colors ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
                   >
                     Tidak
                   </button>
                 </div>
-                {cancelError && <p className="text-red-400 text-xs mt-2">{cancelError}</p>}
+                {cancelError && <p className="text-red-500 text-xs mt-2">{cancelError}</p>}
               </div>
             )}
-          </div>
+          </motion.div>
         )}
       </div>
     </main>
