@@ -1,21 +1,36 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bookingsRouter = void 0;
 const express_1 = require("express");
+const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const zod_1 = require("zod");
 const prisma_1 = require("../lib/prisma");
 const verifySupabaseToken_1 = require("../middleware/verifySupabaseToken");
 const availability_service_1 = require("../services/availability.service");
 const pricing_service_1 = require("../services/pricing.service");
-const xendit_service_1 = require("../services/xendit.service");
+const bayargg_service_1 = require("../services/bayargg.service");
 exports.bookingsRouter = (0, express_1.Router)();
 exports.bookingsRouter.use(verifySupabaseToken_1.verifySupabaseToken);
+// SECURITY: Rate limiting for payment endpoint
+const paymentLimiter = (0, express_rate_limit_1.default)({
+    windowMs: 60 * 1000, // 1 minute
+    max: 5, // 5 payment requests per minute per user
+    keyGenerator: (req) => req.user?.id || 'anonymous',
+    message: { error: 'Terlalu banyak request pembayaran, coba lagi dalam 1 menit' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+// SECURITY: UUID validation schema
+const uuidSchema = zod_1.z.string().uuid();
 const createBookingSchema = zod_1.z.object({
     carId: zod_1.z.string().uuid(),
     tanggalMulai: zod_1.z.coerce.date(),
     tanggalSelesai: zod_1.z.coerce.date(),
-    lokasiAmbil: zod_1.z.string().trim().min(1),
-    lokasiKembali: zod_1.z.string().trim().min(1),
+    lokasiAmbil: zod_1.z.string().trim().min(1).max(500),
+    lokasiKembali: zod_1.z.string().trim().min(1).max(500),
     addons: zod_1.z
         .array(zod_1.z.object({
         jenis: zod_1.z.enum(['sopir', 'asuransi', 'antar_jemput']),
@@ -23,6 +38,19 @@ const createBookingSchema = zod_1.z.object({
     }))
         .default([]),
 });
+// SECURITY: Payment method validation (bayar.gg supported methods)
+const ALLOWED_PAYMENT_METHODS = [
+    // Virtual Account
+    'bri_va', // BRI Virtual Account
+    'livin_va', // Livin by Mandiri
+    // QRIS
+    'qris', // QRIS (GoPay, OVO, DANA, ShopeePay, dll)
+    // E-Wallet
+    'ovo', // OVO
+];
+function isValidPaymentMethod(method) {
+    return ALLOWED_PAYMENT_METHODS.includes(method);
+}
 /**
  * POST /api/bookings — F6 Alur Booking, §11.1/§11.2/§11.3 PRD.
  *
@@ -44,6 +72,9 @@ exports.bookingsRouter.post('/', async (req, res) => {
         return;
     }
     try {
+        // SECURITY: Use Serializable isolation level to prevent race conditions
+        // This ensures that concurrent booking requests for the same car/date
+        // are properly serialized and no double-booking can occur
         const booking = await prisma_1.prisma.$transaction(async (tx) => {
             const car = await tx.car.findUnique({ where: { id: carId } });
             if (!car || car.status !== 'tersedia') {
@@ -65,8 +96,8 @@ exports.bookingsRouter.post('/', async (req, res) => {
                     hargaDasar: rincian.hargaDasar,
                     totalAddon: rincian.totalAddon,
                     totalHarga: rincian.totalHarga,
-                    // v1.3: Status changed from 'pending' to 'menunggu_pembayaran'
-                    // because now waiting for Xendit confirmation, not manual admin verification
+                    // v2: Status changed from 'pending' to 'menunggu_pembayaran'
+                    // because now waiting for DOKU confirmation, not manual admin verification
                     status: 'menunggu_pembayaran',
                     addons: {
                         createMany: {
@@ -103,6 +134,12 @@ exports.bookingsRouter.get('/mine', async (req, res) => {
 });
 /** GET /api/bookings/:id — pemilik booking ATAU admin boleh lihat. */
 exports.bookingsRouter.get('/:id', async (req, res) => {
+    // SECURITY: Validate UUID format
+    const idParse = uuidSchema.safeParse(req.params.id);
+    if (!idParse.success) {
+        res.status(400).json({ error: 'Format ID booking tidak valid' });
+        return;
+    }
     const booking = await prisma_1.prisma.booking.findUnique({
         where: { id: req.params.id },
         include: {
@@ -124,6 +161,12 @@ exports.bookingsRouter.get('/:id', async (req, res) => {
 });
 /** PATCH /api/bookings/:id/cancel — hanya pemilik booking, hanya jika masih `pending`. */
 exports.bookingsRouter.patch('/:id/cancel', async (req, res) => {
+    // SECURITY: Validate UUID format
+    const idParse = uuidSchema.safeParse(req.params.id);
+    if (!idParse.success) {
+        res.status(400).json({ error: 'Format ID booking tidak valid' });
+        return;
+    }
     const booking = await prisma_1.prisma.booking.findUnique({ where: { id: req.params.id } });
     if (!booking) {
         res.status(404).json({ error: 'Booking tidak ditemukan' });
@@ -133,8 +176,8 @@ exports.bookingsRouter.patch('/:id/cancel', async (req, res) => {
         res.status(403).json({ error: 'Tidak berhak membatalkan booking ini' });
         return;
     }
-    if (booking.status !== 'pending') {
-        res.status(409).json({ error: 'Booking hanya bisa dibatalkan selagi berstatus pending' });
+    if (booking.status !== 'menunggu_pembayaran') {
+        res.status(409).json({ error: 'Booking hanya bisa dibatalkan selagi menunggu pembayaran' });
         return;
     }
     const updated = await prisma_1.prisma.$transaction(async (tx) => {
@@ -156,10 +199,16 @@ exports.bookingsRouter.patch('/:id/cancel', async (req, res) => {
 });
 /**
  * POST /api/bookings/:id/checkout
- * Membuat invoice Xendit untuk booking ini
- * Customer akan diarahkan ke halaman pembayaran Xendit
+ * Membuat invoice bayar.gg untuk booking ini
+ * Customer akan diarahkan ke halaman pembayaran bayar.gg
  */
 exports.bookingsRouter.post('/:id/checkout', async (req, res) => {
+    // SECURITY: Validate UUID format
+    const idParse = uuidSchema.safeParse(req.params.id);
+    if (!idParse.success) {
+        res.status(400).json({ error: 'Format ID booking tidak valid' });
+        return;
+    }
     const bookingId = req.params.id;
     try {
         // Ambil booking dengan relasi
@@ -190,40 +239,61 @@ exports.bookingsRouter.post('/:id/checkout', async (req, res) => {
             });
             return;
         }
-        // Check if payment already exists
-        if (booking.payment?.xenditInvoiceId) {
-            // Jika invoice sudah ada, return URL yang sudah ada
+        // Check if payment already exists (return existing invoice URL)
+        if (booking.payment?.gatewayInvoiceId) {
             res.json({
                 data: {
                     bookingId: booking.id,
                     status: booking.payment.status,
-                    invoiceUrl: `https://dashboard.xendit.co/invoices/${booking.payment.xenditInvoiceId}`,
+                    invoiceUrl: (0, bayargg_service_1.getBayarGGPaymentUrl)(booking.payment.gatewayInvoiceId),
+                    invoiceId: booking.payment.gatewayInvoiceId,
+                    gateway: 'bayar.gg',
                     message: 'Invoice sudah dibuat sebelumnya',
                 },
             });
             return;
         }
-        // Check if Xendit is configured
-        if (!(0, xendit_service_1.isXenditConfigured)()) {
+        // Check if bayar.gg is configured
+        if (!(0, bayargg_service_1.isBayarGGConfigured)()) {
             res.status(503).json({
                 error: 'Payment gateway belum dikonfigurasi',
-                hint: 'Hubungi admin untuk setup Xendit',
+                hint: 'Hubungi admin untuk setup bayar.gg',
             });
             return;
         }
-        // Create Xendit invoice
-        const result = await (0, xendit_service_1.createXenditInvoice)(booking.id, Number(booking.totalHarga), booking.profile.email, booking.profile.nama, `Sewa Mobil ${booking.car.nama} - ${booking.car.instansi.namaInstansi}`);
+        // Create bayar.gg payment
+        const result = await (0, bayargg_service_1.createBayarGGPayment)({
+            bookingId: booking.id,
+            amount: Number(booking.totalHarga),
+            customerEmail: booking.profile.email,
+            customerName: booking.profile.nama,
+            customerPhone: booking.profile.noHp,
+            description: `Sewa Mobil ${booking.car.nama} - ${booking.car.instansi.namaInstansi}`,
+        });
         if (!result.success) {
             res.status(500).json({ error: result.error || 'Gagal membuat invoice' });
             return;
         }
+        // Create payment record with gateway IDs
+        await prisma_1.prisma.payment.create({
+            data: {
+                bookingId: booking.id,
+                gatewayInvoiceId: result.invoiceId,
+                gatewayOrderId: result.invoiceId,
+                metodeBayar: 'virtual_account',
+                jumlah: Number(booking.totalHarga),
+                status: 'pending',
+            },
+        });
         res.json({
             data: {
                 bookingId: booking.id,
-                invoiceUrl: result.invoiceUrl,
+                invoiceUrl: result.paymentUrl,
                 invoiceId: result.invoiceId,
+                qrisString: result.qrisString,
                 amount: Number(booking.totalHarga),
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+                gateway: 'bayar.gg',
+                expiresAt: result.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             },
         });
     }
@@ -260,7 +330,8 @@ exports.bookingsRouter.get('/:id/payment-status', async (req, res) => {
                 bookingStatus: booking.status,
                 paymentStatus: booking.payment?.status ?? null,
                 paymentId: booking.payment?.id ?? null,
-                xenditInvoiceId: booking.payment?.xenditInvoiceId ?? null,
+                gatewayInvoiceId: booking.payment?.gatewayInvoiceId ?? null,
+                gateway: 'bayar.gg',
             },
         });
     }
@@ -269,4 +340,141 @@ exports.bookingsRouter.get('/:id/payment-status', async (req, res) => {
         res.status(500).json({ error: 'Gagal mengambil status pembayaran' });
     }
 });
+/**
+ * POST /api/bookings/:id/payment
+ * Membuat pembayaran bayar.gg dengan metode pembayaran yang dipilih
+ * Endpoint baru untuk flow dengan halaman pemilihan metode pembayaran
+ *
+ * SECURITY MEASURES:
+ * - UUID validation on booking ID
+ * - Explicit payment method validation
+ * - Rate limiting (5 requests per minute per user)
+ */
+exports.bookingsRouter.post('/:id/payment', paymentLimiter, async (req, res) => {
+    // SECURITY: Validate UUID format
+    const bookingIdParse = uuidSchema.safeParse(req.params.id);
+    if (!bookingIdParse.success) {
+        res.status(400).json({ error: 'Format ID booking tidak valid' });
+        return;
+    }
+    const bookingId = bookingIdParse.data;
+    const { paymentMethod } = req.body;
+    // SECURITY: Validate payment method explicitly
+    if (!paymentMethod || typeof paymentMethod !== 'string') {
+        res.status(400).json({ error: 'Metode pembayaran diperlukan' });
+        return;
+    }
+    // SECURITY: Strict payment method validation
+    if (!isValidPaymentMethod(paymentMethod)) {
+        res.status(400).json({
+            error: 'Metode pembayaran tidak valid',
+            allowed: ALLOWED_PAYMENT_METHODS,
+        });
+        return;
+    }
+    try {
+        // Ambil booking dengan relasi
+        const booking = await prisma_1.prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: {
+                car: {
+                    include: { instansi: { select: { namaInstansi: true } } },
+                },
+                profile: { select: { nama: true, email: true, noHp: true } },
+                payment: true,
+            },
+        });
+        if (!booking) {
+            res.status(404).json({ error: 'Booking tidak ditemukan' });
+            return;
+        }
+        // Verify ownership
+        if (booking.userId !== req.user.id) {
+            res.status(403).json({ error: 'Tidak berhak mengakses booking ini' });
+            return;
+        }
+        // Check if booking is still awaiting payment
+        if (booking.status !== 'menunggu_pembayaran') {
+            res.status(400).json({
+                error: 'Booking ini tidak bisa dibayar',
+            });
+            return;
+        }
+        // Check if payment already exists
+        if (booking.payment?.gatewayInvoiceId) {
+            // Return existing payment info
+            res.json({
+                data: {
+                    bookingId: booking.id,
+                    gatewayInvoiceId: booking.payment.gatewayInvoiceId,
+                    paymentMethod: booking.payment.metodeBayar,
+                    status: booking.payment.status,
+                    gateway: 'bayar.gg',
+                    message: 'Pembayaran sudah dibuat sebelumnya',
+                },
+            });
+            return;
+        }
+        // Check if bayar.gg is configured
+        if (!(0, bayargg_service_1.isBayarGGConfigured)()) {
+            res.status(503).json({
+                error: 'Payment gateway belum dikonfigurasi',
+            });
+            return;
+        }
+        // Create bayar.gg payment with selected payment method
+        const result = await (0, bayargg_service_1.createBayarGGPayment)({
+            bookingId: booking.id,
+            amount: Number(booking.totalHarga),
+            customerEmail: booking.profile.email,
+            customerName: booking.profile.nama,
+            customerPhone: booking.profile.noHp,
+            description: `Sewa Mobil ${booking.car.nama} - ${booking.car.instansi.namaInstansi}`,
+            paymentMethod: paymentMethod,
+        });
+        if (!result.success) {
+            res.status(500).json({ error: result.error || 'Gagal membuat pembayaran' });
+            return;
+        }
+        // Create payment record with gateway IDs
+        await prisma_1.prisma.payment.create({
+            data: {
+                bookingId: booking.id,
+                gatewayInvoiceId: result.invoiceId,
+                gatewayOrderId: result.invoiceId,
+                metodeBayar: paymentMethodToMetodeBayar(paymentMethod),
+                jumlah: Number(booking.totalHarga),
+                status: 'pending',
+            },
+        });
+        res.json({
+            data: {
+                bookingId: booking.id,
+                gatewayInvoiceId: result.invoiceId,
+                paymentUrl: result.paymentUrl,
+                qrisString: result.qrisString,
+                expiresAt: result.expiresAt,
+                paymentMethod: paymentMethod,
+                amount: Number(booking.totalHarga),
+                gateway: 'bayar.gg',
+            },
+        });
+    }
+    catch (error) {
+        console.error('POST /api/bookings/:id/payment error:', error);
+        res.status(500).json({ error: 'Gagal memproses pembayaran' });
+    }
+});
+/**
+ * Helper function to convert payment method ID to MetodeBayar enum
+ */
+function paymentMethodToMetodeBayar(method) {
+    if (method.includes('va'))
+        return 'virtual_account';
+    if (method === 'qris')
+        return 'qris';
+    if (['shopeepay', 'dana', 'ovo'].includes(method))
+        return 'ewallet';
+    return 'virtual_account'; // default
+}
 //# sourceMappingURL=bookings.routes.js.map

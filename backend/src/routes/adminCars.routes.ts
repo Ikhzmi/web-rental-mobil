@@ -2,39 +2,82 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireAdmin } from '../middleware/verifySupabaseToken';
+import { asyncHandler, AppError } from '../lib/errorHandler';
 
 export const adminCarsRouter = Router();
 
 adminCarsRouter.use(verifySupabaseToken, requireAdmin);
 
-/** GET /api/admin/cars — termasuk mobil nonaktif/maintenance (F10). */
-adminCarsRouter.get('/', async (_req, res) => {
-  const cars = await prisma.car.findMany({
-    include: { images: { orderBy: { urutan: 'asc' } } },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json({ data: cars });
+const paginationSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  cari: z.string().trim().optional(),
 });
+
+/** GET /api/admin/cars — termasuk mobil nonaktif/maintenance (F10) dengan pagination. */
+adminCarsRouter.get('/', asyncHandler(async (req, res) => {
+  const parsed = paginationSchema.safeParse(req.query);
+  if (!parsed.success) {
+    throw new AppError('Query tidak valid', 400);
+  }
+
+  const { page, limit, cari } = parsed.data;
+  const skip = (page - 1) * limit;
+
+  const where = cari
+    ? { nama: { contains: cari, mode: 'insensitive' as const } }
+    : {};
+
+  const [cars, total] = await Promise.all([
+    prisma.car.findMany({
+      where,
+      include: { images: { orderBy: { urutan: 'asc' } } },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.car.count({ where }),
+  ]);
+
+  res.json({
+    data: cars,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  });
+}));
 
 /**
  * GET /api/admin/cars/:id — ditambahkan v1.1, sebelumnya form edit admin
  * harus memfilter dari response list yang tidak efisien untuk armada besar.
  */
-adminCarsRouter.get('/:id', async (req, res) => {
+adminCarsRouter.get('/:id', asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+
+  // Admin scoping: verify car belongs to admin's instansi
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
+  }
+
   const car = await prisma.car.findUnique({
-    where: { id: req.params.id },
+    where: { id, instansiId },
     include: { images: { orderBy: { urutan: 'asc' } } },
   });
+
   if (!car) {
-    res.status(404).json({ error: 'Mobil tidak ditemukan' });
-    return;
+    throw new AppError('Mobil tidak ditemukan', 404);
   }
+
   res.json({ data: car });
-});
+}));
 
 const carBaseSchema = z.object({
   nama: z.string().trim().min(1),
-  kategori: z.enum(['city_car', 'suv', 'mpv', 'mewah']),
+  kategori: z.enum(['city_car', 'hatchback', 'suv', 'mpv', 'minibus', 'pickup', 'mewah', 'electric']),
   transmisi: z.enum(['manual', 'matic']),
   tipeSewa: z.enum(['lepas_kunci', 'dengan_sopir', 'keduanya']),
   hargaSopirPerHari: z.number().nonnegative().nullable().optional(),
@@ -54,59 +97,80 @@ function validateTipeSewaHargaSopir(data: z.infer<typeof carBaseSchema>) {
 }
 
 /** POST /api/admin/cars */
-adminCarsRouter.post('/', async (req, res) => {
+adminCarsRouter.post('/', asyncHandler(async (req, res) => {
   const parsed = carBaseSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
-    return;
+    throw new AppError('Data tidak valid', 400);
   }
+
   const bisnisError = validateTipeSewaHargaSopir(parsed.data);
   if (bisnisError) {
-    res.status(400).json({ error: bisnisError });
-    return;
+    throw new AppError(bisnisError, 400);
   }
 
-  const car = await prisma.car.create({ data: parsed.data, include: { images: true } });
+  // Admin scoping: assign car to admin's instansi
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
+  }
+
+  const car = await prisma.car.create({
+    data: { ...parsed.data, instansiId },
+    include: { images: true },
+  });
   res.status(201).json({ data: car });
-});
+}));
 
 /** PATCH /api/admin/cars/:id */
-adminCarsRouter.patch('/:id', async (req, res) => {
+adminCarsRouter.patch('/:id', asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
   const parsed = carBaseSchema.partial().safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
-    return;
+    throw new AppError('Data tidak valid', 400);
   }
 
-  const existing = await prisma.car.findUnique({ where: { id: req.params.id } });
+  // Admin scoping: verify car belongs to admin's instansi
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
+  }
+
+  const existing = await prisma.car.findUnique({ where: { id, instansiId } });
   if (!existing) {
-    res.status(404).json({ error: 'Mobil tidak ditemukan' });
-    return;
+    throw new AppError('Mobil tidak ditemukan', 404);
   }
 
   const merged = { ...existing, ...parsed.data };
   const bisnisError = validateTipeSewaHargaSopir(merged as z.infer<typeof carBaseSchema>);
   if (bisnisError) {
-    res.status(400).json({ error: bisnisError });
-    return;
+    throw new AppError(bisnisError, 400);
   }
 
-  const car = await prisma.car.update({ where: { id: req.params.id }, data: parsed.data });
+  const car = await prisma.car.update({ where: { id }, data: parsed.data });
   res.json({ data: car });
-});
+}));
 
 /** DELETE /api/admin/cars/:id — nonaktifkan (soft-delete), bukan hapus baris. */
-adminCarsRouter.delete('/:id', async (req, res) => {
-  const car = await prisma.car
-    .update({ where: { id: req.params.id }, data: { status: 'nonaktif' } })
-    .catch(() => null);
+adminCarsRouter.delete('/:id', asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
 
-  if (!car) {
-    res.status(404).json({ error: 'Mobil tidak ditemukan' });
-    return;
+  // Admin scoping: verify car belongs to admin's instansi
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
   }
+
+  const existing = await prisma.car.findUnique({ where: { id, instansiId } });
+  if (!existing) {
+    throw new AppError('Mobil tidak ditemukan', 404);
+  }
+
+  const car = await prisma.car.update({
+    where: { id },
+    data: { status: 'nonaktif' },
+  });
   res.json({ data: car });
-});
+}));
 
 const imageSchema = z.object({
   url: z.string().url(),
@@ -120,34 +184,50 @@ const imageSchema = z.object({
  * referensi URL publiknya ke tabel car_images (pola yang sama seperti
  * POST /api/profiles/me/dokumen untuk dokumen KTP/SIM).
  */
-adminCarsRouter.post('/:id/images', async (req, res) => {
+adminCarsRouter.post('/:id/images', asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
   const parsed = imageSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
-    return;
+    throw new AppError('Data tidak valid', 400);
   }
 
-  const car = await prisma.car.findUnique({ where: { id: req.params.id } });
+  // Admin scoping: verify car belongs to admin's instansi
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
+  }
+
+  const car = await prisma.car.findUnique({ where: { id, instansiId } });
   if (!car) {
-    res.status(404).json({ error: 'Mobil tidak ditemukan' });
-    return;
+    throw new AppError('Mobil tidak ditemukan', 404);
   }
 
   const image = await prisma.carImage.create({
-    data: { carId: req.params.id, url: parsed.data.url, urutan: parsed.data.urutan },
+    data: { carId: id, url: parsed.data.url, urutan: parsed.data.urutan },
   });
   res.status(201).json({ data: image });
-});
+}));
 
 /** DELETE /api/admin/cars/:id/images/:imageId — ditambahkan v1.1. */
-adminCarsRouter.delete('/:id/images/:imageId', async (req, res) => {
-  const image = await prisma.carImage
-    .delete({ where: { id: req.params.imageId } })
-    .catch(() => null);
+adminCarsRouter.delete('/:id/images/:imageId', asyncHandler(async (req, res) => {
+  const imageId = req.params.imageId as string;
 
-  if (!image) {
-    res.status(404).json({ error: 'Foto tidak ditemukan' });
-    return;
+  // Admin scoping: verify image belongs to admin's car's
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
   }
+
+  const existing = await prisma.carImage.findFirst({
+    where: {
+      id: imageId,
+      car: { instansiId },
+    },
+  });
+  if (!existing) {
+    throw new AppError('Foto tidak ditemukan', 404);
+  }
+
+  const image = await prisma.carImage.delete({ where: { id: imageId } });
   res.json({ data: image });
-});
+}));

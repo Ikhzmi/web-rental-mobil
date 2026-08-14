@@ -23,7 +23,7 @@ export default function Footer() {
           </div>
           <Link
             to="/armada"
-            className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium px-8 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 whitespace-nowrap"
+            className="bg-white text-zinc-900 hover:bg-zinc-100 text-sm font-medium px-8 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 whitespace-nowrap"
           >
             Reserve Now
           </Link>

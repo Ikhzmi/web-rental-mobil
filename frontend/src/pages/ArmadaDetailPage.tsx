@@ -11,6 +11,7 @@ import { motion } from 'framer-motion';
 import { api, type Kategori, type TipeSewa } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../hooks/useTheme';
+import { sanitizeHtml } from '../lib/sanitize';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -27,10 +28,10 @@ const KATEGORI_LABEL: Record<Kategori, string> = {
 
 const TIPE_SEWA_BADGE: Record<TipeSewa, { label: string; className: string }> = {
   lepas_kunci: { label: 'Bisa Lepas Kunci', className: 'bg-emerald-500/15 text-emerald-400' },
-  dengan_sopir: { label: 'Wajib dengan Sopir', className: 'bg-blue-500/15 text-blue-400' },
+  dengan_sopir: { label: 'Wajib dengan Sopir', className: 'bg-blue-500/15 text-white/60' },
   keduanya: {
     label: 'Lepas Kunci / Dengan Sopir',
-    className: 'bg-blue-500/15 text-blue-500',
+    className: 'bg-blue-500/15 text-white/60',
   },
 };
 
@@ -98,7 +99,7 @@ export default function ArmadaDetailPage() {
     return (
       <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       } pt-28 pb-20`}>
         <Loader2 size={18} className={`animate-spin ${isDark ? 'text-white/50' : 'text-slate-400'}`} />
@@ -111,13 +112,13 @@ export default function ArmadaDetailPage() {
     return (
       <main className={`min-h-screen flex flex-col items-center justify-center gap-3 text-center px-5 transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       } pt-28 pb-20`}>
         <p className={isDark ? 'text-white/60 text-sm' : 'text-slate-600 text-sm'}>Mobil tidak ditemukan atau gagal dimuat.</p>
         <button
           onClick={() => navigate('/armada')}
-          className={isDark ? 'text-blue-400 text-sm hover:underline' : 'text-blue-600 text-sm hover:underline'}
+          className={isDark ? 'text-white/60 text-sm hover:underline' : 'text-slate-600 text-sm hover:underline'}
         >
           Kembali ke Katalog Armada
         </button>
@@ -132,12 +133,12 @@ export default function ArmadaDetailPage() {
   return (
     <main ref={sectionRef} className={`min-h-screen pt-20 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300 ${
       isDark
-        ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+        ? 'bg-[#0a0a0a]'
         : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
     }`}>
       {/* Background decorations */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className={`absolute top-0 left-1/4 w-96 h-96 rounded-full blur-3xl ${isDark ? 'bg-blue-500/5' : 'bg-blue-500/10'}`} />
+        <div className={`absolute top-0 left-1/4 w-96 h-96 rounded-full blur-3xl ${isDark ? 'bg-white/5' : 'bg-slate-200/50'}`} />
         <div className={`absolute bottom-0 right-1/4 w-96 h-96 rounded-full blur-3xl ${isDark ? 'bg-purple-500/5' : 'bg-purple-500/10'}`} />
       </div>
 
@@ -238,8 +239,8 @@ export default function ArmadaDetailPage() {
                     className={`shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl border-2 transition-all duration-300 overflow-hidden ${
                       i === activeImage
                         ? isDark
-                          ? 'border-blue-500 shadow-lg shadow-blue-500/30'
-                          : 'border-blue-500 shadow-lg shadow-blue-500/20'
+                          ? 'border-white/20 shadow-lg shadow-black/30'
+                          : 'border-white/20 shadow-lg shadow-black/20'
                         : isDark
                           ? 'border-white/10 hover:border-white/30'
                           : 'border-slate-200 hover:border-slate-300'
@@ -262,7 +263,7 @@ export default function ArmadaDetailPage() {
               className="animate-section"
             >
               <p className={`text-sm font-medium uppercase tracking-wider mb-2 ${
-                isDark ? 'text-blue-400' : 'text-blue-600'
+                isDark ? 'text-white/60' : 'text-slate-600'
               }`}>
                 {KATEGORI_LABEL[car.kategori]}
               </p>
@@ -287,14 +288,14 @@ export default function ArmadaDetailPage() {
                     whileHover={{ y: -2 }}
                     className={`rounded-xl p-4 text-center transition-all duration-300 group ${
                       isDark
-                        ? 'sa-glass-light hover:border-blue-500/30'
-                        : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:shadow-lg hover:shadow-blue-500/10'
+                        ? 'sa-glass-light hover:border-white/30'
+                        : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:shadow-lg hover:shadow-black/10'
                     }`}
                   >
                     <spec.icon
                       size={22}
                       className={`mx-auto mb-2 transition-transform group-hover:scale-110 ${
-                        isDark ? 'text-blue-400' : 'text-blue-600'
+                        isDark ? 'text-white/60' : 'text-slate-600'
                       }`}
                     />
                     <p className={`text-sm font-medium capitalize ${isDark ? 'text-white' : 'text-slate-900'}`}>{spec.value}</p>
@@ -316,7 +317,10 @@ export default function ArmadaDetailPage() {
                   }`}
                 >
                   <h3 className={`font-semibold mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>Deskripsi</h3>
-                  <p className={`text-sm leading-relaxed ${isDark ? 'text-white/60' : 'text-slate-600'}`}>{car.deskripsi}</p>
+                  <p
+                    className={`text-sm leading-relaxed ${isDark ? 'text-white/60' : 'text-slate-600'}`}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(car.deskripsi || '') }}
+                  />
                 </motion.div>
               )}
             </motion.div>
@@ -339,8 +343,8 @@ export default function ArmadaDetailPage() {
                 <p className={`text-sm mb-1 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Harga per hari</p>
                 <p className={`text-3xl sm:text-4xl font-bold ${
                   isDark
-                    ? 'bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent'
-                    : 'bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent'
+                    ? 'bg-gradient-to-r from-white/40 to-white/20 bg-clip-text text-transparent'
+                    : 'bg-gradient-to-r from-zinc-700 to-zinc-800 bg-clip-text text-transparent'
                 }`}>
                   {formatRupiah(car.hargaPerHari)}
                 </p>
@@ -349,7 +353,7 @@ export default function ArmadaDetailPage() {
               {/* Calendar Section */}
               <div className="mb-6">
                 <div className={`flex items-center gap-2 mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  <CalendarIcon className={`w-5 h-5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                  <CalendarIcon className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
                   <h3 className="font-semibold">Pilih Tanggal</h3>
                 </div>
 
@@ -378,15 +382,15 @@ export default function ArmadaDetailPage() {
                         month_caption: `${isDark ? 'text-white/80' : 'text-slate-800'} font-semibold text-base mb-3`,
                         weekday: `${isDark ? 'text-white/30' : 'text-slate-400'} text-xs uppercase tracking-wider`,
                         day: `${isDark ? 'text-white/70' : 'text-slate-700'} text-sm transition-all duration-200`,
-                        day_button: `hover:bg-blue-500/20 rounded-full transition-all duration-200 ${isDark ? '' : 'hover:bg-blue-50'}`,
+                        day_button: `hover:bg-white/10 rounded-full transition-all duration-200 ${isDark ? '' : 'hover:bg-slate-100'}`,
                         selected: isDark
-                          ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full shadow-lg shadow-blue-500/30'
-                          : 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-full shadow-lg shadow-blue-500/20',
-                        range_middle: isDark ? 'bg-blue-500/20 text-white rounded-none' : 'bg-blue-50 text-blue-600 rounded-none',
+                          ? 'bg-white text-zinc-900 rounded-full shadow-lg shadow-white/20'
+                          : 'bg-zinc-800 text-white rounded-full shadow-lg shadow-black/20',
+                        range_middle: isDark ? 'bg-white/10 text-white rounded-none' : 'bg-slate-100 text-zinc-800 rounded-none',
                         range_start: 'rounded-r-none',
                         range_end: 'rounded-l-none',
-                        today: `${isDark ? 'text-blue-400' : 'text-blue-600'} font-bold ring-2 ring-blue-500/50 ring-offset-2 ${
-                          isDark ? 'ring-offset-[#0a0f1a]' : 'ring-offset-white'
+                        today: `${isDark ? 'text-white' : 'text-zinc-800'} font-bold ring-2 ring-white/50 ring-offset-2 ${
+                          isDark ? 'ring-offset-[#0a0a0a]' : 'ring-offset-white'
                         }`,
                         disabled: isDark
                           ? 'text-red-400/50 line-through bg-red-500/10 rounded-full'
@@ -401,7 +405,7 @@ export default function ArmadaDetailPage() {
                 <div className={`mt-4 flex flex-wrap gap-4 text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
                   <div className="flex items-center gap-2">
                     <div className={`w-4 h-4 rounded-full ${
-                      isDark ? 'bg-gradient-to-br from-blue-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'
+                      isDark ? 'bg-gradient-to-br from-white/20 to-white/10' : 'bg-gradient-to-br from-zinc-600 to-zinc-700'
                     }`} />
                     <span>Terpilih</span>
                   </div>
@@ -428,11 +432,11 @@ export default function ArmadaDetailPage() {
                   <>
                     <div className={`absolute inset-0 transition-all duration-300 ${
                       isDark
-                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 group-hover:from-blue-500 group-hover:to-purple-500'
-                        : 'bg-gradient-to-r from-blue-600 to-blue-700 group-hover:from-blue-500 group-hover:to-blue-600'
+                        ? 'bg-gradient-to-r from-zinc-700 to-zinc-800 group-hover:from-white/20 group-hover:to-white/10'
+                        : 'bg-gradient-to-r from-zinc-600 to-zinc-700 group-hover:from-white/20 group-hover:to-white/10'
                     }`} />
                     <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300 ${
-                      isDark ? 'bg-gradient-to-r from-blue-600 to-purple-600' : 'bg-gradient-to-r from-blue-600 to-blue-700'
+                      isDark ? 'bg-gradient-to-r from-zinc-700 to-zinc-800' : 'bg-gradient-to-r from-zinc-600 to-zinc-700'
                     }`} />
                     <span className="relative flex items-center justify-center gap-2 py-4 text-white font-semibold">
                       Sewa Sekarang
@@ -460,7 +464,7 @@ export default function ArmadaDetailPage() {
                     <span>Asuransi Incl.</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <CheckCircle size={14} className={isDark ? 'text-blue-400' : 'text-blue-500'} />
+                    <CheckCircle size={14} className={isDark ? 'text-white/60' : 'text-white/60'} />
                     <span>Ter-verifikasi</span>
                   </div>
                 </div>
@@ -473,7 +477,7 @@ export default function ArmadaDetailPage() {
       <style>{`
         .kerental-daypicker {
           --rdp-cell-size: 40px;
-          --rdp-accent-color: #2563eb;
+          --rdp-accent-color: #888888;
           --rdp-background-color: #1e3a5f;
         }
         .kerental-daypicker .rdp-months {

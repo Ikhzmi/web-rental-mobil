@@ -85,19 +85,19 @@ export default function SearchForm() {
           className="relative rounded-3xl overflow-hidden"
         >
           {/* Gradient border effect */}
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-blue-500/20 rounded-3xl p-[1px]">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-blue-500/10 rounded-3xl" />
+          <div className="absolute inset-0 bg-gradient-to-r from-white/10 via-white/10 to-white/10 rounded-3xl p-[1px]">
+            <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/5 to-white/5 rounded-3xl" />
           </div>
 
           {/* Main card */}
           <div className="relative rounded-[22px]
-                          bg-gradient-to-br from-black/80 via-[#0a0a1a]/90 to-black/80
+                          bg-gradient-to-br from-black/80 via-[#0a0a0a]/90 to-black/80
                           backdrop-blur-2xl border border-white/10
                           shadow-2xl shadow-black/50
                           p-6 md:p-8">
             {/* Inner glow */}
             <div className="absolute inset-0 rounded-[22px]
-                            bg-gradient-to-br from-blue-500/5 to-transparent
+                            bg-gradient-to-br from-white/5 to-transparent
                             pointer-events-none" />
 
             <form onSubmit={handleSearch} className="relative">
@@ -107,15 +107,15 @@ export default function SearchForm() {
                 <div className="relative group">
                   <label className="block text-white/50 text-sm mb-2 ml-1">Lokasi</label>
                   <div className="relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400 pointer-events-none" />
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/50 pointer-events-none" />
                     <select
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
                       className="w-full pl-12 pr-10 py-4 rounded-xl
                                  bg-white/5 border border-white/10
                                  text-white placeholder-white/30
-                                 focus:border-blue-500/50 focus:bg-white/10
-                                 focus:outline-none focus:ring-2 focus:ring-blue-500/20
+                                 focus:border-white/50 focus:bg-white/10
+                                 focus:outline-none focus:ring-2 focus:ring-white/20
                                  transition-all duration-300
                                  appearance-none cursor-pointer
                                  group-hover:border-white/20"
@@ -135,7 +135,7 @@ export default function SearchForm() {
                 <div className="relative group">
                   <label className="block text-white/50 text-sm mb-2 ml-1">Tanggal Ambil</label>
                   <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400 pointer-events-none" />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/50 pointer-events-none" />
                     <input
                       type="date"
                       value={startDate}
@@ -143,8 +143,8 @@ export default function SearchForm() {
                       className="w-full pl-12 pr-4 py-4 rounded-xl
                                  bg-white/5 border border-white/10
                                  text-white
-                                 focus:border-blue-500/50 focus:bg-white/10
-                                 focus:outline-none focus:ring-2 focus:ring-blue-500/20
+                                 focus:border-white/50 focus:bg-white/10
+                                 focus:outline-none focus:ring-2 focus:ring-white/20
                                  transition-all duration-300
                                  group-hover:border-white/20
                                  [color-scheme:dark]"
@@ -156,7 +156,7 @@ export default function SearchForm() {
                 <div className="relative group">
                   <label className="block text-white/50 text-sm mb-2 ml-1">Tanggal Kembali</label>
                   <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400 pointer-events-none" />
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/50 pointer-events-none" />
                     <input
                       type="date"
                       value={endDate}
@@ -165,8 +165,8 @@ export default function SearchForm() {
                       className="w-full pl-12 pr-4 py-4 rounded-xl
                                  bg-white/5 border border-white/10
                                  text-white
-                                 focus:border-blue-500/50 focus:bg-white/10
-                                 focus:outline-none focus:ring-2 focus:ring-blue-500/20
+                                 focus:border-white/50 focus:bg-white/10
+                                 focus:outline-none focus:ring-2 focus:ring-white/20
                                  transition-all duration-300
                                  group-hover:border-white/20
                                  [color-scheme:dark]"
@@ -178,15 +178,15 @@ export default function SearchForm() {
                 <div className="relative group">
                   <label className="block text-white/50 text-sm mb-2 ml-1">Kategori</label>
                   <div className="relative">
-                    <Car className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-400 pointer-events-none" />
+                    <Car className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/50 pointer-events-none" />
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value)}
                       className="w-full pl-12 pr-10 py-4 rounded-xl
                                  bg-white/5 border border-white/10
                                  text-white
-                                 focus:border-blue-500/50 focus:bg-white/10
-                                 focus:outline-none focus:ring-2 focus:ring-blue-500/20
+                                 focus:border-white/50 focus:bg-white/10
+                                 focus:outline-none focus:ring-2 focus:ring-white/20
                                  transition-all duration-300
                                  appearance-none cursor-pointer
                                  group-hover:border-white/20"
@@ -209,13 +209,13 @@ export default function SearchForm() {
                   className="relative px-10 py-4 rounded-xl overflow-hidden group"
                 >
                   {/* Gradient background */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600
-                                  group-hover:from-blue-500 group-hover:to-purple-500
+                  <div className="absolute inset-0 bg-gradient-to-r from-zinc-700 to-zinc-800
+                                  group-hover:from-zinc-600 group-hover:to-zinc-700
                                   transition-all duration-300" />
 
                   {/* Glow effect */}
                   <div className="absolute inset-0 opacity-0 group-hover:opacity-100
-                                  bg-gradient-to-r from-blue-600 to-purple-600
+                                  bg-gradient-to-r from-zinc-600 to-zinc-700
                                   blur-xl transition-opacity duration-300" />
 
                   {/* Button content */}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useScrollReveal } from '../hooks/useScrollReveal';
+import { useTheme } from '../hooks/useTheme';
 
 const FAQS = [
   {
@@ -24,12 +25,14 @@ const FAQS = [
 export default function FaqPage() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
   const listRef = useScrollReveal<HTMLDivElement>({ stagger: 0.07 });
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10] pt-28 pb-20 px-5 sm:px-10 md:px-14">
+    <main className="min-h-screen bg-[var(--bg-primary)] pt-28 pb-20 px-5 sm:px-10 md:px-14">
       <div className="max-w-2xl mx-auto">
-        <p className="text-white/40 text-xs uppercase tracking-[0.2em] mb-2">Bantuan</p>
-        <h1 className="font-playfair italic text-white text-4xl sm:text-5xl mb-8">
+        <p className={`text-xs uppercase tracking-[0.2em] mb-2 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Bantuan</p>
+        <h1 className={`font-playfair italic text-4xl sm:text-5xl mb-8 ${isDark ? 'text-white' : 'text-slate-900'}`}>
           Pertanyaan Umum
         </h1>
 
@@ -37,22 +40,26 @@ export default function FaqPage() {
           {FAQS.map((item, i) => (
             <div
               key={item.q}
-              className="rounded-2xl bg-white/[0.04] backdrop-blur-md border border-white/10 overflow-hidden"
+              className={`rounded-2xl backdrop-blur-md overflow-hidden ${
+                isDark
+                  ? 'bg-white/[0.04] border border-white/10'
+                  : 'bg-white/60 border border-white/80 shadow-sm'
+              }`}
             >
               <button
                 onClick={() => setOpenIndex(openIndex === i ? null : i)}
                 className="w-full flex items-center justify-between text-left px-5 py-4"
               >
-                <span className="text-white text-sm font-medium pr-4">{item.q}</span>
+                <span className={`text-sm font-medium pr-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>{item.q}</span>
                 <ChevronDown
                   size={16}
-                  className={`text-white/40 shrink-0 transition-transform ${
-                    openIndex === i ? 'rotate-180' : ''
-                  }`}
+                  className={`shrink-0 transition-transform ${
+                    isDark ? 'text-white/40' : 'text-slate-400'
+                  } ${openIndex === i ? 'rotate-180' : ''}`}
                 />
               </button>
               {openIndex === i && (
-                <p className="text-white/55 text-sm leading-relaxed px-5 pb-4">{item.a}</p>
+                <p className={`text-sm leading-relaxed px-5 pb-4 ${isDark ? 'text-white/55' : 'text-slate-600'}`}>{item.a}</p>
               )}
             </div>
           ))}

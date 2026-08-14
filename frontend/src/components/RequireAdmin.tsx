@@ -6,15 +6,15 @@ import { useProfile } from '../hooks/useProfile';
 
 function GuardFallback() {
   return (
-    <div className="min-h-screen bg-[#0a0f1a] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-white/20 border-t-[#2563eb] rounded-full animate-spin" />
+    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
     </div>
   );
 }
 
 function ForbiddenPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10] flex items-center justify-center px-5">
+    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-5">
       <div className="text-center max-w-sm">
         <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
           <ShieldAlert size={22} className="text-red-400" />
@@ -23,7 +23,7 @@ function ForbiddenPage() {
         <p className="text-white/50 text-sm mb-6">
           Halaman ini khusus admin. Akun kamu tidak punya akses ke sini.
         </p>
-        <Link to="/" className="text-[#2563eb] text-sm hover:underline">
+        <Link to="/" className="text-white/70 text-sm hover:underline">
           Kembali ke Beranda
         </Link>
       </div>

@@ -2,10 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
-
-const getGlassCardClass = (isDark: boolean) => {
-  return isDark ? 'sa-glass-dark' : 'sa-glass-light';
-};
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 function HealthIndicator({ label, status, value, isDark }: { label: string; status: string; value: string; isDark: boolean }) {
   const isOnline = status === 'online' || status === 'healthy';

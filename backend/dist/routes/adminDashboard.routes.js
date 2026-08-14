@@ -13,15 +13,22 @@ exports.adminDashboardRouter.use(verifySupabaseToken_1.verifySupabaseToken, veri
  * terlaris" sebagai fitur, tapi spesifikasi API-nya kelewat ditulis.
  * Ditambahkan di sini, PRD perlu di-update menyusul.
  */
-exports.adminDashboardRouter.get('/summary', async (_req, res) => {
+exports.adminDashboardRouter.get('/summary', async (req, res) => {
+    // Admin scoping
+    const instansiId = req.user?.instansiId;
+    if (!instansiId) {
+        res.status(403).json({ error: 'Instansi tidak ditemukan untuk admin ini' });
+        return;
+    }
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const STATUS_DIHITUNG_PENDAPATAN = ['dikonfirmasi', 'berjalan', 'selesai'];
-    const STATUS_PESANAN_AKTIF = ['pending', 'dikonfirmasi', 'berjalan'];
+    const STATUS_PESANAN_AKTIF = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'];
     const [pendapatanBulanIni, jumlahPesananAktif, totalMobilTersedia, mobilSedangBerjalan, mobilTerlaris] = await Promise.all([
         // Total pendapatan bulan berjalan
         prisma_1.prisma.booking.aggregate({
             where: {
+                car: { instansiId }, // Admin scoping
                 status: { in: [...STATUS_DIHITUNG_PENDAPATAN] },
                 createdAt: { gte: startOfMonth },
             },
@@ -29,22 +36,19 @@ exports.adminDashboardRouter.get('/summary', async (_req, res) => {
         }),
         // Jumlah pesanan aktif (belum selesai/dibatalkan)
         prisma_1.prisma.booking.count({
-            where: { status: { in: [...STATUS_PESANAN_AKTIF] } },
+            where: { car: { instansiId }, status: { in: [...STATUS_PESANAN_AKTIF] } },
         }),
         // Total mobil berstatus 'tersedia' (basis okupansi)
-        prisma_1.prisma.car.count({ where: { status: 'tersedia' } }),
-        // Mobil yang SEDANG disewa (status booking 'berjalan') — dipakai
-        // sebagai pembilang okupansi. Catatan: ini okupansi "saat ini",
-        // bukan rata-rata periode, karena PRD tidak spesifik soal periode.
+        prisma_1.prisma.car.count({ where: { instansiId, status: 'tersedia' } }),
+        // Mobil yang SEDANG disewa (status booking 'berjalan')
         prisma_1.prisma.booking.groupBy({
             by: ['carId'],
-            where: { status: 'berjalan' },
+            where: { car: { instansiId }, status: 'berjalan' },
         }),
-        // Mobil terlaris — paling banyak dibooking sepanjang waktu
-        // (status apa pun kecuali dibatalkan), top 1.
+        // Mobil terlaris (hanya booking yang sudah dibayar)
         prisma_1.prisma.booking.groupBy({
             by: ['carId'],
-            where: { status: { not: 'dibatalkan' } },
+            where: { car: { instansiId }, status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] } },
             _count: { carId: true },
             orderBy: { _count: { carId: 'desc' } },
             take: 1,

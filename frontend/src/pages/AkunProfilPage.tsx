@@ -164,8 +164,8 @@ export default function AkunProfilPage() {
 
   const inputClass = `w-full text-sm rounded-xl px-3.5 py-2.5 transition-all focus:outline-none ${
     isDark
-      ? 'bg-white/5 border border-white/15 text-white placeholder:text-white/30 focus:border-blue-500/50'
-      : 'bg-white/80 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20'
+      ? 'bg-white/5 border border-white/15 text-white placeholder:text-white/30 focus:border-white/30'
+      : 'bg-white/80 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20'
   }`;
 
   const cardClass = isDark
@@ -176,7 +176,7 @@ export default function AkunProfilPage() {
     return (
       <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
         <Loader2 size={18} className="animate-spin" />
@@ -188,7 +188,7 @@ export default function AkunProfilPage() {
   return (
     <main className={`min-h-screen pt-28 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
       isDark
-        ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+        ? 'bg-[#0a0a0a]'
         : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
     }`}>
       <div className="max-w-lg mx-auto">
@@ -249,8 +249,8 @@ export default function AkunProfilPage() {
             disabled={updateMutation.isPending}
             className={`text-sm font-medium py-2.5 rounded-full flex items-center justify-center gap-2 transition-all disabled:opacity-60 ${
               isDark
-                ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20'
+                ? 'bg-white text-zinc-900 hover:bg-zinc-100'
+                : 'bg-zinc-800 hover:bg-zinc-900 text-white shadow-lg shadow-black/10'
             }`}
           >
             {updateMutation.isPending && <Loader2 size={14} className="animate-spin" />}

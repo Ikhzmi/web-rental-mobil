@@ -1,16 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { Clock, CheckCircle, AlertCircle, CreditCard, Building2, Car, User } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
-
-const getGlassCardClass = (isDark: boolean) => {
-  return isDark ? 'sa-glass-dark' : 'sa-glass-light';
-};
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 function getActivityIcon(type: string, isDark: boolean) {
   const iconMap: Record<string, { icon: typeof Clock; color: string }> = {
     booking_confirmed: { icon: CheckCircle, color: 'text-emerald-400 bg-emerald-500/20' },
-    payment_received: { icon: CreditCard, color: 'text-blue-400 bg-blue-500/20' },
+    booking_completed: { icon: CheckCircle, color: 'text-emerald-400 bg-emerald-500/20' },
+    payment_received: { icon: CreditCard, color: 'text-white/60 bg-blue-500/20' },
     instansi_registered: { icon: Building2, color: 'text-purple-400 bg-purple-500/20' },
     vehicle_approved: { icon: Car, color: 'text-cyan-400 bg-cyan-500/20' },
     customer_registered: { icon: User, color: 'text-amber-400 bg-amber-500/20' },
@@ -34,23 +33,40 @@ function formatTimeAgo(dateStr: string) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
 }
 
+interface DashboardActivity {
+  id: string;
+  type: string;
+  title: string;
+  description?: string | null;
+  createdAt: string;
+}
+
 export function ActivitiesTimeline() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const { data: activities, isLoading } = useQuery({
+  const { data: activities, isLoading } = useQuery<DashboardActivity[]>({
     queryKey: ['superadmin-activities'],
     queryFn: api.getSuperAdminActivities,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 30 * 1000, // 30 seconds
+    refetchInterval: 60 * 1000, // Refetch every minute
   });
 
   const activitiesList = activities ?? [];
 
   return (
     <div className={`p-5 rounded-2xl ${getGlassCardClass(isDark)}`}>
-      <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-        Aktivitas Terbaru
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          Aktivitas Terbaru
+        </h3>
+        <Link
+          to="/superadmin/bookings"
+          className={`text-xs ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Lihat Semua
+        </Link>
+      </div>
 
       <div className="space-y-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {isLoading ? (
@@ -78,10 +94,15 @@ export function ActivitiesTimeline() {
                   <Icon size={14} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  <p className={`text-xs font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>
                     {activity.title}
                   </p>
-                  <p className={`text-[10px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                  {activity.description && (
+                    <p className={`text-[10px] mt-0.5 truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                      {activity.description}
+                    </p>
+                  )}
+                  <p className={`text-[10px] mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
                     {formatTimeAgo(activity.createdAt)}
                   </p>
                 </div>

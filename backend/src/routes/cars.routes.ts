@@ -2,11 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { getBookedDateRanges } from '../services/availability.service';
+import { asyncHandler, AppError } from '../lib/errorHandler';
 
 export const carsRouter = Router();
 
 const listCarsQuerySchema = z.object({
-  kategori: z.enum(['city_car', 'suv', 'mpv', 'mewah']).optional(),
+  kategori: z.enum(['city_car', 'hatchback', 'suv', 'mpv', 'minibus', 'pickup', 'mewah', 'electric']).optional(),
   transmisi: z.enum(['manual', 'matic']).optional(),
   tipeSewa: z.enum(['lepas_kunci', 'dengan_sopir', 'keduanya']).optional(),
   hargaMin: z.coerce.number().nonnegative().optional(),
@@ -16,13 +17,16 @@ const listCarsQuerySchema = z.object({
   sort: z.enum(['harga_asc', 'harga_desc']).optional(),
 });
 
+// SECURITY: UUID validation schema
+const uuidSchema = z.string().uuid();
+
 /** GET /api/cars — F2 Katalog Armada: filter + sort, hanya mobil `tersedia`. */
-carsRouter.get('/', async (req, res) => {
+carsRouter.get('/', asyncHandler(async (req, res) => {
   const parsed = listCarsQuerySchema.safeParse(req.query);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Query tidak valid', detail: parsed.error.flatten() });
-    return;
+    throw new AppError('Query tidak valid', 400);
   }
+
   const { kategori, transmisi, tipeSewa, hargaMin, hargaMax, kapasitasMin, cari, sort } =
     parsed.data;
 
@@ -48,34 +52,50 @@ carsRouter.get('/', async (req, res) => {
   });
 
   res.json({ data: cars });
-});
+}));
 
 /** GET /api/cars/:id — F3 Detail Mobil: spesifikasi + galeri penuh. */
-carsRouter.get('/:id', async (req, res) => {
+carsRouter.get('/:id', asyncHandler(async (req, res) => {
+  // SECURITY: Validate UUID format
+  const idParse = uuidSchema.safeParse(req.params.id);
+  if (!idParse.success) {
+    throw new AppError('Format ID mobil tidak valid', 400);
+  }
+
+  const id = idParse.data;
   const car = await prisma.car.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     include: { images: { orderBy: { urutan: 'asc' } } },
   });
 
   if (!car || car.status === 'nonaktif') {
-    res.status(404).json({ error: 'Mobil tidak ditemukan' });
-    return;
+    throw new AppError('Mobil tidak ditemukan', 404);
   }
 
   res.json({ data: car });
-});
+}));
 
 /**
  * GET /api/cars/:id/availability — dipakai kalender di F3 untuk menandai
  * tanggal yang sudah terbooking sebagai tidak bisa dipilih.
  */
-carsRouter.get('/:id/availability', async (req, res) => {
-  const car = await prisma.car.findUnique({ where: { id: req.params.id }, select: { id: true } });
-  if (!car) {
-    res.status(404).json({ error: 'Mobil tidak ditemukan' });
-    return;
+carsRouter.get('/:id/availability', asyncHandler(async (req, res) => {
+  // SECURITY: Validate UUID format
+  const idParse = uuidSchema.safeParse(req.params.id);
+  if (!idParse.success) {
+    throw new AppError('Format ID mobil tidak valid', 400);
   }
 
-  const bookedRanges = await getBookedDateRanges(req.params.id);
+  const id = idParse.data;
+  const car = await prisma.car.findUnique({
+    where: { id },
+    select: { id: true }
+  });
+
+  if (!car) {
+    throw new AppError('Mobil tidak ditemukan', 404);
+  }
+
+  const bookedRanges = await getBookedDateRanges(id);
   res.json({ data: bookedRanges });
-});
+}));

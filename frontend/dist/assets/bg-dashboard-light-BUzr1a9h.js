@@ -1,0 +1,1 @@
+var e=`/assets/bg-dashboard-dark-DKByybs1.jpg`,t=`/assets/bg-dashboard-light-i6iQbZk7.png`;export{e as n,t};

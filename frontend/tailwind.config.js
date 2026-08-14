@@ -8,17 +8,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Dark mode (default)
+        // Dark mode (default) - Pure black
         dark: {
-          bg: '#090d15',
-          surface: '#0f172a',
-          elevated: '#1e293b',
+          bg: '#0a0a0a',
+          surface: '#0f0f0f',
+          elevated: '#1a1a1a',
         },
         // Light mode
         light: {
-          bg: '#f8fafc',
+          bg: '#F9EFE8',
           surface: '#ffffff',
-          elevated: '#f1f5f9',
+          elevated: '#f5ebe0',
         },
       },
       fontFamily: {

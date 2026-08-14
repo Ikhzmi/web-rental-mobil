@@ -1,6 +1,8 @@
 import 'dotenv/config';
-import express, { NextFunction, Request, Response } from 'express';
+import express from 'express';
 import cors from 'cors';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import helmet from 'helmet';
 
 import { carsRouter } from './routes/cars.routes';
 import { bookingsRouter } from './routes/bookings.routes';
@@ -12,16 +14,64 @@ import { adminDashboardRouter } from './routes/adminDashboard.routes';
 import { superadminRouter } from './routes/superadmin.routes';
 import { instansiRouter } from './routes/instansi.routes';
 import { webhooksRouter } from './routes/webhooks.routes';
+import { globalErrorHandler, notFoundHandler } from './lib/errorHandler';
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 
+// Security headers
+app.use(helmet());
+
+// CORS configuration
 app.use(
   cors({
     origin: process.env.FRONTEND_ORIGIN?.split(',') ?? 'http://localhost:5173',
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+// Rate limiting - general
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per window
+  message: { error: 'Terlalu banyak permintaan, coba lagi nanti' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting - stricter for auth-sensitive endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 requests per window
+  message: { error: 'Terlalu banyak percobaan, coba lagi dalam 15 menit' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// SECURITY: Rate limiting for payment endpoints
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // 5 payment requests per minute per user
+  keyGenerator: (req) => req.user?.id || req.ip || 'anonymous',
+  validate: { ip: false },
+  message: { error: 'Terlalu banyak request pembayaran, coba lagi dalam 1 menit' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// SECURITY: Rate limiting for webhooks (prevent webhook spam/DOS)
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 webhook requests per minute per IP
+  keyGenerator: (req) => req.ip || 'anonymous',
+  validate: { ip: false },
+  message: { error: 'Too many requests' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limiting to all routes
+app.use('/api', generalLimiter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -31,8 +81,9 @@ app.get('/health', (_req, res) => {
 app.use('/api/cars', carsRouter);
 
 // Customer (verifySupabaseToken dipasang di dalam masing-masing router)
-app.use('/api/bookings', bookingsRouter);
-app.use('/api/profiles', profilesRouter);
+// Stricter rate limit for checkout (payment endpoint)
+app.use('/api/bookings', authLimiter, bookingsRouter);
+app.use('/api/profiles', authLimiter, profilesRouter);
 
 // Admin (verifySupabaseToken + requireAdmin dipasang di dalam masing-masing router)
 app.use('/api/admin/cars', adminCarsRouter);
@@ -45,22 +96,16 @@ app.use('/api/admin/dashboard', adminDashboardRouter);
 app.use('/api/superadmin', superadminRouter);
 
 // Instansi routes (public + admin scoped)
-app.use('/api/instansi', instansiRouter);
+app.use('/api/instansi', authLimiter, instansiRouter);
 
-// Webhooks (Xendit)
-app.use('/api/webhooks', webhooksRouter);
+// Webhooks (DOKU) - with rate limiting to prevent webhook spam
+app.use('/api/webhooks', webhookLimiter, webhooksRouter);
 
-app.use((req, res) => {
-  res.status(404).json({ error: `Endpoint tidak ditemukan: ${req.method} ${req.path}` });
-});
+// 404 handler
+app.use(notFoundHandler);
 
-// Error handler terakhir — menangkap error async yang tidak sengaja lolos
-// dari try/catch di masing-masing route.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Terjadi kesalahan pada server' });
-});
+// Global error handler - harus di akhir
+app.use(globalErrorHandler);
 
 app.listen(PORT, () => {
   console.log(`KerenTal Kita API berjalan di http://localhost:${PORT}`);

@@ -1,11 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
-
-const getGlassCardClass = (isDark: boolean) => {
-  return isDark ? 'sa-glass-dark' : 'sa-glass-light';
-};
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 export function TopCompanies() {
   const { theme } = useTheme();
@@ -19,9 +17,17 @@ export function TopCompanies() {
 
   return (
     <div className={`p-5 rounded-2xl ${getGlassCardClass(isDark)}`}>
-      <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-        Perusahaan Rental Teratas
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          Perusahaan Rental Teratas
+        </h3>
+        <Link
+          to="/superadmin/instansi"
+          className={`text-xs ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Lihat Semua
+        </Link>
+      </div>
 
       <div className="space-y-3">
         {isLoading ? (

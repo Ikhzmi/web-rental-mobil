@@ -42,8 +42,8 @@ function CarCard({ car, isDark }: { car: Car; isDark: boolean }) {
         to={`/armada/${car.id}`}
         className={`block rounded-2xl overflow-hidden transition-all duration-300 group ${
           isDark
-            ? 'sa-glass-light hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10'
-            : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-500/10'
+            ? 'sa-glass-light hover:border-white/30 hover:shadow-lg hover:shadow-black/10'
+            : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 hover:border-slate-300 hover:shadow-xl hover:shadow-black/10'
         }`}
       >
         <div className={`relative h-40 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
@@ -82,12 +82,12 @@ function CarCard({ car, isDark }: { car: Car; isDark: boolean }) {
           <h3 className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{car.nama}</h3>
           <p className={`text-xs mt-0.5 ${isDark ? 'text-white/45' : 'text-slate-500'}`}>{TIPE_SEWA_LABEL[car.tipeSewa]}</p>
           <div className="flex items-center justify-between mt-3">
-            <p className={`font-medium text-sm ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+            <p className={`font-medium text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
               {formatRupiah(car.hargaPerHari)}
               <span className={`font-normal ${isDark ? 'text-white/40' : 'text-slate-400'}`}> /hari</span>
             </p>
             <span className={`text-xs transition-colors group-hover:translate-x-1 ${
-              isDark ? 'text-white/50 group-hover:text-white' : 'text-slate-500 group-hover:text-blue-600'
+              isDark ? 'text-white/50 group-hover:text-white' : 'text-slate-500 group-hover:text-slate-600'
             }`}>
               Lihat Detail
               <svg className="inline w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -129,16 +129,12 @@ export default function ArmadaPage() {
 
   const selectClass = `text-sm rounded-full px-4 py-2 transition-all duration-200 focus:scale-[1.02] ${
     isDark
-      ? 'bg-[var(--bg-elevated)] border border-[var(--border-color)] text-white focus:border-blue-500 [&>option]:bg-[var(--bg-surface)]'
-      : 'bg-white/80 border border-slate-200 text-slate-900 focus:border-blue-400 [&>option]:bg-white'
+      ? 'bg-[var(--bg-elevated)] border border-[var(--border-color)] text-white focus:border-white/30 [&>option]:bg-[var(--bg-surface)]'
+      : 'bg-white/80 border border-slate-200 text-slate-900 focus:border-slate-400 [&>option]:bg-white'
   }`;
 
   return (
-    <main className={`min-h-screen pt-28 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
-      isDark
-        ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
-        : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
-    }`}>
+    <main className={`min-h-screen pt-28 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 bg-[var(--bg-primary)]`}>
       <div className="max-w-6xl mx-auto">
         <div ref={headerRef}>
           <div className="mb-8">
@@ -160,8 +156,8 @@ export default function ArmadaPage() {
                 placeholder="Cari nama mobil..."
                 className={`w-full rounded-full pl-10 pr-4 py-2.5 text-sm transition-all duration-200 focus:scale-[1.01] ${
                   isDark
-                    ? 'bg-[var(--bg-elevated)] border border-white/15 text-white placeholder:text-white/30 focus:border-blue-500'
-                    : 'bg-white/80 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-400'
+                    ? 'bg-[var(--bg-elevated)] border border-white/15 text-white placeholder:text-white/30 focus:border-white/30'
+                    : 'bg-white/80 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
                 }`}
               />
             </div>

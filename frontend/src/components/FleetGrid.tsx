@@ -55,8 +55,8 @@ export default function FleetGrid({ cars, activeIndex, onSelect }: FleetGridProp
                 ? 'bg-white/10 border-white/30'
                 : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.07] hover:border-white/20'
               : i === activeIndex
-                ? 'bg-white/90 border-blue-200 shadow-lg backdrop-blur-xl'
-                : 'bg-white/60 border-white/80 backdrop-blur-xl hover:bg-white/80 hover:border-blue-200'
+                ? 'bg-white/90 border-slate-300 shadow-lg backdrop-blur-xl'
+                : 'bg-white/60 border-white/80 backdrop-blur-xl hover:bg-white/80 hover:border-slate-300'
           }`}
         >
           {/* Top highlight */}
@@ -79,7 +79,7 @@ export default function FleetGrid({ cars, activeIndex, onSelect }: FleetGridProp
           <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{car.nama}</p>
           <p className={`text-xs ${isDark ? 'text-white/45' : 'text-slate-500'}`}>{KATEGORI_LABEL[car.kategori]}</p>
           <p className={`text-xs mt-1 font-medium ${
-            isDark ? 'text-blue-400' : 'text-blue-600'
+            isDark ? 'text-white/60' : 'text-slate-600'
           }`}>
             {formatRupiah(Number(car.hargaPerHari))}/hari
           </p>

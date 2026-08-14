@@ -1,36 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Car as CarIcon, Plus, Trash2, ImagePlus, Pencil, X, Loader2, Search } from 'lucide-react';
+import { Car as CarIcon, Plus, Trash2, ImagePlus, Pencil, X, Loader2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api, type Car, type Kategori, type Transmisi, type StatusMobil, type TipeSewa } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { supabase } from '../../lib/supabase';
 import { SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
-
-const STATUS_CONFIG_DARK: Record<StatusMobil, { bg: string; text: string; label: string }> = {
-  tersedia: { bg: 'bg-emerald-500/20 text-emerald-400', text: 'border-emerald-500/30', label: 'Tersedia' },
-  maintenance: { bg: 'bg-amber-500/20 text-amber-400', text: 'border-amber-500/30', label: 'Maintenance' },
-  nonaktif: { bg: 'bg-white/10 text-white/40', text: 'border-white/20', label: 'Nonaktif' },
-};
-
-const STATUS_CONFIG_LIGHT: Record<StatusMobil, { bg: string; text: string; label: string }> = {
-  tersedia: { bg: 'bg-emerald-100 text-emerald-700', text: 'border-emerald-200', label: 'Tersedia' },
-  maintenance: { bg: 'bg-amber-100 text-amber-700', text: 'border-amber-200', label: 'Maintenance' },
-  nonaktif: { bg: 'bg-slate-100 text-slate-500', text: 'border-slate-200', label: 'Nonaktif' },
-};
-
-const APPROVAL_CONFIG_DARK: Record<string, { bg: string; text: string; label: string }> = {
-  disetujui: { bg: 'bg-emerald-500/20 text-emerald-400', text: 'border-emerald-500/30', label: 'Disetujui' },
-  menunggu_persetujuan: { bg: 'bg-amber-500/20 text-amber-400', text: 'border-amber-500/30', label: 'Menunggu' },
-  ditolak: { bg: 'bg-red-500/20 text-red-400', text: 'border-red-500/30', label: 'Ditolak' },
-};
-
-const APPROVAL_CONFIG_LIGHT: Record<string, { bg: string; text: string; label: string }> = {
-  disetujui: { bg: 'bg-emerald-100 text-emerald-700', text: 'border-emerald-200', label: 'Disetujui' },
-  menunggu_persetujuan: { bg: 'bg-amber-100 text-amber-700', text: 'border-amber-200', label: 'Menunggu' },
-  ditolak: { bg: 'bg-red-100 text-red-700', text: 'border-red-200', label: 'Ditolak' },
-};
+import { getCarStatusConfig, getApprovalStatusConfig } from '../../lib/statusConfig';
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 const KATEGORI_LABELS: Record<string, string> = {
   city_car: 'City Car', hatchback: 'Hatchback', suv: 'SUV', mpv: 'MPV',
@@ -127,8 +105,8 @@ function EditCarModal({ car, onClose, isDark }: { car: Car; onClose: () => void;
 
   const inputClass = `w-full text-sm rounded-xl px-4 py-3 focus:outline-none transition-all ${
     isDark
-      ? 'bg-white/5 border border-white/15 text-white focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 [&>option]:bg-[#0a0f1a]'
-      : 'bg-white border border-slate-200 text-slate-900 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 [&>option]:bg-white'
+      ? 'bg-white/5 border border-white/15 text-white focus:border-white/30 focus:ring-2 focus:ring-blue-500/20 [&>option]:bg-[#0a0f1a]'
+      : 'bg-white border border-slate-200 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20 [&>option]:bg-white'
   }`;
 
   return (
@@ -188,8 +166,8 @@ function EditCarModal({ car, onClose, isDark }: { car: Car; onClose: () => void;
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
             className={`w-full px-4 py-3 font-medium rounded-xl shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
               isDark
-                ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-blue-500/25'
-                : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-blue-500/25'
+                ? 'bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-500 hover:to-zinc-600 text-white shadow-black/20'
+                : 'bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-500 hover:to-zinc-600 text-white shadow-black/20'
             }`}>
             {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
             Simpan
@@ -239,8 +217,8 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
 
   const inputClass = `w-full text-sm rounded-xl px-4 py-3 focus:outline-none transition-all ${
     isDark
-      ? 'bg-white/5 border border-white/15 text-white focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 [&>option]:bg-[#0a0f1a]'
-      : 'bg-white border border-slate-200 text-slate-900 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 [&>option]:bg-white'
+      ? 'bg-white/5 border border-white/15 text-white focus:border-white/30 focus:ring-2 focus:ring-blue-500/20 [&>option]:bg-[#0a0f1a]'
+      : 'bg-white border border-slate-200 text-slate-900 focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20 [&>option]:bg-white'
   }`;
 
   return (
@@ -319,8 +297,8 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
           <button onClick={handleSubmit} disabled={mutation.isPending}
             className={`w-full px-4 py-3 font-medium rounded-xl shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
               isDark
-                ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-blue-500/25'
-                : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-blue-500/25'
+                ? 'bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-500 hover:to-zinc-600 text-white shadow-black/20'
+                : 'bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-500 hover:to-zinc-600 text-white shadow-black/20'
             }`}>
             {mutation.isPending && <Loader2 size={14} className="animate-spin" />}
             Buat & Lanjut Tambah Foto
@@ -332,19 +310,15 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
 }
 
 function CarCard({ car, onEdit, isDark }: { car: Car; onEdit: () => void; isDark: boolean }) {
-  const statusCfg = isDark ? STATUS_CONFIG_DARK[car.status] : STATUS_CONFIG_LIGHT[car.status];
-  const approvalCfg = isDark ? APPROVAL_CONFIG_DARK[car.statusApproval ?? 'disetujui'] : APPROVAL_CONFIG_LIGHT[car.statusApproval ?? 'disetujui'];
+  const statusCfg = getCarStatusConfig(car.status, isDark);
+  const approvalCfg = getApprovalStatusConfig(car.statusApproval ?? 'disetujui', isDark);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -4 }}
-      className={`group rounded-2xl overflow-hidden transition-all duration-300 ${
-        isDark
-          ? 'bg-gradient-to-br from-white/8 via-white/5 to-white/3 backdrop-blur-xl border border-white/10 shadow-lg shadow-black/20 hover:border-blue-500/30 hover:shadow-blue-500/10'
-          : 'bg-white/80 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 hover:border-blue-300 hover:shadow-blue-500/10'
-      }`}
+      className={`group rounded-2xl overflow-hidden transition-all duration-300 ${getGlassCardClass(isDark)}`}
     >
       <div className="flex flex-col sm:flex-row">
         {/* Image */}
@@ -382,7 +356,7 @@ function CarCard({ car, onEdit, isDark }: { car: Car; onEdit: () => void; isDark
           </div>
 
           <div className="flex items-center justify-between">
-            <p className={`font-bold text-sm sm:text-base ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>{formatRupiah(Number(car.hargaPerHari))}/hari</p>
+            <p className={`font-bold text-sm sm:text-base ${isDark ? 'text-white/60' : 'text-slate-600'}`}>{formatRupiah(Number(car.hargaPerHari))}/hari</p>
             {car.tipeSewa !== 'lepas_kunci' && (
               <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>+Sopir</p>
             )}
@@ -400,15 +374,25 @@ export default function AdminArmadaPage() {
   const [editingCar, setEditingCar] = useState<Car | null>(null);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  const { data: cars, isLoading, isError } = useQuery({
-    queryKey: ['admin-cars'],
-    queryFn: api.listAdminCars,
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to first page on search change
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['admin-cars', page, debouncedSearch],
+    queryFn: () => api.listAdminCars({ page, limit: 12, cari: debouncedSearch || undefined }),
   });
 
-  const filteredCars = search
-    ? cars?.filter(c => c.nama.toLowerCase().includes(search.toLowerCase()))
-    : cars;
+  const cars = data?.data;
+  const pagination = data?.pagination;
 
   return (
     <div>
@@ -425,8 +409,8 @@ export default function AdminArmadaPage() {
           onClick={() => setCreating(true)}
           className={`flex items-center justify-center gap-2 px-5 py-2.5 font-medium rounded-xl shadow-lg transition-all ${
             isDark
-              ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-blue-500/25 hover:shadow-blue-500/40'
-              : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-blue-500/25 hover:shadow-blue-500/40'
+              ? 'bg-gradient-to-r from-zinc-600 to-zinc-700 text-white shadow-black/20 hover:shadow-black/30'
+              : 'bg-gradient-to-r from-zinc-600 to-zinc-700 text-white shadow-black/20 hover:shadow-black/30'
           }`}
         >
           <Plus size={18} />
@@ -444,8 +428,8 @@ export default function AdminArmadaPage() {
           onChange={(e) => setSearch(e.target.value)}
           className={`w-full pl-11 pr-4 py-3 rounded-xl text-sm focus:outline-none transition-all ${
             isDark
-              ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20'
-              : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20'
+              ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-white/30 focus:ring-2 focus:ring-blue-500/20'
+              : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20'
           }`}
         />
       </div>
@@ -463,8 +447,8 @@ export default function AdminArmadaPage() {
           <p className={`text-base sm:text-lg mb-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Gagal memuat armada</p>
           <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Silakan refresh halaman</p>
         </motion.div>
-      ) : !filteredCars?.length ? (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16 sm:py-20">
+      ) : !cars?.length ? (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`text-center py-16 sm:py-20 rounded-2xl ${getGlassCardClass(isDark)}`}>
           <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center ${
             isDark ? 'bg-white/5 border border-white/10' : 'bg-slate-100 border border-slate-200'
           }`}>
@@ -474,11 +458,43 @@ export default function AdminArmadaPage() {
           <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Klik "Tambah Mobil" untuk mulai</p>
         </motion.div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredCars.map((car) => (
-            <CarCard key={car.id} car={car} onEdit={() => setEditingCar(car)} isDark={isDark} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {cars.map((car) => (
+              <CarCard key={car.id} car={car} onEdit={() => setEditingCar(car)} isDark={isDark} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-8">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className={`p-2 rounded-xl transition-all disabled:opacity-30 ${
+                  isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className={`px-4 py-2 rounded-xl ${isDark ? 'bg-white/5 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                <span className="font-medium">{pagination.page}</span>
+                <span className="mx-1">/</span>
+                <span>{pagination.totalPages}</span>
+                <span className="ml-2 text-xs opacity-60">({pagination.total} total)</span>
+              </div>
+              <button
+                onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                disabled={page === pagination.totalPages}
+                className={`p-2 rounded-xl transition-all disabled:opacity-30 ${
+                  isDark ? 'bg-white/5 hover:bg-white/10 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       <AnimatePresence>

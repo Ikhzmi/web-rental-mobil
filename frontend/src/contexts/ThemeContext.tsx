@@ -17,8 +17,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'dark';
     const stored = localStorage.getItem(STORAGE_KEY);
+    // Default to dark theme - only use stored value if explicitly set
     if (stored === 'light' || stored === 'dark') return stored;
-    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    // No stored preference - default to dark
+    return 'dark';
   });
 
   const [isTransitioning, setIsTransitioning] = useState(false);

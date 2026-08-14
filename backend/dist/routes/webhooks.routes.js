@@ -1,227 +1,330 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.webhooksRouter = void 0;
 const express_1 = require("express");
+const crypto_1 = require("crypto");
 const prisma_1 = require("../lib/prisma");
-const xendit_service_1 = require("../services/xendit.service");
-const xendit_service_2 = require("../services/xendit.service");
+const bayargg_service_1 = require("../services/bayargg.service");
 exports.webhooksRouter = (0, express_1.Router)();
+// ============================================================================
+// SECURITY: Audit Logging Helper
+// ============================================================================
 /**
- * POST /api/webhooks/xendit
- * Menerima callback dari Xendit untuk update status pembayaran/disbursement
- *
- * Xendit akan POST ke endpoint ini saat:
- * - Invoice berhasil dibayar
- * - Invoice kedaluwarsa
- * - Disbursement berhasil/gagal
- *
- * Headers penting:
- * - x-callback-token: Token untuk verifikasi webhook
+ * Log payment events for audit trail
+ * Sanitizes sensitive data before logging
  */
-exports.webhooksRouter.post('/xendit', async (req, res) => {
-    const callbackToken = req.headers['x-callback-token'];
-    // Verify webhook authenticity
-    if (!(0, xendit_service_1.verifyXenditWebhook)(callbackToken)) {
-        console.warn('Xendit webhook rejected: invalid callback token');
-        res.status(401).json({ error: 'Invalid callback token' });
+function logPaymentAudit(event, data) {
+    // Sanitize - don't log sensitive payment details
+    console.log(`[PAYMENT_AUDIT] ${event}`, {
+        timestamp: new Date().toISOString(),
+        bookingId: data.bookingId,
+        paymentId: data.paymentId,
+        transactionId: data.transactionId,
+        status: data.status,
+        ...(data.error && { error: data.error }),
+    });
+}
+// ============================================================================
+// BAYAR.GG WEBHOOK HANDLER
+// ============================================================================
+/**
+ * POST /api/webhooks/bayargg
+ * Menerima callback dari bayar.gg untuk update status pembayaran
+ *
+ * SECURITY MEASURES:
+ * - HMAC signature verification
+ * - Timestamp validation (5 minute window)
+ * - Idempotency check via WebhookLog
+ * - Transaction wrapping for atomicity
+ * - Audit logging
+ *
+ * bayar.gg akan POST ke endpoint ini saat:
+ * - Pembayaran berhasil (paid)
+ * - Invoice kedaluwarsa (expired)
+ * - Pembayaran dibatalkan (cancelled)
+ */
+exports.webhooksRouter.post('/bayargg', async (req, res) => {
+    const signature = req.headers['x-webhook-signature'];
+    const timestamp = req.headers['x-webhook-timestamp'];
+    const webhookEvent = req.headers['x-webhook-event'];
+    const invoiceIdHeader = req.headers['x-invoice-id'];
+    const bodyString = JSON.stringify(req.body);
+    // Log received webhook
+    logPaymentAudit('BAYARGG_WEBHOOK_RECEIVED', {
+        ip: req.ip,
+        status: webhookEvent || req.body.status,
+        transactionId: invoiceIdHeader || req.body.invoice_id,
+    });
+    // SECURITY: Verify bayar.gg signature with timestamp validation
+    if (!(0, bayargg_service_1.verifyBayarGGWebhook)(signature, bodyString, timestamp)) {
+        logPaymentAudit('BAYARGG_WEBHOOK_REJECTED_SIGNATURE', {
+            ip: req.ip,
+            error: 'Invalid signature or timestamp',
+        });
+        res.status(401).json({ error: 'Invalid signature' });
         return;
     }
-    const { event, data } = req.body;
-    console.log('Xendit webhook received:', event, data);
     try {
-        switch (event) {
-            case 'invoice.paid': {
-                await handleInvoicePaid(data);
-                break;
-            }
-            case 'invoice.expired': {
-                await handleInvoiceExpired(data);
-                break;
-            }
-            case 'invoice.failed': {
-                await handleInvoiceFailed(data);
-                break;
-            }
-            case 'disbursement.success': {
-                await handleDisbursementSuccess(data);
-                break;
-            }
-            case 'disbursement.failed': {
-                await handleDisbursementFailed(data);
-                break;
-            }
-            default:
-                console.log(`Unhandled Xendit event: ${event}`);
+        const { invoice_id, status, final_amount, paid_at } = req.body;
+        if (!invoice_id) {
+            logPaymentAudit('BAYARGG_WEBHOOK_NO_INVOICE', { ip: req.ip });
+            res.status(200).json({ received: true });
+            return;
         }
-        // Always return 200 to acknowledge receipt
+        const eventType = (status || 'UNKNOWN').toUpperCase();
+        logPaymentAudit('BAYARGG_WEBHOOK_PROCESSING', {
+            transactionId: invoice_id,
+            status: eventType,
+            amount: final_amount,
+            ip: req.ip,
+        });
+        // Find payment record using gatewayInvoiceId
+        const paymentByInvoice = await prisma_1.prisma.payment.findFirst({
+            where: { gatewayInvoiceId: invoice_id },
+            include: { booking: true },
+        });
+        if (paymentByInvoice) {
+            await processBayarGGWebhook(paymentByInvoice, invoice_id, eventType, paid_at, bodyString, req.ip);
+        }
+        else {
+            // Also try to find by gatewayOrderId for backwards compatibility
+            const paymentByOrderId = await prisma_1.prisma.payment.findFirst({
+                where: { gatewayOrderId: invoice_id },
+                include: { booking: true },
+            });
+            if (!paymentByOrderId) {
+                logPaymentAudit('BAYARGG_WEBHOOK_PAYMENT_NOT_FOUND', {
+                    transactionId: invoice_id,
+                    ip: req.ip,
+                });
+                // Return 200 to prevent retries for non-existent payments
+                res.status(200).json({ received: true });
+                return;
+            }
+            // Process with payment found by order ID
+            await processBayarGGWebhook(paymentByOrderId, invoice_id, eventType, paid_at, bodyString, req.ip);
+        }
         res.status(200).json({ received: true });
     }
     catch (error) {
-        console.error('Xendit webhook processing error:', error);
-        // Return 200 anyway to prevent Xendit from retrying
-        // Log the error for manual investigation
-        res.status(200).json({ received: true, error: 'Processing error logged' });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logPaymentAudit('BAYARGG_WEBHOOK_ERROR', {
+            ip: req.ip,
+            error: errorMessage,
+        });
+        // SECURITY: Return 500 for processing errors so bayar.gg will retry
+        res.status(500).json({ error: 'Internal processing error' });
     }
 });
-// ============================================================================
-// WEBHOOK HANDLERS
-// ============================================================================
 /**
- * Handle invoice.paid - Pembayaran berhasil
- * Update booking status ke 'dikonfirmasi' dan payment status ke 'paid'
+ * Process webhook - extracted to handle both invoice ID and order ID lookup
  */
-async function handleInvoicePaid(data) {
-    const { id: xenditInvoiceId, external_id, paid_at, payment_method } = data;
-    // Extract booking ID from external_id (format: booking_<uuid>)
-    const bookingId = external_id.replace('booking_', '');
-    // Find payment record
-    const payment = await prisma_1.prisma.payment.findUnique({
-        where: { xenditInvoiceId },
-        include: { booking: true },
-    });
-    if (!payment) {
-        console.error(`Payment not found for Xendit invoice: ${xenditInvoiceId}`);
-        return;
-    }
-    // Update payment status
-    await prisma_1.prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-            status: 'paid',
-            paidAt: paid_at ? new Date(paid_at) : new Date(),
+async function processBayarGGWebhook(payment, invoice_id, eventType, paid_at, bodyString, ip) {
+    // SECURITY: Idempotency check - skip if already processed
+    const existingLog = await prisma_1.prisma.webhookLog.findFirst({
+        where: {
+            transactionId: invoice_id,
+            eventType: eventType,
         },
     });
-    // Update booking status to 'dikonfirmasi' (only if still waiting for payment)
-    if (payment.booking.status === 'menunggu_pembayaran') {
-        await prisma_1.prisma.booking.update({
-            where: { id: bookingId },
-            data: { status: 'dikonfirmasi' },
+    if (existingLog) {
+        logPaymentAudit('BAYARGG_WEBHOOK_DUPLICATE', {
+            paymentId: payment.id,
+            transactionId: invoice_id,
+            status: eventType,
+            ip: ip,
         });
-        // Create status log
-        await prisma_1.prisma.bookingStatusLog.create({
-            data: {
-                bookingId,
-                statusLama: 'menunggu_pembayaran',
-                statusBaru: 'dikonfirmasi',
-                diubahOleh: 'system', // System action
-            },
-        });
-        console.log(`Booking ${bookingId} confirmed - payment received`);
-    }
-}
-/**
- * Handle invoice.expired - Invoice kedaluwarsa
- * Update booking status ke 'dibatalkan'
- */
-async function handleInvoiceExpired(data) {
-    const { id: xenditInvoiceId, external_id } = data;
-    const bookingId = external_id.replace('booking_', '');
-    const payment = await prisma_1.prisma.payment.findUnique({
-        where: { xenditInvoiceId },
-        include: { booking: true },
-    });
-    if (!payment) {
-        console.error(`Payment not found for Xendit invoice: ${xenditInvoiceId}`);
         return;
     }
-    // Update payment status
-    await prisma_1.prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'expired' },
+    // Handle based on payment status
+    switch (eventType.toLowerCase()) {
+        case 'paid': {
+            await handleBayarGGPaymentPaid(payment.id, payment.booking.id, invoice_id, paid_at);
+            break;
+        }
+        case 'expired': {
+            await handleBayarGGPaymentExpired(payment.id, payment.booking.id);
+            break;
+        }
+        case 'cancelled':
+        case 'failed': {
+            await handleBayarGGPaymentFailed(payment.id);
+            break;
+        }
+        default:
+            logPaymentAudit('BAYARGG_WEBHOOK_UNHANDLED_STATUS', {
+                paymentId: payment.id,
+                transactionId: invoice_id,
+                status: eventType,
+            });
+    }
+    // SECURITY: Store webhook log for idempotency
+    const requestHash = (0, crypto_1.createHash)('sha256').update(bodyString).digest('hex').slice(0, 32);
+    await prisma_1.prisma.webhookLog.create({
+        data: {
+            paymentId: payment.id,
+            transactionId: invoice_id,
+            eventType: eventType,
+            requestHash: requestHash,
+        },
     });
-    // Cancel booking if still waiting for payment
-    if (payment.booking.status === 'menunggu_pembayaran') {
-        await prisma_1.prisma.booking.update({
-            where: { id: bookingId },
-            data: { status: 'dibatalkan' },
+    logPaymentAudit('BAYARGG_WEBHOOK_PROCESSED', {
+        bookingId: payment.booking.id,
+        paymentId: payment.id,
+        transactionId: invoice_id,
+        status: eventType,
+        amount: Number(payment.jumlah),
+    });
+}
+// ============================================================================
+// BAYAR.GG WEBHOOK HANDLERS (ATOMIC OPERATIONS)
+// ============================================================================
+/**
+ * Handle bayar.gg PAID - Pembayaran berhasil
+ * Uses transaction for atomicity
+ */
+async function handleBayarGGPaymentPaid(paymentId, bookingId, transactionId, paidAt) {
+    await prisma_1.prisma.$transaction(async (tx) => {
+        // Check current state first
+        const payment = await tx.payment.findUnique({
+            where: { id: paymentId },
         });
-        await prisma_1.prisma.bookingStatusLog.create({
-            data: {
+        // Already processed
+        if (payment?.status === 'paid') {
+            logPaymentAudit('BAYARGG_PAYMENT_ALREADY_PAID', {
+                paymentId,
                 bookingId,
-                statusLama: 'menunggu_pembayaran',
-                statusBaru: 'dibatalkan',
-                diubahOleh: 'system',
+                transactionId,
+            });
+            return;
+        }
+        // Update payment status
+        await tx.payment.update({
+            where: { id: paymentId },
+            data: {
+                status: 'paid',
+                paidAt: paidAt ? new Date(paidAt) : new Date(),
             },
         });
-        console.log(`Booking ${bookingId} cancelled - invoice expired`);
-    }
+        // Update booking status atomically
+        const booking = await tx.booking.findUnique({
+            where: { id: bookingId },
+        });
+        if (booking?.status === 'menunggu_pembayaran') {
+            await tx.booking.update({
+                where: { id: bookingId },
+                data: { status: 'dikonfirmasi' },
+            });
+            await tx.bookingStatusLog.create({
+                data: {
+                    bookingId,
+                    statusLama: 'menunggu_pembayaran',
+                    statusBaru: 'dikonfirmasi',
+                    diubahOleh: 'system',
+                    keterangan: `Pembayaran berhasil via bayar.gg. Invoice ID: ${transactionId}`,
+                },
+            });
+        }
+    });
+    logPaymentAudit('BAYARGG_BOOKING_CONFIRMED', {
+        bookingId,
+        paymentId,
+        transactionId,
+    });
 }
 /**
- * Handle invoice.failed - Pembayaran gagal
+ * Handle bayar.gg EXPIRED - Invoice kedaluwarsa
+ * Uses transaction for atomicity
  */
-async function handleInvoiceFailed(data) {
-    const { id: xenditInvoiceId, external_id } = data;
-    const bookingId = external_id.replace('booking_', '');
-    const payment = await prisma_1.prisma.payment.findUnique({
-        where: { xenditInvoiceId },
-        include: { booking: true },
+async function handleBayarGGPaymentExpired(paymentId, bookingId) {
+    await prisma_1.prisma.$transaction(async (tx) => {
+        // Update payment status
+        await tx.payment.update({
+            where: { id: paymentId },
+            data: { status: 'expired' },
+        });
+        // Cancel booking atomically
+        const booking = await tx.booking.findUnique({
+            where: { id: bookingId },
+        });
+        if (booking?.status === 'menunggu_pembayaran') {
+            await tx.booking.update({
+                where: { id: bookingId },
+                data: { status: 'dibatalkan' },
+            });
+            await tx.bookingStatusLog.create({
+                data: {
+                    bookingId,
+                    statusLama: 'menunggu_pembayaran',
+                    statusBaru: 'dibatalkan',
+                    diubahOleh: 'system',
+                    keterangan: 'Pembayaran kedaluwarsa via bayar.gg',
+                },
+            });
+        }
     });
-    if (!payment) {
-        console.error(`Payment not found for Xendit invoice: ${xenditInvoiceId}`);
-        return;
-    }
+    logPaymentAudit('BAYARGG_BOOKING_EXPIRED', {
+        bookingId,
+        paymentId,
+    });
+}
+/**
+ * Handle bayar.gg FAILED/CANCELLED - Pembayaran gagal
+ */
+async function handleBayarGGPaymentFailed(paymentId) {
     await prisma_1.prisma.payment.update({
-        where: { id: payment.id },
+        where: { id: paymentId },
         data: { status: 'failed' },
     });
-    console.log(`Payment failed for booking ${bookingId}`);
-}
-/**
- * Handle disbursement.success - Pencairan berhasil
- */
-async function handleDisbursementSuccess(data) {
-    const { id: xenditDisbursementId, external_id, completed_at } = data;
-    const disbursementId = external_id.replace('disbursement_', '');
-    await prisma_1.prisma.disbursement.updateMany({
-        where: { xenditDisbursementId },
-        data: {
-            status: 'berhasil',
-            dicairkanPada: completed_at ? new Date(completed_at) : new Date(),
-        },
+    logPaymentAudit('BAYARGG_PAYMENT_FAILED', {
+        paymentId,
     });
-    console.log(`Disbursement ${disbursementId} completed successfully`);
-}
-/**
- * Handle disbursement.failed - Pencairan gagal
- */
-async function handleDisbursementFailed(data) {
-    const { id: xenditDisbursementId, external_id, failure_reason } = data;
-    const disbursementId = external_id.replace('disbursement_', '');
-    await prisma_1.prisma.disbursement.updateMany({
-        where: { xenditDisbursementId },
-        data: {
-            status: 'gagal',
-        },
-    });
-    console.log(`Disbursement ${disbursementId} failed: ${failure_reason}`);
 }
 // ============================================================================
-// MANUAL TRIGGER ENDPOINT
+// HEALTH CHECK - BAYAR.GG STATUS
 // ============================================================================
 /**
- * POST /api/webhooks/xendit/trigger-disbursement
- * Manual trigger untuk memproses batch disbursement
- * Biasanya dipanggil via cron atau oleh Super Admin
+ * GET /api/webhooks/bayargg/health
+ * Check bayar.gg webhook configuration status
  */
-exports.webhooksRouter.post('/xendit/trigger-disbursement', async (req, res) => {
-    // Only allow in development or with proper auth in production
-    const authHeader = req.headers.authorization;
-    const expectedToken = process.env.DISBURSEMENT_TRIGGER_TOKEN;
-    if (expectedToken && authHeader !== `Bearer ${expectedToken}`) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-    }
-    try {
-        const result = await (0, xendit_service_2.processBatchDisbursements)();
-        res.json({
-            success: result.success,
-            message: `Processed: ${result.processed}, Failed: ${result.failed}`,
-            details: result,
-        });
-    }
-    catch (error) {
-        console.error('Manual disbursement trigger error:', error);
-        res.status(500).json({ error: 'Gagal memproses disbursement' });
-    }
+exports.webhooksRouter.get('/bayargg/health', async (_req, res) => {
+    const { isBayarGGConfigured } = await Promise.resolve().then(() => __importStar(require('../services/bayargg.service')));
+    res.json({
+        status: isBayarGGConfigured() ? 'ready' : 'not_configured',
+        gateway: 'bayar.gg',
+    });
 });
 //# sourceMappingURL=webhooks.routes.js.map

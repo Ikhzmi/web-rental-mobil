@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { gsap } from 'gsap';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   Building2,
@@ -17,74 +18,121 @@ import {
   CheckCircle,
   AlertCircle,
   Info,
+  XCircle,
+  CreditCard,
+  Building,
+  ClipboardList,
+  Receipt,
+  BarChart3,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
+import { MockDataProvider } from '../../contexts/MockDataContext';
 import bgDashboardDark from '../../assets/bg-dashboard-dark.jpg';
 import bgDashboardLight from '../../assets/bg-dashboard-light.png';
 
 const navItems = [
   { to: '/superadmin', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/superadmin/instansi', label: 'Instansi', icon: Building2 },
-  { to: '/superadmin/admin', label: 'Akun', icon: Users },
-  { to: '/superadmin/armada/approval', label: 'Approval', icon: Car },
-  { to: '/superadmin/pencairan', label: 'Dana', icon: Wallet },
+  { to: '/superadmin/bookings', label: 'Pesanan', icon: ClipboardList, end: false },
+  { to: '/superadmin/transactions', label: 'Transaksi', icon: Receipt, end: false },
+  { to: '/superadmin/reports', label: 'Laporan', icon: BarChart3, end: false },
 ];
 
-// Mock notifications
-const mockNotifications = [
-  { id: 1, type: 'approval', title: 'Kendaraan Baru Menunggu', message: '3 kendaraan baru memerlukan persetujuan', time: '5 menit lalu', read: false },
-  { id: 2, type: 'booking', title: 'Booking Baru', message: 'Rental Mobil Jakarta approve 2 booking baru', time: '15 menit lalu', read: false },
-  { id: 3, type: 'success', title: 'Komisi Dicairkan', message: 'Rp 2.500.000 telah dicairkan ke rekening', time: '1 jam lalu', read: true },
-  { id: 4, type: 'info', title: 'Instansi Baru', message: 'Rental Bintang Surabaya berhasil terdaftar', time: '2 jam lalu', read: true },
+const navItemsSlide2 = [
+  { to: '/superadmin/instansi', label: 'Instansi', icon: Building2, end: false },
+  { to: '/superadmin/admin', label: 'Akun', icon: Users, end: false },
+  { to: '/superadmin/armada/approval', label: 'Approval', icon: Car, end: false },
+  { to: '/superadmin/pencairan', label: 'Dana', icon: Wallet, end: false },
 ];
+
+// Loading fallback for content
+function ContentFallback() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="w-8 h-8 border-2 border-white/20 border-t-[#e8702a] rounded-full animate-spin" />
+    </div>
+  );
+}
 
 export default function SuperAdminLayout() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
+  const queryClient = useQueryClient();
 
   const location = useLocation();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [showTopNav, setShowTopNav] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [mobileSlide, setMobileSlide] = useState(0);
   const isHeaderHidden = useRef(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const headerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // Fetch notifications with error handling - won't block rendering
+  const { data: notificationsResponse } = useQuery({
+    queryKey: ['superadmin-notifications-sidebar'],
+    queryFn: () => api.getSuperAdminNotifications(false),
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    retry: 1,
+    throwOnError: false,
+  });
 
-  // Close notification popup when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setShowNotifications(false);
+  const notifications = notificationsResponse?.data ?? [];
+  const unreadCount = notificationsResponse?.unreadCount ?? 0;
+
+  const markAllAsRead = async () => {
+    // Mark all notifications as read
+    for (const notification of notifications) {
+      if (!notification.isRead) {
+        try {
+          await api.markNotificationRead(notification.id);
+        } catch {
+          // Ignore individual errors
+        }
       }
-    };
-
-    if (showNotifications) {
-      document.addEventListener('mousedown', handleClickOutside);
     }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showNotifications]);
-
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    queryClient.invalidateQueries({ queryKey: ['superadmin-notifications-sidebar'] });
   };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case 'approval': return <AlertCircle size={18} className="text-amber-400" />;
-      case 'booking': return <Info size={18} className="text-blue-400" />;
+      case 'booking': return <Info size={18} className="text-white/60" />;
       case 'success': return <CheckCircle size={18} className="text-emerald-400" />;
+      case 'instansi': return <Building size={18} className="text-purple-400" />;
+      case 'payment': return <CreditCard size={18} className="text-cyan-400" />;
+      case 'error': return <XCircle size={18} className="text-red-400" />;
       default: return <Bell size={18} className="text-slate-400" />;
     }
+  };
+
+  const formatNotificationTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Baru saja';
+    if (diffMins < 60) return `${diffMins} menit lalu`;
+    if (diffHours < 24) return `${diffHours} jam lalu`;
+    if (diffDays < 7) return `${diffDays} hari lalu`;
+    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
   };
 
   useEffect(() => {
@@ -159,7 +207,7 @@ export default function SuperAdminLayout() {
       >
         {/* Navigation */}
         <nav className="flex-1 px-3 mt-2 space-y-2 overflow-hidden">
-          {navItems.map((item, index) => {
+          {[...navItems, ...navItemsSlide2].map((item, index) => {
             const Icon = item.icon;
             return (
               <motion.div
@@ -257,17 +305,26 @@ export default function SuperAdminLayout() {
         </button>
       </motion.aside>
 
-      {/* Main Content - Desktop - No scroll */}
+      {/* Main Content */}
       <main
-        className="hidden lg:block overflow-hidden"
-        style={{ paddingTop: '88px', paddingLeft: isCollapsed ? '80px' : '280px' }}
+        className="transition-all duration-300 ease-in-out"
+        style={{
+          paddingTop: isMobile ? '96px' : '88px',
+          paddingBottom: isMobile ? '112px' : '24px',
+          paddingLeft: isMobile ? '16px' : (isCollapsed ? '104px' : '304px'),
+          paddingRight: isMobile ? '16px' : '32px'
+        }}
       >
-        <div className="px-8 py-6 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <Outlet />
+        <div className="overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <Suspense fallback={<ContentFallback />} key={location.pathname}>
+            <MockDataProvider>
+              <Outlet />
+            </MockDataProvider>
+          </Suspense>
         </div>
       </main>
 
-      {/* Mobile Bottom Nav - Glass Style */}
+      {/* Mobile Bottom Nav - Glass Style with 2 Slides */}
       <nav className="fixed z-40 max-w-md mx-auto lg:hidden bottom-4 left-4 right-4">
         <motion.div
           initial={{ y: 100, opacity: 0 }}
@@ -277,70 +334,208 @@ export default function SuperAdminLayout() {
             isDark ? 'sa-glass-dark' : 'sa-glass-light'
           }`}
         >
-          <div className="relative flex items-center justify-around py-2.5 px-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={() =>
-                    `relative flex items-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300`
-                  }
-                >
-                  {({ isActive }) => (
-                    <>
-                      {isActive && (
-                        <motion.div
-                          layoutId="saMobileActiveBg"
-                          className="absolute inset-0 rounded-full"
-                          style={isDark ? { backgroundColor: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)' } : { backgroundColor: 'rgba(241, 245, 249, 0.95)', border: '1px solid rgba(31, 41, 55, 0.15)' }}
-                          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                        />
-                      )}
-                      <div className="relative z-10 flex items-center gap-2">
-                        <Icon size={20} className={isActive ? (isDark ? 'text-white' : 'text-[#1F2937]') : textMutedClass} />
-                        <AnimatePresence>
-                          {isActive && (
-                            <motion.span
-                              initial={{ opacity: 0, width: 0 }}
-                              animate={{ opacity: 1, width: 'auto' }}
-                              exit={{ opacity: 0, width: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className={`text-xs font-medium whitespace-nowrap overflow-hidden ${textAccentClass}`}
-                            >
-                              {item.label}
-                            </motion.span>
+          {/* Slide indicator dots */}
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-50">
+            <button
+              onClick={() => setMobileSlide(0)}
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                mobileSlide === 0
+                  ? 'bg-[#e8702a] w-4'
+                  : isDark ? 'bg-white/30 hover:bg-white/50' : 'bg-slate-400/50 hover:bg-slate-400'
+              }`}
+            />
+            <button
+              onClick={() => setMobileSlide(1)}
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                mobileSlide === 1
+                  ? 'bg-[#e8702a] w-4'
+                  : isDark ? 'bg-white/30 hover:bg-white/50' : 'bg-slate-400/50 hover:bg-slate-400'
+              }`}
+            />
+          </div>
+
+          <div className="relative flex items-center py-2.5 px-2">
+            {/* Arrow to slide 1 - on right */}
+            <button
+              onClick={() => setMobileSlide(1)}
+              className={`p-2.5 rounded-full transition-all duration-300 shrink-0 ${
+                mobileSlide === 0
+                  ? isDark
+                    ? 'text-white/50 hover:text-white hover:bg-white/10'
+                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/50'
+                  : 'opacity-0 pointer-events-none'
+              }`}
+            >
+              <motion.div
+                animate={{ x: 0 }}
+                whileTap={{ scale: 0.9 }}
+                transition={{ duration: 0.1 }}
+              >
+                <ChevronRight size={18} />
+              </motion.div>
+            </button>
+
+            {/* Slide Content */}
+            <div className="relative flex-1 overflow-hidden">
+              <AnimatePresence mode="wait">
+                {mobileSlide === 0 ? (
+                  <motion.div
+                    key="slide0"
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -50 }}
+                    transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                    className="flex items-center justify-around"
+                  >
+                    {navItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          end={item.end}
+                          className="relative flex items-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300"
+                        >
+                          {({ isActive }) => (
+                            <>
+                              {isActive && (
+                                <motion.div
+                                  layoutId="saMobileActiveBg"
+                                  className="absolute inset-0 rounded-full"
+                                  style={isDark ? { backgroundColor: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)' } : { backgroundColor: 'rgba(241, 245, 249, 0.95)', border: '1px solid rgba(31, 41, 55, 0.15)' }}
+                                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                />
+                              )}
+                              <div className="relative z-10 flex items-center gap-2">
+                                <Icon size={20} className={isActive ? (isDark ? 'text-white' : 'text-[#1F2937]') : textMutedClass} />
+                                <AnimatePresence>
+                                  {isActive && (
+                                    <motion.span
+                                      initial={{ opacity: 0, width: 0 }}
+                                      animate={{ opacity: 1, width: 'auto' }}
+                                      exit={{ opacity: 0, width: 0 }}
+                                      transition={{ duration: 0.2 }}
+                                      className={`text-xs font-medium whitespace-nowrap overflow-hidden ${textAccentClass}`}
+                                    >
+                                      {item.label}
+                                    </motion.span>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </>
                           )}
-                        </AnimatePresence>
-                      </div>
-                    </>
-                  )}
-                </NavLink>
-              );
-            })}
+                        </NavLink>
+                      );
+                    })}
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="slide1"
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -50 }}
+                    transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                    className="flex items-center justify-around"
+                  >
+                    {navItemsSlide2.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          end={item.end}
+                          className="relative flex items-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300"
+                        >
+                          {({ isActive }) => (
+                            <>
+                              {isActive && (
+                                <motion.div
+                                  layoutId="saMobileActiveBg"
+                                  className="absolute inset-0 rounded-full"
+                                  style={isDark ? { backgroundColor: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(255, 255, 255, 0.2)' } : { backgroundColor: 'rgba(241, 245, 249, 0.95)', border: '1px solid rgba(31, 41, 55, 0.15)' } }
+                                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                />
+                              )}
+                              <div className="relative z-10 flex items-center gap-2">
+                                <Icon size={20} className={isActive ? (isDark ? 'text-white' : 'text-[#1F2937]') : textMutedClass} />
+                                <AnimatePresence>
+                                  {isActive && (
+                                    <motion.span
+                                      initial={{ opacity: 0, width: 0 }}
+                                      animate={{ opacity: 1, width: 'auto' }}
+                                      exit={{ opacity: 0, width: 0 }}
+                                      transition={{ duration: 0.2 }}
+                                      className={`text-xs font-medium whitespace-nowrap overflow-hidden ${textAccentClass}`}
+                                    >
+                                      {item.label}
+                                    </motion.span>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </>
+                          )}
+                        </NavLink>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Arrow to slide 0 - on left */}
+            <button
+              onClick={() => setMobileSlide(0)}
+              className={`p-2.5 rounded-full transition-all duration-300 shrink-0 ${
+                mobileSlide === 1
+                  ? isDark
+                    ? 'text-white/50 hover:text-white hover:bg-white/10'
+                    : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/50'
+                  : 'opacity-0 pointer-events-none'
+              }`}
+            >
+              <motion.div
+                animate={{ x: 0 }}
+                whileTap={{ scale: 0.9 }}
+                transition={{ duration: 0.1 }}
+              >
+                <ChevronLeft size={18} />
+              </motion.div>
+            </button>
           </div>
         </motion.div>
       </nav>
 
-      {/* Mobile Top Navbar - Glass Style */}
-      {location.pathname === '/superadmin' && (
-        <motion.div
-          initial={{ y: -80 }}
-          animate={{ y: showTopNav ? 0 : -80 }}
-          transition={{ duration: 0.2 }}
-          className={`lg:hidden fixed top-0 left-0 right-0 z-30 ${
-            isDark ? 'sa-glass-dark border-b border-white/[0.12]' : 'sa-glass-light border-b border-white/70'
-          }`}
-        >
-          <div className="px-4 py-4">
+      {/* Mobile Top Navbar - Shows on all superadmin pages */}
+      <motion.div
+        initial={{ y: -100 }}
+        animate={{ y: showTopNav ? 0 : -100 }}
+        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+        className={`lg:hidden fixed top-0 left-0 right-0 z-30 overflow-hidden sa-header ${
+          isDark ? 'sa-glass-dark' : 'sa-glass-light'
+        }`}
+      >
+          <div className="relative px-4 py-3">
             <div className="flex items-center justify-between">
-              <h1 className={`text-lg font-semibold ${textClass}`}>Dashboard</h1>
+              {/* Mac-style traffic lights - smaller for mobile */}
               <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 px-1.5 py-1 rounded-md bg-black/20 backdrop-blur-sm">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-lg shadow-red-500/30" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 shadow-lg shadow-yellow-500/30" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-lg shadow-green-500/30" />
+                </div>
+              </div>
+
+              {/* Header Center Title: Super Admin */}
+              <h1 className={`text-base font-extrabold tracking-wider ${textClass}`}>
+                Super Admin
+              </h1>
+
+              {/* Header Right Icons */}
+              <div className="flex items-center gap-1.5">
+                {/* Theme Toggle */}
                 <button
                   onClick={toggleTheme}
-                  className={`p-2 rounded-xl transition-all ${
+                  className={`p-2 rounded-xl transition-all duration-300 ${
                     isDark
                       ? 'glass-daftar-btn-dark'
                       : 'glass-daftar-btn-light'
@@ -356,7 +551,7 @@ export default function SuperAdminLayout() {
                         exit={{ rotate: 90, opacity: 0 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <Sun size={18} className="text-yellow-400" />
+                        <Sun size={16} className="text-yellow-400" />
                       </motion.div>
                     ) : (
                       <motion.div
@@ -366,31 +561,28 @@ export default function SuperAdminLayout() {
                         exit={{ rotate: -90, opacity: 0 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <Moon size={18} className="text-slate-600" />
+                        <Moon size={16} className="text-slate-600" />
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </button>
+
+                {/* Logout Button */}
                 <button
                   onClick={handleLogout}
                   className={`p-2 rounded-xl transition-all ${
-                    isDark ? 'bg-white/10 text-white/70 hover:text-red-400 hover:bg-red-500/10' : 'bg-slate-100 text-slate-500 hover:text-red-600 hover:bg-red-50'
+                    isDark ? 'glass-daftar-btn-dark text-white/70 hover:text-red-400' : 'glass-daftar-btn-light text-slate-500 hover:text-red-600'
                   }`}
                 >
-                  <LogOut size={18} />
+                  <LogOut size={16} />
                 </button>
               </div>
             </div>
           </div>
-          <div className="sa-header-inverted" />
-          <div className="sa-header-inverted-border" />
-        </motion.div>
-      )}
 
-      {/* Mobile Page Content */}
-      <main className="px-4 pt-24 lg:hidden pb-28">
-        <Outlet />
-      </main>
+          {/* Bottom decorative line */}
+          <div className={`h-px ${isDark ? 'bg-white/[0.08]' : 'bg-[#D4CFC7]/50'}`} />
+        </motion.div>
 
       {/* Desktop Header - Full Width with inverted left corner, ABOVE sidebar */}
       <div
@@ -417,83 +609,87 @@ export default function SuperAdminLayout() {
 
             {/* Header Right Icons */}
             <div className="flex items-center gap-2">
-              {/* Notification Bell */}
+              {/* Notification Bell - Hover to show */}
               <div ref={notificationRef} className="relative">
-                <button
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  className={`p-2.5 rounded-xl transition-all duration-300 relative ${
-                    isDark
-                      ? 'glass-daftar-btn-dark'
-                      : 'glass-daftar-btn-light'
-                  }`}
-                  aria-label="Notifications"
-                >
-                  <Bell size={18} className={isDark ? 'text-white/70' : 'text-slate-600'} />
-                  {unreadCount > 0 && (
-                    <span className="absolute flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full -top-1 -right-1">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
+                {/* Wrapper for hover area - bell + popup with padding for invisible hover zone */}
+                <div className="group/notif p-2 -m-2">
+                  <button
+                    className={`p-2.5 rounded-xl transition-all duration-300 relative ${
+                      isDark
+                        ? 'glass-daftar-btn-dark'
+                        : 'glass-daftar-btn-light'
+                    }`}
+                    aria-label="Notifications"
+                  >
+                    <Bell size={18} className={isDark ? 'text-white/70' : 'text-slate-600'} />
+                    {unreadCount > 0 && (
+                      <span className="absolute flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full -top-1 -right-1">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
 
-                {/* Notification Popup */}
-                <AnimatePresence>
-                  {showNotifications && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                      transition={{ duration: 0.2 }}
-                      className={`absolute right-0 top-12 w-80 rounded-2xl overflow-hidden shadow-2xl z-50 ${
-                        isDark
-                          ? 'bg-slate-900/95 backdrop-blur-xl border border-white/10'
-                          : 'bg-white/95 backdrop-blur-xl border border-slate-200 shadow-lg'
-                      }`}
-                    >
-                      {/* Popup Header */}
-                      <div className={`px-4 py-3 flex items-center justify-between border-b ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-                        <h3 className={`font-semibold ${textClass}`}>Notifikasi</h3>
-                        <button
-                          onClick={markAllAsRead}
-                          className={`text-xs ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                          Tandai semua dibaca
-                        </button>
-                      </div>
+                  {/* Notification Popup - Glass Effect on Hover */}
+                  <div className={`
+                    absolute right-0 top-10 w-80 rounded-2xl overflow-hidden shadow-2xl z-50
+                    pointer-events-none opacity-0 group-hover/notif:pointer-events-auto group-hover/notif:opacity-100
+                    transition-all duration-300 transform translate-y-[-8px] group-hover/notif:translate-y-0
+                    backdrop-blur-xl
+                    ${isDark
+                      ? 'bg-[#1a1a1a]/90 border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]'
+                      : 'bg-[#F9EFE8]/90 border border-[#D4CFC7]/60 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.1)]'
+                    }
+                  `}>
+                    {/* Popup Header */}
+                    <div className={`px-4 py-3 flex items-center justify-between border-b ${isDark ? 'border-white/10' : 'border-[#D4CFC7]/40'}`}>
+                      <h3 className={`font-semibold ${textClass}`}>Notifikasi</h3>
+                      <button
+                        onClick={markAllAsRead}
+                        className={`text-xs ${isDark ? 'text-white/50 hover:text-white' : 'text-[#8B7355] hover:text-[#6B5344]'}`}
+                      >
+                        Tandai semua dibaca
+                      </button>
+                    </div>
 
-                      {/* Notification List */}
-                      <div className="overflow-y-auto max-h-80">
-                        {notifications.map((notification) => (
+                    {/* Notification List */}
+                    <div className="overflow-y-auto max-h-80">
+                      {notifications.length === 0 ? (
+                        <div className={`px-4 py-8 text-center ${isDark ? 'text-white/40' : 'text-[#8B7355]'}`}>
+                          <Bell size={24} className="mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">Tidak ada notifikasi</p>
+                        </div>
+                      ) : (
+                        notifications.map((notification) => (
                           <div
                             key={notification.id}
-                            className={`px-4 py-3 flex items-start gap-3 border-b last:border-b-0 transition-colors ${
-                              isDark ? 'border-white/5 hover:bg-white/5' : 'border-slate-100 hover:bg-slate-50'
-                            } ${!notification.read ? (isDark ? 'bg-white/5' : 'bg-blue-50/50') : ''}`}
+                            className={`px-4 py-3 flex items-start gap-3 border-b last:border-b-0 transition-colors cursor-pointer ${
+                              isDark ? 'border-white/5 hover:bg-white/10' : 'border-[#D4CFC7]/30 hover:bg-[#F5F0E8]'
+                            } ${!notification.isRead ? (isDark ? 'bg-white/5' : 'bg-[#F5F0E8]/80') : ''}`}
                           >
                             <div className="mt-0.5">
                               {getNotificationIcon(notification.type)}
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm font-medium ${textClass}`}>{notification.title}</p>
-                              <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{notification.message}</p>
-                              <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>{notification.time}</p>
+                              <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-[#8B7355]/80'}`}>{notification.message}</p>
+                              <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-[#8B7355]/60'}`}>{formatNotificationTime(notification.createdAt)}</p>
                             </div>
-                            {!notification.read && (
-                              <div className="w-2 h-2 mt-2 bg-blue-500 rounded-full" />
+                            {!notification.isRead && (
+                              <div className="w-2 h-2 mt-2 bg-[#e8702a] rounded-full" />
                             )}
                           </div>
-                        ))}
-                      </div>
+                        ))
+                      )}
+                    </div>
 
-                      {/* Popup Footer */}
-                      <div className={`px-4 py-3 text-center border-t ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-                        <button className={`text-sm font-medium ${isDark ? 'text-white/70 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}>
-                          Lihat semua notifikasi
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                    {/* Popup Footer */}
+                    <div className={`px-4 py-3 text-center border-t ${isDark ? 'border-white/10' : 'border-[#D4CFC7]/40'}`}>
+                      <button className={`text-sm font-medium ${isDark ? 'text-white/70 hover:text-white' : 'text-[#8B7355] hover:text-[#6B5344]'}`}>
+                        Lihat semua notifikasi
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Theme Toggle */}

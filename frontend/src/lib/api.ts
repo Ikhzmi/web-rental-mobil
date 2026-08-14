@@ -35,6 +35,20 @@ export interface Car {
   };
 }
 
+/** Pagination metadata returned by paginated endpoints */
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+/** Response wrapper for paginated endpoints */
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationMeta;
+}
+
 export interface BookedRange {
   tanggalMulai: string;
   tanggalSelesai: string;
@@ -45,7 +59,7 @@ export interface Profile {
   nama: string;
   email: string;
   noHp: string;
-  role: 'customer' | 'admin';
+  role: 'customer' | 'admin' | 'super_admin';
   noKtp: string | null;
   noSim: string | null;
   dokumenKtpUrl: string | null;
@@ -90,6 +104,8 @@ export interface Booking {
   // Ditambahkan ke include backend supaya admin bisa lihat data penyewa
   // dari endpoint yang sama (lihat AdminPesananDetailPage.tsx).
   profile?: { nama: string; email: string; noHp: string };
+  // expiresAt from checkout API response
+  expiresAt?: string;
 }
 
 export interface CreateBookingInput {
@@ -149,6 +165,16 @@ export interface AdminBooking extends Booking {
   profile: { nama: string; email: string; noHp: string };
 }
 
+export interface PaginatedAdminBookings {
+  data: AdminBooking[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 // ── Super Admin Types (v1.3) ──
 export type Role = 'customer' | 'admin' | 'super_admin';
 export type StatusInstansi = 'menunggu_verifikasi' | 'aktif' | 'nonaktif';
@@ -186,6 +212,16 @@ export interface SuperAdminUser {
   instansi?: { id: string; namaInstansi: string } | null;
 }
 
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export interface SuperAdminCar {
   id: string;
   nama: string;
@@ -209,7 +245,7 @@ export interface Disbursement {
   komisiPlatform: string;
   jumlahBersih: string;
   status: StatusDisbursement;
-  xenditDisbursementId: string | null;
+  bankTransferId: string | null;
   dicairkanPada: string | null;
   createdAt: string;
   instansi: { id: string; namaInstansi: string };
@@ -367,6 +403,77 @@ export interface TodayBookings {
   cancelled: number;
 }
 
+// ── SuperAdmin Bookings & Transactions & Reports Types ──
+
+export interface SuperAdminBookingItem {
+  id: string;
+  status: StatusBooking;
+  tanggalMulai: string;
+  tanggalSelesai: string;
+  totalHarga: number;
+  createdAt: string;
+  car: {
+    id: string;
+    nama: string;
+    images: { url: string }[];
+  };
+  profile: { id: string; nama: string };
+  instansi: { id: string; nama: string };
+}
+
+export interface SuperAdminTransactionItem {
+  id: string;
+  type: 'payment' | 'refund' | 'commission' | 'disbursement';
+  amount: number;
+  status: 'pending' | 'success' | 'failed';
+  description: string;
+  createdAt: string;
+  instansi?: string;
+  customer?: string;
+  bookingId?: string;
+}
+
+export interface TransactionSummary {
+  totalMasuk: number;
+  totalRefund: number;
+}
+
+export interface SuperAdminReportsData {
+  revenue: {
+    total: number;
+    thisMonth: number;
+    daily: number;
+  };
+  booking: {
+    total: number;
+    active: number;
+    completionRate: number;
+  };
+  customer: {
+    total: number;
+    newThisPeriod: number;
+    retentionRate: number;
+  };
+  fleet: {
+    total: number;
+    available: number;
+    utilization: number;
+  };
+  rental: {
+    total: number;
+    active: number;
+    avgRevenue: number;
+  };
+  commission: {
+    total: number;
+    pending: number;
+    rate: number;
+  };
+  period: string;
+  dari: string;
+  sampai: string;
+}
+
 export interface InstansiSaldo {
   saldoTertunda: {
     jumlahKotor: number;
@@ -422,35 +529,88 @@ class ApiError extends Error {
   }
 }
 
+// Custom event types for session management
+const SESSION_EXPIRED_EVENT = 'session:expired';
+
+export function dispatchSessionExpired() {
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+}
+
+export function onSessionExpired(callback: () => void) {
+  const handler = () => callback();
+  window.addEventListener(SESSION_EXPIRED_EVENT, handler);
+  return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handler);
+}
+
 /**
  * Fetch wrapper ke Express API. Menyisipkan Bearer token dari sesi
  * Supabase yang sedang aktif (kalau ada) — dibutuhkan endpoint
  * Customer/Admin sesuai §10 PRD. Endpoint publik tetap jalan tanpa token.
  */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const { data, error: sessionError } = await supabase.auth.getSession();
-  console.log('[apiFetch] Session:', data?.session?.user?.email, 'error:', sessionError);
+  const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  console.log('[apiFetch] Token exists:', !!token, 'Path:', path);
+
+  if (import.meta.env.DEV) {
+    console.log(`[API] ${init?.method ?? 'GET'} ${path}`);
+  }
 
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
 
-  console.log('[apiFetch] Response status:', res.status, 'for', path);
-
   const body = await res.json().catch(() => null);
 
+  if (import.meta.env.DEV) {
+    console.log(`[API] Response ${path}:`, res.status, body);
+  }
+
   if (!res.ok) {
+    // Handle 401 - session expired, show popup via SessionExpiredContext
+    if (res.status === 401) {
+      dispatchSessionExpired();
+      throw new ApiError('Sesi berakhir. Silakan login kembali.', 401);
+    }
     throw new ApiError(body?.error ?? `Request gagal (${res.status})`, res.status);
   }
 
   return body.data as T;
+}
+
+// Wrapper for endpoints that return additional metadata (pagination, summary, etc.)
+async function apiFetchFull<T>(path: string, init?: RequestInit): Promise<T> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      dispatchSessionExpired();
+      throw new ApiError('Sesi berakhir. Silakan login kembali.', 401);
+    }
+    throw new ApiError(body?.error ?? `Request gagal (${res.status})`, res.status);
+  }
+
+  return body as T;
 }
 
 export const api = {
@@ -481,8 +641,21 @@ export const api = {
   getDashboardSummary: () => apiFetch<DashboardSummary>('/api/admin/dashboard/summary'),
   getInstansiDashboard: () => apiFetch<InstansiDashboardData>('/api/instansi/dashboard'),
 
+  // ── Admin: Notifications ──
+  getAdminNotifications: (unreadOnly?: boolean) =>
+    apiFetch<NotificationResponse>(`/api/admin/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
+  markAdminNotificationRead: (id: string) =>
+    apiFetch<Notification>(`/api/admin/notifications/${id}/read`, { method: 'PATCH' }),
+
   // ── Admin: Armada (F10) ──
-  listAdminCars: () => apiFetch<Car[]>('/api/admin/cars'),
+  listAdminCars: (params: { page?: number; limit?: number; cari?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', String(params.page));
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.cari) qs.set('cari', params.cari);
+    const query = qs.toString();
+    return apiFetch<PaginatedResponse<Car>>(`/api/admin/cars${query ? `?${query}` : ''}`);
+  },
   getAdminCar: (id: string) => apiFetch<Car>(`/api/admin/cars/${id}`),
   createAdminCar: (input: CarInput) =>
     apiFetch<Car>('/api/admin/cars', { method: 'POST', body: JSON.stringify(input) }),
@@ -498,11 +671,14 @@ export const api = {
     apiFetch<CarImage>(`/api/admin/cars/${carId}/images/${imageId}`, { method: 'DELETE' }),
 
   // ── Admin: Pesanan (F11) ──
-  listAdminBookings: (params: { status?: StatusBooking } = {}) => {
+  listAdminBookings: (params: { status?: StatusBooking; dari?: string; sampai?: string; limit?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.status) qs.set('status', params.status);
+    if (params.dari) qs.set('dari', params.dari);
+    if (params.sampai) qs.set('sampai', params.sampai);
+    if (params.limit) qs.set('limit', String(params.limit));
     const query = qs.toString();
-    return apiFetch<AdminBooking[]>(`/api/admin/bookings${query ? `?${query}` : ''}`);
+    return apiFetch<PaginatedAdminBookings>(`/api/admin/bookings${query ? `?${query}` : ''}`);
   },
   updateBookingStatus: (id: string, status: StatusBooking) =>
     apiFetch<Booking>(`/api/admin/bookings/${id}/status`, {
@@ -608,12 +784,14 @@ export const api = {
     }),
 
   // User Management
-  listSuperAdminUsers: (params: { role?: Role | 'all'; cari?: string } = {}) => {
+  listSuperAdminUsers: (params: { role?: Role | 'all'; cari?: string; page?: number; limit?: number } = {}) => {
     const qs = new URLSearchParams();
     if (params.role && params.role !== 'all') qs.set('role', params.role);
     if (params.cari) qs.set('cari', params.cari);
+    if (params.page) qs.set('page', String(params.page));
+    if (params.limit) qs.set('limit', String(params.limit));
     const query = qs.toString();
-    return apiFetch<SuperAdminUser[]>(`/api/superadmin/pengguna${query ? `?${query}` : ''}`);
+    return apiFetch<PaginatedResponse<SuperAdminUser>>(`/api/superadmin/pengguna${query ? `?${query}` : ''}`);
   },
   toggleUserStatus: (id: string, aktif: boolean) =>
     apiFetch<SuperAdminUser>(`/api/superadmin/pengguna/${id}/status`, {
@@ -656,14 +834,106 @@ export const api = {
     return apiFetch<Disbursement[]>(`/api/superadmin/disbursements${query ? `?${query}` : ''}`);
   },
 
-  // Checkout (Customer)
+  // Bookings Management
+  listSuperAdminBookings: (params?: {
+    status?: StatusBooking;
+    cari?: string;
+    page?: number;
+    limit?: number;
+    dari?: string;
+    sampai?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.cari) qs.set('cari', params.cari);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.dari) qs.set('dari', params.dari);
+    if (params?.sampai) qs.set('sampai', params.sampai);
+    const query = qs.toString();
+    return apiFetchFull<{
+      data: SuperAdminBookingItem[];
+      pagination: PaginationMeta;
+    }>(`/api/superadmin/bookings${query ? `?${query}` : ''}`);
+  },
+
+  // Transactions
+  listSuperAdminTransactions: (params?: {
+    type?: 'payment' | 'refund' | 'commission' | 'disbursement';
+    status?: 'pending' | 'success' | 'failed';
+    cari?: string;
+    page?: number;
+    limit?: number;
+    dari?: string;
+    sampai?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.type) qs.set('type', params.type);
+    if (params?.status) qs.set('status', params.status);
+    if (params?.cari) qs.set('cari', params.cari);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.dari) qs.set('dari', params.dari);
+    if (params?.sampai) qs.set('sampai', params.sampai);
+    const query = qs.toString();
+    return apiFetchFull<{
+      data: SuperAdminTransactionItem[];
+      pagination: PaginationMeta;
+      summary: TransactionSummary;
+    }>(`/api/superadmin/transactions${query ? `?${query}` : ''}`);
+  },
+
+  // Reports
+  getSuperAdminReports: (period?: string) => {
+    const query = period ? `?period=${period}` : '';
+    return apiFetchFull<SuperAdminReportsData>(`/api/superadmin/reports${query}`);
+  },
+
+  // Checkout (Customer) - DOKU
   checkoutBooking: (bookingId: string) =>
-    apiFetch<{ bookingId: string; invoiceUrl: string; invoiceId: string; amount: number; expiresAt: string }>(
+    apiFetch<{
+      bookingId: string;
+      invoiceUrl: string;
+      invoiceId: string;
+      orderId?: string;
+      amount: number;
+      expiresAt: string;
+      gateway: 'DOKU';
+    }>(
       `/api/bookings/${bookingId}/checkout`,
       { method: 'POST' }
     ),
+
+  // Create Payment - DOKU
+  createPayment: (bookingId: string, data: { paymentMethod: string }) =>
+    apiFetch<{
+      bookingId: string;
+      dokuOrderId: string;
+      dokuInvoiceId: string;
+      paymentCode: string;
+      expiresAt: string;
+      paymentMethod: string;
+      amount: number;
+      gateway: 'DOKU';
+    }>(
+      `/api/bookings/${bookingId}/payment`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      }
+    ),
+
   getBookingPaymentStatus: (bookingId: string) =>
-    apiFetch<{ bookingId: string; bookingStatus: StatusBooking; paymentStatus: string | null }>(
+    apiFetch<{
+      bookingId: string;
+      bookingStatus: StatusBooking;
+      paymentStatus: string | null;
+      dokuInvoiceId?: string | null;
+      dokuOrderId?: string | null;
+      dokuPaymentCode?: string | null;
+      gateway: 'DOKU';
+    }>(
       `/api/bookings/${bookingId}/payment-status`
     ),
 };

@@ -17,7 +17,7 @@ const STATUS_LABEL: Record<StatusBooking, string> = {
 
 const STATUS_BADGE_DARK: Record<StatusBooking, string> = {
   menunggu_pembayaran: 'bg-amber-500/15 text-amber-400',
-  dikonfirmasi: 'bg-blue-500/15 text-blue-400',
+  dikonfirmasi: 'bg-blue-500/15 text-white/60',
   berjalan: 'bg-purple-500/15 text-purple-400',
   selesai: 'bg-emerald-500/15 text-emerald-400',
   dibatalkan: 'bg-white/10 text-white/40',
@@ -25,7 +25,7 @@ const STATUS_BADGE_DARK: Record<StatusBooking, string> = {
 
 const STATUS_BADGE_LIGHT: Record<StatusBooking, string> = {
   menunggu_pembayaran: 'bg-amber-100 text-amber-700',
-  dikonfirmasi: 'bg-blue-100 text-blue-700',
+  dikonfirmasi: 'bg-blue-100 text-slate-700',
   berjalan: 'bg-purple-100 text-purple-700',
   selesai: 'bg-emerald-100 text-emerald-700',
   dibatalkan: 'bg-slate-100 text-slate-500',
@@ -51,7 +51,7 @@ export default function AkunPesananPage() {
   return (
     <main className={`min-h-screen pt-28 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
       isDark
-        ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+        ? 'bg-[#0a0a0a]'
         : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
     }`}>
       <div className="max-w-3xl mx-auto">
@@ -98,7 +98,7 @@ export default function AkunPesananPage() {
             className="text-center py-16"
           >
             <p className={`text-sm mb-4 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Kamu belum pernah memesan mobil.</p>
-            <Link to="/armada" className={`text-sm hover:underline ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+            <Link to="/armada" className={`text-sm hover:underline ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
               Lihat Armada
             </Link>
           </motion.div>
@@ -117,7 +117,7 @@ export default function AkunPesananPage() {
                   className={`flex items-center gap-4 rounded-2xl p-4 sm:p-5 transition-all duration-200 ${
                     isDark
                       ? 'bg-white/[0.04] hover:bg-white/[0.07] border border-white/10'
-                      : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 hover:border-blue-200 hover:shadow-xl'
+                      : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 hover:border-slate-300 hover:shadow-xl'
                   }`}
                 >
                   <div className={`w-14 h-14 shrink-0 rounded-xl overflow-hidden ${

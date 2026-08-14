@@ -113,7 +113,7 @@ export default function AdminPesananDetailPage() {
     return (
       <div className="py-16 text-center">
         <p className={`mb-3 text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Pesanan tidak ditemukan.</p>
-        <Link to="/admin/pesanan" className={isDark ? 'text-blue-400 text-sm hover:underline' : 'text-blue-600 text-sm hover:underline'}>
+        <Link to="/admin/pesanan" className={isDark ? 'text-white/60 text-sm hover:underline' : 'text-slate-600 text-sm hover:underline'}>
           Kembali ke Kelola Pesanan
         </Link>
       </div>
@@ -187,7 +187,7 @@ export default function AdminPesananDetailPage() {
                 </Fragment>
               ))}
               <span className={`pt-2 font-medium ${textClass} border-t ${borderClass}`}>Total</span>
-              <span className={`font-medium text-right pt-2 border-t ${isDark ? 'text-blue-400 border-white/10' : 'text-blue-600 border-slate-200'}`}>
+              <span className={`font-medium text-right pt-2 border-t ${isDark ? 'text-white/60 border-white/10' : 'text-slate-600 border-slate-200'}`}>
                 {formatRupiah(Number(booking.totalHarga))}
               </span>
             </div>
@@ -280,8 +280,8 @@ export default function AdminPesananDetailPage() {
                     disabled={statusMutation.isPending}
                     className={`text-sm font-medium py-2.5 rounded-full flex items-center justify-center gap-2 disabled:opacity-60 ${
                       isDark
-                        ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20'
+                        ? 'bg-white text-zinc-900 hover:bg-zinc-100'
+                        : 'bg-zinc-800 hover:bg-zinc-900 text-white shadow-lg shadow-black/10'
                     }`}
                   >
                     {statusMutation.isPending && <Loader2 size={14} className="animate-spin" />}

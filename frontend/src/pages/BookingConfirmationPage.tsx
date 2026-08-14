@@ -18,7 +18,7 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_COLOR_DARK: Record<string, string> = {
   menunggu_pembayaran: 'text-amber-400',
   dikonfirmasi: 'text-emerald-400',
-  berjalan: 'text-blue-400',
+  berjalan: 'text-white/60',
   selesai: 'text-emerald-400',
   dibatalkan: 'text-red-400',
 };
@@ -26,7 +26,7 @@ const STATUS_COLOR_DARK: Record<string, string> = {
 const STATUS_COLOR_LIGHT: Record<string, string> = {
   menunggu_pembayaran: 'text-amber-600',
   dikonfirmasi: 'text-emerald-600',
-  berjalan: 'text-blue-600',
+  berjalan: 'text-slate-600',
   selesai: 'text-emerald-600',
   dibatalkan: 'text-red-600',
 };
@@ -112,7 +112,7 @@ export default function BookingConfirmationPage() {
     return (
       <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
         <Loader2 size={18} className="animate-spin" />
@@ -125,11 +125,11 @@ export default function BookingConfirmationPage() {
     return (
       <main className={`min-h-screen flex flex-col items-center justify-center gap-3 text-center px-5 text-sm transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
         <p className={isDark ? 'text-white/60' : 'text-slate-600'}>Pesanan tidak ditemukan.</p>
-        <Link to="/armada" className={isDark ? 'text-blue-400 hover:underline' : 'text-blue-600 hover:underline'}>
+        <Link to="/armada" className={isDark ? 'text-white/60 hover:underline' : 'text-slate-600 hover:underline'}>
           Kembali ke Katalog Armada
         </Link>
       </main>
@@ -143,7 +143,7 @@ export default function BookingConfirmationPage() {
   return (
     <main className={`min-h-screen pt-24 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
       isDark
-        ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+        ? 'bg-[#0a0a0a]'
         : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
     }`}>
       <div className="max-w-lg mx-auto">
@@ -227,7 +227,7 @@ export default function BookingConfirmationPage() {
           </div>
         </motion.div>
 
-        {/* Xendit Payment Section */}
+        {/* Payment Section */}
         {isWaitingPayment && (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -236,7 +236,7 @@ export default function BookingConfirmationPage() {
             className={`mt-5 ${cardClass}`}
           >
             <h2 className={`text-xs uppercase tracking-wider mb-3 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-              Pembayaran via Xendit
+              Pembayaran via bayar.gg
             </h2>
 
             {checkoutMutation.isPending && (
@@ -280,21 +280,19 @@ export default function BookingConfirmationPage() {
                     </p>
                   </div>
                 )}
-                <a
-                  href={invoiceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  to={`/booking/${id}/bayar`}
                   className={`flex items-center justify-center gap-2 w-full text-sm font-medium py-3 rounded-full transition-colors ${
                     isDark
                       ? 'bg-orange-500 hover:bg-orange-400 text-white'
                       : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20'
                   }`}
                 >
-                  Bayar Sekarang via Xendit
+                  Pilih Metode Pembayaran
                   <ExternalLink size={16} />
-                </a>
+                </Link>
                 <p className={`text-xs text-center ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                  Kamu akan diarahkan ke halaman pembayaran Xendit.
+                  Pilih metode pembayaran yang tersedia (QRIS, OVO).
                   Setelah berhasil, halaman ini akan otomatis ter-update.
                 </p>
               </div>
@@ -346,8 +344,8 @@ export default function BookingConfirmationPage() {
             to="/armada"
             className={`flex-1 text-center text-sm font-medium py-3 rounded-full transition-colors ${
               isDark
-                ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20'
+                ? 'bg-white text-zinc-900 hover:bg-zinc-100'
+                : 'bg-zinc-800 hover:bg-zinc-900 text-white shadow-lg shadow-black/10'
             }`}
           >
             Sewa Mobil Lain

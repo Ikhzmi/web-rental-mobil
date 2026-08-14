@@ -123,8 +123,8 @@ export default function BookingPage() {
 
   const inputClass = `w-full rounded-xl text-sm px-4 py-3.5 transition-all focus:outline-none ${
     isDark
-      ? 'bg-white/[0.03] border border-white/10 text-white placeholder:text-white/30 focus:border-blue-500/50 focus:bg-white/[0.05]'
-      : 'bg-white/80 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20'
+      ? 'bg-white/[0.03] border border-white/10 text-white placeholder:text-white/30 focus:border-white/30 focus:bg-white/[0.05]'
+      : 'bg-white/80 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20'
   }`;
 
   const cardClass = isDark
@@ -132,14 +132,14 @@ export default function BookingPage() {
     : 'animate-card rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 p-6 md:p-8';
 
   const iconBoxClass = isDark
-    ? 'w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/20 flex items-center justify-center'
-    : 'w-10 h-10 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center';
+    ? 'w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center'
+    : 'w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center';
 
   if (carQuery.isLoading) {
     return (
       <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
         <Loader2 size={18} className="animate-spin" />
@@ -152,7 +152,7 @@ export default function BookingPage() {
     return (
       <main className={`min-h-screen flex items-center justify-center text-sm transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10] text-white/60'
+          ? 'bg-gradient-to-b from-[#0a0a0a] to-[#0a0a0a] text-white/60'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-600'
       }`}>
         Mobil tidak ditemukan.
@@ -163,7 +163,7 @@ export default function BookingPage() {
   return (
     <main ref={sectionRef} className={`min-h-screen pt-20 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300 ${
       isDark
-        ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+        ? 'bg-[#0a0a0a]'
         : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
     }`}>
       <div className="relative max-w-6xl mx-auto">
@@ -173,7 +173,7 @@ export default function BookingPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-10"
         >
-          <p className={`text-sm font-medium uppercase tracking-wider mb-2 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Form Pemesanan</p>
+          <p className={`text-sm font-medium uppercase tracking-wider mb-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Form Pemesanan</p>
           <h1 className={`font-playfair italic text-3xl sm:text-4xl md:text-5xl mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>{car.nama}</h1>
           <p className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Lengkapi data di bawah untuk melanjutkan pemesanan</p>
         </motion.div>
@@ -201,8 +201,8 @@ export default function BookingPage() {
                             : 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/30'
                           : isActive
                           ? isDark
-                            ? 'bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/30'
-                            : 'bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/30'
+                            ? 'bg-gradient-to-br from-white/20 to-white/10 shadow-lg shadow-black/30'
+                            : 'bg-gradient-to-br from-white/20 to-white/10 shadow-lg shadow-black/30'
                           : isDark
                           ? 'bg-white/5 border border-white/10'
                           : 'bg-slate-100 border border-slate-200'
@@ -249,7 +249,7 @@ export default function BookingPage() {
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className={iconBoxClass}>
-                  <CalendarIcon className={`w-5 h-5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                  <CalendarIcon className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
                 </div>
                 <div>
                   <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Pilih Tanggal</h2>
@@ -274,18 +274,18 @@ export default function BookingPage() {
                     month_caption: `font-medium mb-3 text-base ${isDark ? 'text-white/80' : 'text-slate-800'}`,
                     weekday: `${isDark ? 'text-white/30' : 'text-slate-400'} text-xs uppercase tracking-wider`,
                     day: `${isDark ? 'text-white/70' : 'text-slate-700'} text-sm transition-all duration-200`,
-                    day_button: 'hover:bg-blue-500/20 rounded-full transition-all duration-200',
+                    day_button: 'hover:bg-white/10 rounded-full transition-all duration-200',
                     selected: isDark
-                      ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-full shadow-lg shadow-blue-500/30'
-                      : 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-full shadow-lg shadow-blue-500/30',
+                      ? 'bg-white text-zinc-900 rounded-full shadow-lg shadow-white/20'
+                      : 'bg-zinc-800 text-white rounded-full shadow-lg shadow-black/20',
                     range_middle: isDark
-                      ? 'bg-blue-500/20 text-white rounded-none hover:bg-blue-500/30'
-                      : 'bg-blue-100 text-blue-800 rounded-none hover:bg-blue-200',
+                      ? 'bg-white/10 text-white rounded-none hover:bg-white/15'
+                      : 'bg-slate-100 text-zinc-800 rounded-none hover:bg-slate-200',
                     range_start: 'rounded-r-none',
                     range_end: 'rounded-l-none',
                     today: isDark
-                      ? 'text-blue-400 font-bold ring-2 ring-blue-500/50 ring-offset-2 ring-offset-[#0a0f1a]'
-                      : 'text-blue-600 font-bold ring-2 ring-blue-300',
+                      ? 'text-white font-bold ring-2 ring-white/50 ring-offset-2 ring-offset-[#0a0a0a]'
+                      : 'text-zinc-800 font-bold ring-2 ring-zinc-300',
                     disabled: isDark
                       ? 'text-red-400/50 line-through bg-red-500/10 rounded-full'
                       : 'text-red-400/50 line-through bg-red-50 rounded-full',
@@ -297,7 +297,7 @@ export default function BookingPage() {
               {/* Legend */}
               <div className={`mt-4 flex flex-wrap gap-4 text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
                 <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-full ${isDark ? 'bg-gradient-to-br from-blue-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-blue-600'}`} />
+                  <div className={`w-4 h-4 rounded-full ${isDark ? 'bg-gradient-to-br from-white/20 to-white/10' : 'bg-gradient-to-br from-zinc-600 to-zinc-700'}`} />
                   <span>Terpilih</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -305,7 +305,7 @@ export default function BookingPage() {
                   <span>Tidak Tersedia</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-full border-2 ${isDark ? 'border-blue-500/50' : 'border-blue-400'}`} />
+                  <div className={`w-4 h-4 rounded-full border-2 ${isDark ? 'border-white/30' : 'border-slate-400'}`} />
                   <span>Hari Ini</span>
                 </div>
               </div>
@@ -320,7 +320,7 @@ export default function BookingPage() {
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className={iconBoxClass}>
-                  <MapPin className={`w-5 h-5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                  <MapPin className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
                 </div>
                 <div>
                   <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Lokasi</h2>
@@ -382,7 +382,7 @@ export default function BookingPage() {
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className={iconBoxClass}>
-                  <Truck className={`w-5 h-5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                  <Truck className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
                 </div>
                 <div>
                   <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Layanan Tambahan</h2>
@@ -395,18 +395,18 @@ export default function BookingPage() {
                 {car.tipeSewa === 'dengan_sopir' && (
                   <div className={`flex items-center gap-4 p-4 rounded-xl border ${
                     isDark
-                      ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/20'
-                      : 'bg-blue-50 border-blue-200'
+                      ? 'bg-white/5 border-white/10'
+                      : 'bg-slate-50 border-slate-200'
                   }`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                      <CarIcon size={18} className={isDark ? 'text-blue-400' : 'text-blue-600'} />
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-white/10' : 'bg-slate-100'}`}>
+                      <CarIcon size={18} className={isDark ? 'text-white/70' : 'text-slate-600'} />
                     </div>
                     <div className="flex-1">
                       <p className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>Sopir</p>
                       <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Wajib — sudah termasuk di harga</p>
                     </div>
                     {car.hargaSopirPerHari && (
-                      <span className={`text-sm font-medium ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                      <span className={`text-sm font-medium ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
                         {formatRupiah(Number(car.hargaSopirPerHari))}/hari
                       </span>
                     )}
@@ -503,7 +503,7 @@ export default function BookingPage() {
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className={iconBoxClass}>
-                  <User className={`w-5 h-5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                  <User className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
                 </div>
                 <div>
                   <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Data Penyewa</h2>
@@ -587,7 +587,7 @@ export default function BookingPage() {
 
               {/* Price Summary */}
               <h2 className={`font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <CreditCard className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                <CreditCard className={`w-4 h-4 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
                 Ringkasan Harga
               </h2>
 
@@ -615,7 +615,7 @@ export default function BookingPage() {
                   <div className={`border-t pt-3 mt-3 ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
                     <div className={`flex justify-between font-bold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       <span>Total</span>
-                      <span className={isDark ? 'bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent' : 'text-blue-600'}>
+                      <span className={isDark ? 'bg-gradient-to-r from-white/40 to-white/20 bg-clip-text text-transparent' : 'text-slate-600'}>
                         {formatRupiah(estimasi.totalHarga)}
                       </span>
                     </div>
@@ -659,8 +659,8 @@ export default function BookingPage() {
                 whileTap={{ scale: createBookingMutation.isPending ? 1 : 0.99 }}
                 className={`w-full mt-6 relative group overflow-hidden rounded-xl ${
                   isDark
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/20'
-                    : 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/30'
+                    ? 'bg-gradient-to-r from-zinc-700 to-zinc-800 text-white shadow-lg shadow-black/20'
+                    : 'bg-gradient-to-r from-zinc-600 to-zinc-700 text-white shadow-lg shadow-black/30'
                 }`}
               >
                 <span className="relative flex items-center justify-center gap-2 py-4 font-semibold">
@@ -687,12 +687,12 @@ export default function BookingPage() {
       <style>{`
         .kerental-daypicker-dark {
           --rdp-cell-size: 42px;
-          --rdp-accent-color: #3b82f6;
+          --rdp-accent-color: #ffffff;
           --rdp-background-color: #1e3a5f;
         }
         .kerental-daypicker-light {
           --rdp-cell-size: 42px;
-          --rdp-accent-color: #2563eb;
+          --rdp-accent-color: #888888;
           --rdp-background-color: #dbeafe;
         }
         .kerental-daypicker-dark .rdp-months,

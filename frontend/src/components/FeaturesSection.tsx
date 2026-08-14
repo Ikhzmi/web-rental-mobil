@@ -16,30 +16,35 @@ const STATS = [
 
 const FEATURES = [
   {
+    num: '01',
     icon: ShieldCheck,
     title: 'Asuransi Lengkap',
-    desc: 'Setiap sewa sudah termasuk asuransi komprehensif, tanpa biaya tersembunyi.',
+    desc: 'Setiap sewa sudah termasuk asuransi komprehensif, tanpa biaya tersembunyi untuk ketenangan perjalanan Anda.',
   },
   {
+    num: '02',
     icon: Clock,
     title: 'Booking Instan',
-    desc: 'Pesan dalam 2 menit, mobil siap diambil di hari yang sama.',
+    desc: 'Proses pemesanan selesai dalam waktu kurang dari 2 menit, armada siap digunakan pada hari yang sama.',
   },
   {
+    num: '03',
     icon: MapPin,
     title: 'Lokasi Fleksibel',
-    desc: 'Ambil mobil di 40+ lokasi strategis di berbagai kota.',
+    desc: 'Layanan penjemputan dan pengembalian armada tersedia di lebih dari 40 lokasi strategis berbagai kota.',
   },
   {
+    num: '04',
     icon: Sparkles,
     title: 'Periksa Detail',
-    desc: 'Setiap kendaraan dibersihkan dan dicek mesin sebelum disewa.',
+    desc: 'Setiap armada melalui proses sanitasi ketat dan inspeksi mekanis menyeluruh sebelum diserahkan.',
   },
 ];
 
 export default function FeaturesSection() {
   const sectionRef = useRef<HTMLDivElement>(null);
   const statRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -66,31 +71,37 @@ export default function FeaturesSection() {
         });
       });
 
-      // Feature cards animation
-      gsap.fromTo(
-        '.feature-card',
-        { opacity: 0, y: 30 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.5,
-          stagger: 0.1,
-          ease: 'power2.out',
-          scrollTrigger: {
-            trigger: sectionRef.current,
-            start: 'top 75%',
-            once: true,
-          },
-        }
-      );
+      // Card fade-in animation
+      cardRefs.current.forEach((card, index) => {
+        if (!card) return;
+        gsap.fromTo(
+          card,
+          { opacity: 0, y: 30 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            delay: index * 0.1,
+            ease: 'power3.out',
+            scrollTrigger: {
+              trigger: card,
+              start: 'top 85%',
+              once: true,
+            },
+          }
+        );
+      });
     },
     { scope: sectionRef }
   );
 
   return (
-    <section ref={sectionRef} className={`relative py-24 md:py-32 px-5 sm:px-10 md:px-16 ${
-      isDark ? 'bg-zinc-950' : 'bg-white'
-    }`}>
+    <section
+      ref={sectionRef}
+      className={`relative py-24 md:py-32 px-4 sm:px-6 lg:px-8 ${
+        isDark ? 'bg-[#141419]' : 'bg-[#F9EFE8]'
+      }`}
+    >
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
@@ -102,102 +113,93 @@ export default function FeaturesSection() {
         />
       </div>
 
-      <div className="relative max-w-5xl mx-auto">
+      <div className="relative max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-14">
-          <h2 className={`text-3xl md:text-4xl font-bold mb-3 ${
+        <div className="text-center mb-16">
+          <p className={`text-sm tracking-widest font-medium uppercase mb-3 ${
+            isDark ? 'text-zinc-400' : 'text-zinc-600'
+          }`}>
+            Kenapa Kami
+          </p>
+          <h2 className={`text-3xl md:text-4xl font-bold mb-4 ${
             isDark ? 'text-white' : 'text-zinc-900'
           }`}>
             Mengapa KerenTal?
           </h2>
-          <p className={`text-base max-w-md mx-auto ${
+          <p className={`text-base max-w-xl mx-auto ${
             isDark ? 'text-zinc-400' : 'text-zinc-600'
           }`}>
-            Komitmen kami untuk pengalaman sewa mobil terbaik
+            Komitmen kami untuk memberikan pengalaman sewa mobil terbaik tanpa kompromi.
           </p>
         </div>
 
-        {/* Stats - Glass card */}
-        <div className={`relative mb-14 p-8 rounded-2xl overflow-hidden ${
+        {/* Stats Grid */}
+        <div className={`grid grid-cols-2 lg:grid-cols-4 gap-4 mb-16 rounded-2xl p-6 ${
           isDark
             ? 'bg-white/[0.03] backdrop-blur-xl border border-white/[0.08]'
-            : 'bg-white/80 backdrop-blur-xl border border-white/80 shadow-sm'
+            : 'bg-white/80 backdrop-blur-xl border border-white/80'
         }`}>
-          {/* Top highlight */}
-          <div className={`
-            absolute top-0 left-4 right-4 h-px
-            ${isDark
-              ? 'bg-gradient-to-r from-transparent via-white/20 to-transparent'
-              : 'bg-gradient-to-r from-transparent via-white/90 to-transparent'
-            }
-          `} />
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {STATS.map((stat, i) => (
-              <div key={stat.label} className="text-center">
-                <div className={`text-4xl md:text-5xl font-bold ${
-                  isDark ? 'text-white' : 'text-zinc-900'
-                }`}>
-                  <span ref={(el) => { statRefs.current[i] = el; }}>0</span>
-                  <span className="text-zinc-500">{stat.suffix}</span>
-                </div>
-                <p className={`text-sm mt-2 ${
-                  isDark ? 'text-zinc-500' : 'text-zinc-500'
-                }`}>
-                  {stat.label}
-                </p>
+          {STATS.map((stat, i) => (
+            <div key={stat.label} className="text-center py-4">
+              <div className={`text-3xl md:text-4xl font-bold tracking-tighter flex items-baseline justify-center gap-1 ${
+                isDark ? 'text-white' : 'text-zinc-900'
+              }`}>
+                <span ref={(el) => { statRefs.current[i] = el; }}>0</span>
+                <span className={isDark ? 'text-zinc-400' : 'text-zinc-500'}>{stat.suffix}</span>
               </div>
-            ))}
-          </div>
+              <p className={`text-sm mt-1 ${
+                isDark ? 'text-zinc-500' : 'text-zinc-500'
+              }`}>
+                {stat.label}
+              </p>
+            </div>
+          ))}
         </div>
 
-        {/* Features - Glass cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {FEATURES.map((feature) => {
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {FEATURES.map((feature, index) => {
             const Icon = feature.icon;
             return (
-              <div key={feature.title} className="feature-card">
-                <div className={`
-                  relative p-6 rounded-2xl overflow-hidden
-                  transition-transform duration-200 hover:-translate-y-1
+              <div
+                key={feature.title}
+                ref={(el) => { cardRefs.current[index] = el; }}
+                className={`
+                  relative p-6 md:p-8 rounded-2xl overflow-hidden
                   ${isDark
-                    ? 'bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] hover:border-white/[0.12]'
-                    : 'bg-white/70 backdrop-blur-xl border border-white/80 shadow-sm hover:shadow-md'
+                    ? 'bg-white/[0.03] backdrop-blur-xl border border-white/[0.08]'
+                    : 'bg-white/80 backdrop-blur-xl border border-white/80'
                   }
-                `}>
-                  {/* Top highlight */}
-                  <div className={`
-                    absolute top-0 left-4 right-4 h-px
-                    ${isDark
-                      ? 'bg-gradient-to-r from-transparent via-white/20 to-transparent'
-                      : 'bg-gradient-to-r from-transparent via-white/90 to-transparent'
-                    }
-                  `} />
+                `}
+              >
+                {/* Top highlight */}
+                <div className={`
+                  absolute top-0 left-4 right-4 h-px
+                  ${isDark
+                    ? 'bg-gradient-to-r from-transparent via-white/20 to-transparent'
+                    : 'bg-gradient-to-r from-transparent via-white/90 to-transparent'
+                  }
+                `} />
 
-                  {/* Icon */}
+                <div className="flex flex-col gap-4">
                   <div className={`
-                    w-12 h-12 rounded-xl flex items-center justify-center mb-5
-                    ${isDark
-                      ? 'bg-white/5 border border-white/10'
-                      : 'bg-zinc-50 border border-zinc-200'
-                    }
+                    w-12 h-12 rounded-xl flex items-center justify-center
+                    ${isDark ? 'bg-white/[0.05]' : 'bg-zinc-100'}
                   `}>
-                    <Icon size={22} className={isDark ? 'text-zinc-400' : 'text-zinc-600'} />
+                    <Icon className={`w-6 h-6 ${isDark ? 'text-white' : 'text-zinc-700'}`} />
                   </div>
-
-                  {/* Title */}
-                  <h3 className={`font-semibold mb-2 ${
-                    isDark ? 'text-white' : 'text-zinc-900'
-                  }`}>
-                    {feature.title}
-                  </h3>
-
-                  {/* Description */}
-                  <p className={`text-sm leading-relaxed ${
-                    isDark ? 'text-zinc-500' : 'text-zinc-500'
-                  }`}>
-                    {feature.desc}
-                  </p>
+                  <div>
+                    <h3 className={`text-xl font-semibold mb-2 ${
+                      isDark ? 'text-white' : 'text-zinc-900'
+                    }`}>
+                      {feature.title}
+                    </h3>
+                    <p className={`text-sm leading-relaxed ${
+                      isDark ? 'text-zinc-400' : 'text-zinc-600'
+                    }`}>
+                      {feature.desc}
+                    </p>
+                  </div>
                 </div>
               </div>
             );

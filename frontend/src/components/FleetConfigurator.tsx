@@ -188,7 +188,7 @@ export default function FleetConfigurator() {
         ref={sectionRef}
         className={`relative w-full min-h-[60vh] overflow-hidden py-20 ${
           isDark
-            ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+            ? 'bg-[#0a0a0a]'
             : 'bg-gradient-to-b from-zinc-100 via-zinc-50 to-white'
         }`}
       >
@@ -204,7 +204,7 @@ export default function FleetConfigurator() {
       ref={sectionRef}
       className={`relative w-full min-h-[100vh] overflow-hidden py-20 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-zinc-100 via-zinc-50 to-white'
       }`}
     >
@@ -296,7 +296,7 @@ export default function FleetConfigurator() {
                     key={i}
                     className={`h-1.5 rounded-full transition-all duration-300 ${
                       i === activeIndex
-                        ? 'w-5 bg-blue-500'
+                        ? isDark ? 'w-5 bg-white' : 'w-5 bg-zinc-800'
                         : isDark ? 'w-1.5 bg-white/25' : 'w-1.5 bg-zinc-300'
                     }`}
                   />
@@ -315,7 +315,7 @@ export default function FleetConfigurator() {
             <div className="relative z-20 flex justify-center mt-8">
               <Link
                 to={`/armada/${activeCar.id}`}
-                className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium px-9 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-blue-500/30"
+                className="bg-white text-zinc-900 hover:bg-zinc-100 text-sm font-medium px-9 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-black/10"
               >
                 Booking Sekarang
               </Link>
@@ -327,7 +327,7 @@ export default function FleetConfigurator() {
             <div className="flex justify-center mt-8">
               <Link
                 to="/armada"
-                className="bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium px-9 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-blue-500/30"
+                className="bg-white text-zinc-900 hover:bg-zinc-100 text-sm font-medium px-9 py-3.5 rounded-full transition-all hover:scale-[1.03] active:scale-95 hover:shadow-lg hover:shadow-black/10"
               >
                 Booking Sekarang
               </Link>
@@ -427,7 +427,7 @@ export default function FleetConfigurator() {
               onClick={() => selectCar(i)}
               className={`shrink-0 px-4 py-2 rounded-full text-xs font-medium transition-all ${
                 i === activeIndex
-                  ? 'bg-blue-500 text-white'
+                  ? isDark ? 'bg-white text-zinc-900' : 'bg-zinc-800 text-white'
                   : isDark
                     ? 'bg-white/10 text-white/60 hover:bg-white/20'
                     : 'bg-white/80 text-zinc-600 hover:bg-white'

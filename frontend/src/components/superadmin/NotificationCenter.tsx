@@ -1,10 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
-
-const getGlassCardClass = (isDark: boolean) => {
-  return isDark ? 'sa-glass-dark' : 'sa-glass-light';
-};
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 function formatTimeAgo(dateStr: string) {
   const date = new Date(dateStr);
@@ -46,13 +44,21 @@ export function NotificationCenter() {
         <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
           Notifikasi
         </h3>
-        {unreadCount > 0 && (
-          <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
-            isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
-          }`}>
-            {unreadCount} baru
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+              isDark ? 'bg-white/10 text-white/60' : 'bg-blue-100 text-slate-600'
+            }`}>
+              {unreadCount} baru
+            </span>
+          )}
+          <Link
+            to="/superadmin/notifications"
+            className={`text-xs ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
+          >
+            Lihat Semua
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -85,7 +91,7 @@ export function NotificationCenter() {
             >
               <div className="flex items-start gap-2">
                 {!notification.isRead && (
-                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
+                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isDark ? 'bg-blue-400' : 'bg-white/50'}`} />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className={`text-xs font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>

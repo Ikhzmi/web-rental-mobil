@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 /** Status booking yang dihitung sebagai penghalang slot (§11.2 PRD). */
-const BLOCKING_STATUSES = ['pending', 'dikonfirmasi', 'berjalan'] as const;
+const BLOCKING_STATUSES = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'] as const;
 
 interface OverlapCheckParams {
   carId: string;

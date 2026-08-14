@@ -4,7 +4,7 @@ exports.isCarAvailable = isCarAvailable;
 exports.getBookedDateRanges = getBookedDateRanges;
 const prisma_1 = require("../lib/prisma");
 /** Status booking yang dihitung sebagai penghalang slot (§11.2 PRD). */
-const BLOCKING_STATUSES = ['pending', 'dikonfirmasi', 'berjalan'];
+const BLOCKING_STATUSES = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'];
 /**
  * Mengecek apakah rentang tanggal yang diminta bentrok dengan booking lain
  * pada mobil yang sama. Formula overlap sesuai §11.2 PRD:

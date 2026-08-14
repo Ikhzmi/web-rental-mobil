@@ -73,7 +73,7 @@ export default function FaqPreview() {
     <section
       ref={sectionRef}
       className={`relative py-24 md:py-32 px-4 sm:px-6 lg:px-8 ${
-        isDark ? 'bg-zinc-950' : 'bg-white'
+        isDark ? 'bg-[#141419]' : 'bg-[#F9EFE8]'
       }`}
     >
       {/* Background decoration */}

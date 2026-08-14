@@ -1,14 +1,81 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/webp" href="/favicon.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="KerenTal Kita - Rental mobil terpercaya dengan sopir profesional" />
+    <meta name="theme-color" content="#0a0a0a" />
+
+    <!-- Preload critical assets -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- DNS Prefetch for external resources -->
+    <link rel="dns-prefetch" href="https://zzbqekebpmdhvhcdmvrs.supabase.co" />
+
     <title>KerenTal Kita</title>
-    <script type="module" crossorigin src="/assets/index-DkmcnBrp.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-C9FQVDlI.css">
+
+    <script>
+      // Inline critical theme script to prevent FOUC
+      (function() {
+        var stored = localStorage.getItem('kerental-theme');
+        var root = document.documentElement;
+        var body = document.body;
+
+        if (stored === 'light') {
+          root.classList.remove('dark');
+          root.classList.add('light');
+          body.style.backgroundColor = '#F9EFE8';
+        } else {
+          root.classList.add('dark');
+          root.classList.remove('light');
+          body.style.backgroundColor = '#0a0a0a';
+        }
+      })();
+    </script>
+
+    <style>
+      /* Critical CSS - prevents layout shift */
+      body { margin: 0; }
+      html.dark body { background-color: #0a0a0a; }
+      html.light body { background-color: #F9EFE8; }
+
+      /* Loading spinner for lazy loaded pages */
+      .initial-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: inherit;
+      }
+      .initial-loader::after {
+        content: '';
+        width: 32px;
+        height: 32px;
+        border: 2px solid rgba(255,255,255,0.1);
+        border-top-color: #f97316;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+    <script type="module" crossorigin src="/assets/index-BYUqt3ar.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-CNC7AqOf.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-charts-gHzKlT1s.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-date-u369hKLx.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-DGf6rmUF.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-motion-pleHz7UM.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-query-0GXLkUEf.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-icons-cjgplEyb.js">
+    <link rel="stylesheet" crossorigin href="/assets/vendor-react-CyUUxN2G.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-kl7Nbc1E.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Initial loader shown while JS loads -->
+      <div class="initial-loader"></div>
+    </div>
   </body>
 </html>

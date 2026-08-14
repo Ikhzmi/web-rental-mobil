@@ -99,15 +99,15 @@ export default function ModernFooter() {
       {/* Background gradient */}
       <div className={`absolute inset-0 pointer-events-none ${
         isDark
-          ? 'bg-gradient-to-t from-[#0a0a1a] to-transparent'
-          : 'bg-gradient-to-t from-blue-50/50 to-transparent'
+          ? 'bg-gradient-to-t from-[#0a0a0a] to-transparent'
+          : 'bg-gradient-to-t from-slate-50/50 to-transparent'
       }`} />
 
       {/* Top decorative line */}
       <div className={`absolute top-0 left-0 right-0 h-px ${
         isDark
           ? 'bg-gradient-to-r from-transparent via-white/10 to-transparent'
-          : 'bg-gradient-to-r from-transparent via-blue-200/50 to-transparent'
+          : 'bg-gradient-to-r from-transparent via-slate-200/50 to-transparent'
       }`} />
 
       <div className="relative max-w-7xl mx-auto">
@@ -124,7 +124,7 @@ export default function ModernFooter() {
                 />
                 <div>
                   <h3 className={`font-bold text-xl ${isDark ? 'text-white' : 'text-slate-900'}`}>KerenTal</h3>
-                  <p className={`text-sm ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>Kita</p>
+                  <p className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Kita</p>
                 </div>
               </div>
             </Link>
@@ -136,19 +136,19 @@ export default function ModernFooter() {
             {/* Contact info */}
             <div className="space-y-3">
               <div className={`flex items-start gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
-                <MapPin className={`w-5 h-5 shrink-0 mt-0.5 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                <MapPin className={`w-5 h-5 shrink-0 mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
                 <span className="text-sm">Jl. Sudirman No. 123, Jakarta</span>
               </div>
               <div className={`flex items-center gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
-                <Phone className={`w-5 h-5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                <Phone className={`w-5 h-5 shrink-0 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
                 <span className="text-sm">+62 812 3456 7890</span>
               </div>
               <div className={`flex items-center gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
-                <Mail className={`w-5 h-5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                <Mail className={`w-5 h-5 shrink-0 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
                 <span className="text-sm">info@kerentalkita.id</span>
               </div>
               <div className={`flex items-center gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
-                <Clock className={`w-5 h-5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                <Clock className={`w-5 h-5 shrink-0 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
                 <span className="text-sm">24/7 Siap Melayani</span>
               </div>
             </div>
@@ -162,8 +162,8 @@ export default function ModernFooter() {
                 <li key={item.name}>
                   <Link
                     to={item.href}
-                    className={`text-sm transition-colors duration-200 hover:text-blue-500 ${
-                      isDark ? 'text-white/50 hover:text-blue-400' : 'text-slate-600'
+                    className={`text-sm transition-colors duration-200 hover:text-white/80 ${
+                      isDark ? 'text-white/50 hover:text-white/50' : 'text-slate-600'
                     }`}
                   >
                     {item.name}
@@ -181,8 +181,8 @@ export default function ModernFooter() {
                 <li key={item.name}>
                   <Link
                     to={item.href}
-                    className={`text-sm transition-colors duration-200 hover:text-blue-500 ${
-                      isDark ? 'text-white/50 hover:text-blue-400' : 'text-slate-600'
+                    className={`text-sm transition-colors duration-200 hover:text-white/80 ${
+                      isDark ? 'text-white/50 hover:text-white/50' : 'text-slate-600'
                     }`}
                   >
                     {item.name}
@@ -200,8 +200,8 @@ export default function ModernFooter() {
                 <li key={item.name}>
                   <Link
                     to={item.href}
-                    className={`text-sm transition-colors duration-200 hover:text-blue-500 ${
-                      isDark ? 'text-white/50 hover:text-blue-400' : 'text-slate-600'
+                    className={`text-sm transition-colors duration-200 hover:text-white/80 ${
+                      isDark ? 'text-white/50 hover:text-white/50' : 'text-slate-600'
                     }`}
                   >
                     {item.name}
@@ -220,8 +220,8 @@ export default function ModernFooter() {
                     href={social.href}
                     className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
                       isDark
-                        ? 'bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-blue-500/20 hover:border-blue-500/30'
-                        : 'bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-500/10'
+                        ? 'bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300 hover:shadow-lg'
                     }`}
                     aria-label={social.name}
                   >

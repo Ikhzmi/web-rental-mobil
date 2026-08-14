@@ -1,40 +1,133 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Search, Plus, Eye, CheckCircle, XCircle, AlertCircle, Trash2, X } from 'lucide-react';
+import {
+  Building2,
+  Search,
+  Plus,
+  Eye,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Trash2,
+  X,
+  Phone,
+  Mail,
+  MapPin,
+  CreditCard,
+  Percent,
+  Users,
+  Car,
+} from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Instansi, StatusInstansi } from '../../lib/api';
 import { SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
+import { getInstansiStatusConfig } from '../../lib/statusConfig';
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
-const STATUS_CONFIG_DARK: Record<string, { color: string; icon: React.ElementType; glow: string }> = {
-  aktif: { color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: CheckCircle, glow: 'shadow-emerald-500/20' },
-  menunggu_verifikasi: { color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: AlertCircle, glow: 'shadow-amber-500/20' },
-  nonaktif: { color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: XCircle, glow: 'shadow-red-500/20' },
-};
-
-const STATUS_CONFIG_LIGHT: Record<string, { color: string; icon: React.ElementType; glow: string }> = {
-  aktif: { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle, glow: 'shadow-emerald-500/10' },
-  menunggu_verifikasi: { color: 'bg-amber-100 text-amber-700 border-amber-200', icon: AlertCircle, glow: 'shadow-amber-500/10' },
-  nonaktif: { color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle, glow: 'shadow-red-500/10' },
+// Status labels for filter display
+const INSTANSI_STATUS_LABELS: Record<string, string> = {
+  aktif: 'Aktif',
+  menunggu_verifikasi: 'Menunggu',
+  nonaktif: 'Nonaktif',
 };
 
 function StatusBadge({ status, isDark }: { status: StatusInstansi; isDark: boolean }) {
-  const config = isDark ? STATUS_CONFIG_DARK[status] : STATUS_CONFIG_LIGHT[status];
+  const config = getInstansiStatusConfig(status, isDark);
   const Icon = config.icon;
 
-  const labels = {
-    aktif: 'Aktif',
-    menunggu_verifikasi: 'Menunggu',
-    nonaktif: 'Nonaktif',
-  };
-
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${config.color} shadow-lg ${config.glow}`}>
-      <Icon size={12} />
-      {labels[status]}
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium border ${config.bg}`}>
+      <Icon size={10} />
+      {config.label}
     </span>
+  );
+}
+
+// Form input component - matches dashboard style
+function FormField({
+  label,
+  icon: Icon,
+  type = 'text',
+  value,
+  onChange,
+  placeholder,
+  required = false,
+  dark,
+}: {
+  label: string;
+  icon: React.ElementType;
+  type?: string;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  dark: boolean;
+}) {
+  return (
+    <div>
+      <label className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${dark ? 'text-white/60' : 'text-slate-600'}`}>
+        <Icon size={13} />
+        {label}
+        {required && <span className="text-red-400">*</span>}
+      </label>
+      <input
+        type={type}
+        required={required}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full px-4 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-2 ${
+          dark
+            ? 'bg-white/[0.05] border-white/10 text-white placeholder:text-white/30 focus:border-white/30 focus:ring-white/20'
+            : 'bg-slate-50/80 border border-slate-200/80 text-slate-900 placeholder:text-slate-400 focus:border-[#8b7355]/50 focus:ring-[#8b7355]/20'
+        }`}
+      />
+    </div>
+  );
+}
+
+// Form textarea component
+function FormArea({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  placeholder,
+  required = false,
+  rows = 3,
+  dark,
+}: {
+  label: string;
+  icon: React.ElementType;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  rows?: number;
+  dark: boolean;
+}) {
+  return (
+    <div>
+      <label className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${dark ? 'text-white/60' : 'text-slate-600'}`}>
+        <Icon size={13} />
+        {label}
+        {required && <span className="text-red-400">*</span>}
+      </label>
+      <textarea
+        required={required}
+        rows={rows}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full px-4 py-3 rounded-xl text-sm transition-all duration-200 focus:outline-none focus:ring-2 resize-none ${
+          dark
+            ? 'bg-white/[0.05] border-white/10 text-white placeholder:text-white/30 focus:border-white/30 focus:ring-white/20'
+            : 'bg-slate-50/80 border border-slate-200/80 text-slate-900 placeholder:text-slate-400 focus:border-[#8b7355]/50 focus:ring-[#8b7355]/20'
+        }`}
+      />
+    </div>
   );
 }
 
@@ -69,109 +162,192 @@ function CreateInstansiModal({ onClose, onSuccess, isDark }: { onClose: () => vo
     });
   };
 
-  const modalClass = isDark
-    ? 'bg-gradient-to-br from-[#0d1424]/95 to-[#0a0f1a]/95 backdrop-blur-xl border border-white/10'
-    : 'bg-white/95 backdrop-blur-xl border border-slate-200 shadow-xl';
-
-  const inputClass = isDark
-    ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20'
-    : 'bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20';
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className={`${modalClass} rounded-2xl w-full max-w-lg shadow-2xl ${isDark ? 'shadow-black/50' : 'shadow-slate-900/10'}`}
+        className={`w-full max-w-lg rounded-2xl overflow-hidden ${
+          isDark
+            ? 'login-card-dark'
+            : 'login-card-light'
+        }`}
       >
-        <div className={`flex items-center justify-between p-5 border-b ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-          <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Tambah Instansi Baru</h2>
-          <button onClick={onClose} className={`p-2 rounded-lg transition-colors ${isDark ? 'text-white/50 hover:text-white hover:bg-white/10' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}>
-            <X size={20} />
+        {/* Header */}
+        <div className={`relative px-6 py-5 ${isDark ? 'border-b border-white/10' : 'border-b border-[#D4CFC7]/40'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${
+              isDark ? 'bg-white/10' : 'bg-[#f5ebe0]'
+            }`}>
+              <Building2 size={22} className={isDark ? 'text-white' : 'text-[#6b5545]'} />
+            </div>
+            <div>
+              <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                Tambah Instansi Baru
+              </h2>
+              <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                Daftarkan rental baru ke platform
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className={`absolute top-4 right-4 p-2 rounded-lg transition-all ${
+              isDark ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <X size={18} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`rounded-lg p-3 text-sm ${isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'}`}
+              className={`rounded-xl p-3 text-sm flex items-center gap-2 ${
+                isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'
+              }`}
             >
+              <AlertCircle size={16} />
               {error}
             </motion.div>
           )}
-          <div>
-            <label className={`block text-sm mb-1.5 ${isDark ? 'text-white/70' : 'text-slate-600'}`}>Nama Instansi</label>
-            <input
-              type="text"
-              required
-              value={form.namaInstansi}
-              onChange={(e) => setForm({ ...form, namaInstansi: e.target.value })}
-              className={`w-full px-4 py-3 rounded-xl focus:outline-none transition-all ${inputClass}`}
-              placeholder="PT Rental Mobil Sejahtera"
-            />
-          </div>
-          <div>
-            <label className={`block text-sm mb-1.5 ${isDark ? 'text-white/70' : 'text-slate-600'}`}>Alamat</label>
-            <textarea
-              required
-              rows={2}
-              value={form.alamat}
-              onChange={(e) => setForm({ ...form, alamat: e.target.value })}
-              className={`w-full px-4 py-3 rounded-xl focus:outline-none transition-all resize-none ${inputClass}`}
-              placeholder="Jl. Sudirman No. 123, Jakarta"
-            />
-          </div>
+
+          {/* Nama Instansi */}
+          <FormField
+            label="Nama Instansi"
+            icon={Building2}
+            value={form.namaInstansi}
+            onChange={(val) => setForm({ ...form, namaInstansi: val })}
+            placeholder="PT Rental Mobil Sejahtera"
+            required
+            dark={isDark}
+          />
+
+          {/* Alamat */}
+          <FormArea
+            label="Alamat Lengkap"
+            icon={MapPin}
+            value={form.alamat}
+            onChange={(val) => setForm({ ...form, alamat: val })}
+            placeholder="Jl. Sudirman No. 123, RT/RW 001/002, Kel. Sudirman, Kec. Menteng, Jakarta Pusat"
+            required
+            rows={2}
+            dark={isDark}
+          />
+
+          {/* Contact Grid */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`block text-sm mb-1.5 ${isDark ? 'text-white/70' : 'text-slate-600'}`}>No. HP PIC</label>
-              <input
-                type="tel"
-                required
-                value={form.noHpPic}
-                onChange={(e) => setForm({ ...form, noHpPic: e.target.value })}
-                className={`w-full px-4 py-3 rounded-xl focus:outline-none transition-all ${inputClass}`}
-                placeholder="081234567890"
-              />
-            </div>
-            <div>
-              <label className={`block text-sm mb-1.5 ${isDark ? 'text-white/70' : 'text-slate-600'}`}>Email PIC</label>
-              <input
-                type="email"
-                required
-                value={form.emailPic}
-                onChange={(e) => setForm({ ...form, emailPic: e.target.value })}
-                className={`w-full px-4 py-3 rounded-xl focus:outline-none transition-all ${inputClass}`}
-                placeholder="admin@contoh.com"
-              />
-            </div>
-          </div>
-          <div>
-            <label className={`block text-sm mb-1.5 ${isDark ? 'text-white/70' : 'text-slate-600'}`}>Rekening Bank</label>
-            <input
-              type="text"
-              value={form.rekeningBank}
-              onChange={(e) => setForm({ ...form, rekeningBank: e.target.value })}
-              className={`w-full px-4 py-3 rounded-xl focus:outline-none transition-all ${inputClass}`}
-              placeholder="BCA-1234567890"
+            <FormField
+              label="No. HP PIC"
+              icon={Phone}
+              type="tel"
+              value={form.noHpPic}
+              onChange={(val) => setForm({ ...form, noHpPic: val })}
+              placeholder="081234567890"
+              required
+              dark={isDark}
+            />
+            <FormField
+              label="Email PIC"
+              icon={Mail}
+              type="email"
+              value={form.emailPic}
+              onChange={(val) => setForm({ ...form, emailPic: val })}
+              placeholder="admin@rental.com"
+              required
+              dark={isDark}
             />
           </div>
+
+          {/* Rekening */}
+          <FormField
+            label="Nomor Rekening"
+            icon={CreditCard}
+            value={form.rekeningBank}
+            onChange={(val) => setForm({ ...form, rekeningBank: val })}
+            placeholder="BCA - 1234567890 (opsional)"
+            dark={isDark}
+          />
+
+          {/* Komisi Slider */}
+          <div>
+            <label className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+              <Percent size={13} />
+              Komisi Platform
+              <span className="text-red-400">*</span>
+            </label>
+            <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/10' : 'bg-slate-50 border border-slate-200'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <span className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {form.komisiPlatformPersen}%
+                </span>
+                <span className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                  dari setiap transaksi
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={form.komisiPlatformPersen}
+                onChange={(e) => setForm({ ...form, komisiPlatformPersen: parseInt(e.target.value) })}
+                className="w-full h-2 rounded-full appearance-none cursor-pointer accent-white"
+                style={{
+                  background: `linear-gradient(to right, ${isDark ? '#666666' : '#888888'} 0%, ${isDark ? '#666666' : '#888888'} ${(form.komisiPlatformPersen / 30) * 100}%, ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'} ${(form.komisiPlatformPersen / 30) * 100}%, ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'} 100%)`
+                }}
+              />
+              <div className={`flex justify-between text-[10px] mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
+                <span>1%</span>
+                <span>15%</span>
+                <span>30%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className={`flex-1 px-4 py-3 rounded-xl transition-all ${isDark ? 'bg-white/10 hover:bg-white/15 text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>
+            <button
+              type="button"
+              onClick={onClose}
+              className={`flex-1 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
+                isDark
+                  ? 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+              }`}
+            >
               Batal
             </button>
-            <button type="submit" disabled={createMutation.isPending}
-              className={`flex-1 px-4 py-3 font-medium rounded-xl shadow-lg transition-all disabled:opacity-50 ${isDark ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-blue-500/25' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20'}`}>
-              {createMutation.isPending ? 'Membuat...' : 'Buat Instansi'}
+            <button
+              type="submit"
+              disabled={createMutation.isPending}
+              className={`flex-1 px-4 py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                isDark
+                  ? 'bg-[#6b5545] hover:bg-[#5b4535] text-white shadow-lg shadow-[#6b5545]/25'
+                  : 'bg-[#6b5545] hover:bg-[#5b4535] text-white shadow-lg shadow-[#6b5545]/20'
+              }`}
+            >
+              {createMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Membuat...
+                </>
+              ) : (
+                <>
+                  <Plus size={16} />
+                  Buat Instansi
+                </>
+              )}
             </button>
           </div>
         </form>
@@ -201,77 +377,99 @@ function InstansiCard({ instansi, index, onDelete, isDark }: {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
       whileHover={{ y: -2 }}
-      className={`group relative rounded-2xl overflow-hidden transition-all duration-300 ${
-        isDark
-          ? 'bg-gradient-to-br from-white/8 via-white/5 to-white/3 backdrop-blur-xl border border-white/10 shadow-lg shadow-black/20 hover:border-blue-500/30 hover:shadow-blue-500/10'
-          : 'bg-white/80 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 hover:border-blue-300 hover:shadow-blue-500/10'
-      }`}
+      className={`rounded-2xl overflow-hidden transition-all duration-300 ${getGlassCardClass(isDark)}`}
     >
       <div className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg ${isDark ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                <Building2 size={18} className={isDark ? 'text-blue-400' : 'text-blue-600'} />
-              </div>
-              <div>
-                <h3 className={`font-semibold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{instansi.namaInstansi}</h3>
-                <StatusBadge status={instansi.status} isDark={isDark} />
-              </div>
+        {/* Header Row */}
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center backdrop-blur-xl ${
+              isDark ? 'bg-white/[0.08] border border-white/10' : 'bg-[#f5ebe0] border border-[#d5c9bc]/50'
+            }`}>
+              <Building2 size={20} className={isDark ? 'text-white' : 'text-[#6b5545]'} />
             </div>
-
-            <p className={`text-sm mb-3 line-clamp-2 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{instansi.alamat}</p>
-
-            <div className={`flex flex-wrap items-center gap-4 text-xs mb-4 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
-              <span className="flex items-center gap-1.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
-                {instansi.noHpPic}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
-                {instansi.emailPic}
-              </span>
-            </div>
-
-            <div className={`flex items-center gap-3 pt-3 ${isDark ? 'border-t border-white/5' : 'border-t border-slate-100'}`}>
-              <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${isDark ? 'bg-white/5 text-white/60' : 'bg-slate-100 text-slate-600'}`}>
-                {instansi._count?.cars ?? 0} mobil
-              </span>
-              <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${isDark ? 'bg-white/5 text-white/60' : 'bg-slate-100 text-slate-600'}`}>
-                {instansi._count?.profiles ?? 0} admin
-              </span>
-              <span className={`px-2.5 py-1 rounded-lg text-xs font-medium ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                {instansi.komisiPlatformPersen}% komisi
-              </span>
+            <div>
+              <h3 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {instansi.namaInstansi}
+              </h3>
+              <StatusBadge status={instansi.status} isDark={isDark} />
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Link
-              to={`/superadmin/instansi/${instansi.id}`}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+          <div className="flex items-center gap-2">
+            <a
+              href={`/superadmin/instansi/${instansi.id}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all backdrop-blur-xl ${
                 isDark
-                  ? 'bg-gradient-to-r from-blue-500/20 to-blue-500/10 text-blue-400 border-blue-500/30 hover:border-blue-400/50 hover:from-blue-500/30 hover:to-blue-500/20 shadow-lg shadow-blue-500/10'
-                  : 'bg-gradient-to-r from-blue-50 to-blue-50/50 text-blue-600 border-blue-200 hover:border-blue-300 hover:from-blue-100 hover:to-blue-50 shadow-lg shadow-blue-500/10'
+                  ? 'bg-white/[0.08] text-white/80 hover:bg-white/[0.12] border border-white/10 hover:border-white/20'
+                  : 'bg-white/60 text-[#6b5545] hover:bg-[#f5ebe0] border border-[#d5c9bc]/50 hover:border-[#d5c9bc]'
               }`}
             >
-              <Eye size={16} />
+              <Eye size={14} />
               Detail
-            </Link>
+            </a>
 
             {(instansi._count?.cars ?? 0) === 0 && (instansi._count?.profiles ?? 0) === 0 && (
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className={`p-2.5 rounded-xl border transition-all disabled:opacity-50 ${
+                className={`p-2 rounded-xl transition-all disabled:opacity-50 backdrop-blur-xl ${
                   isDark
-                    ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:border-red-400/50 hover:bg-red-500/20 shadow-lg shadow-red-500/10'
-                    : 'bg-red-50 text-red-600 border-red-200 hover:border-red-300 hover:bg-red-100 shadow-lg shadow-red-500/10'
+                    ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20'
+                    : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
                 }`}
               >
-                <Trash2 size={16} />
+                <Trash2 size={14} />
               </button>
             )}
+          </div>
+        </div>
+
+        {/* Info Grid - Glass style */}
+        <div className={`grid grid-cols-2 gap-3 mb-4 p-3 rounded-xl backdrop-blur-xl ${
+          isDark
+            ? 'bg-white/[0.02] border border-white/5'
+            : 'bg-white/40 border border-[#D4CFC7]/30'
+        }`}>
+          <div className="flex items-center gap-2">
+            <Phone size={12} className={isDark ? 'text-white/40' : 'text-[#8B7355]/60'} />
+            <span className={`text-xs truncate ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+              {instansi.noHpPic}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Mail size={12} className={isDark ? 'text-white/40' : 'text-[#8B7355]/60'} />
+            <span className={`text-xs truncate ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+              {instansi.emailPic}
+            </span>
+          </div>
+          <div className="col-span-2 flex items-start gap-2">
+            <MapPin size={12} className={`mt-0.5 ${isDark ? 'text-white/40' : 'text-[#8B7355]/60'}`} />
+            <span className={`text-xs ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+              {instansi.alamat}
+            </span>
+          </div>
+        </div>
+
+        {/* Stats Row */}
+        <div className={`flex items-center gap-3 pt-3 ${isDark ? 'border-t border-white/5' : 'border-t border-[#D4CFC7]/30'}`}>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs backdrop-blur-xl ${
+            isDark ? 'bg-white/[0.05] text-white/50' : 'bg-white/50 text-slate-500'
+          }`}>
+            <Car size={12} />
+            <span>{instansi._count?.cars ?? 0} mobil</span>
+          </div>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs backdrop-blur-xl ${
+            isDark ? 'bg-white/[0.05] text-white/50' : 'bg-white/50 text-slate-500'
+          }`}>
+            <Users size={12} />
+            <span>{instansi._count?.profiles ?? 0} admin</span>
+          </div>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs ml-auto backdrop-blur-xl ${
+            isDark ? 'bg-[#6b5545]/20 text-[#f5ebe0]' : 'bg-[#f5ebe0] text-[#6b5545]'
+          }`}>
+            <Percent size={12} />
+            <span>{instansi.komisiPlatformPersen}%</span>
           </div>
         </div>
       </div>
@@ -315,100 +513,130 @@ export default function SuperAdminInstansiPage() {
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className={`text-2xl sm:text-3xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>Instansi Rental</h1>
+          <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            Instansi Rental
+          </h1>
+          <p className={`text-sm mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+            Kelola semua rental yang terdaftar
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className={`px-3 py-1.5 rounded-xl text-sm ${isDark ? 'bg-white/5 border border-white/10 text-white/60' : 'bg-slate-100 border border-slate-200 text-slate-600'}`}>
-            {stats.total} instansi
-          </span>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className={`flex items-center gap-2 px-5 py-2.5 font-medium rounded-xl shadow-lg transition-all ${
-              isDark
-                ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:shadow-blue-500/40 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20'
-            }`}
-          >
-            <Plus size={18} />
-            Tambah
-          </button>
-        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className={`flex items-center gap-2 px-5 py-2.5 font-medium rounded-xl transition-all backdrop-blur-xl border ${
+            isDark
+              ? 'bg-white/[0.08] hover:bg-white/[0.12] text-white border-white/20 shadow-lg shadow-black/20'
+              : 'bg-white/60 hover:bg-white/80 text-slate-900 border-white/70 shadow-lg shadow-slate-900/10'
+          }`}
+        >
+          <Plus size={16} />
+          Tambah Instansi
+        </button>
       </motion.div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      {/* Stats Cards - Glass Card Style */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { key: 'aktif', label: 'Aktif', value: stats.aktif, darkBg: 'bg-emerald-500/15 border-emerald-500/30', lightBg: 'bg-emerald-50 border-emerald-200' },
-          { key: 'menunggu_verifikasi', label: 'Menunggu', value: stats.menunggu, darkBg: 'bg-amber-500/15 border-amber-500/30', lightBg: 'bg-amber-50 border-amber-200' },
-          { key: 'nonaktif', label: 'Nonaktif', value: stats.nonaktif, darkBg: 'bg-red-500/15 border-red-500/30', lightBg: 'bg-red-50 border-red-200' },
-        ].map((stat, i) => (
-          <motion.button
-            key={stat.key}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setFilter(filter === stat.key ? '' : stat.key as StatusInstansi)}
-            className={`rounded-xl p-4 text-left transition-all border ${
-              filter === stat.key
-                ? isDark
-                  ? stat.darkBg
-                  : stat.lightBg
-                : isDark
-                ? 'bg-white/5 border-white/10 hover:bg-white/10'
-                : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            <p className={`text-xs mb-1 ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{stat.label}</p>
-            <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{stat.value}</p>
-          </motion.button>
-        ))}
+          {
+            key: 'aktif',
+            label: 'Aktif',
+            value: stats.aktif,
+            icon: CheckCircle,
+            activeBg: 'bg-emerald-500/10',
+          },
+          {
+            key: 'menunggu_verifikasi',
+            label: 'Menunggu',
+            value: stats.menunggu,
+            icon: AlertCircle,
+            activeBg: 'bg-amber-500/10',
+          },
+          {
+            key: 'nonaktif',
+            label: 'Nonaktif',
+            value: stats.nonaktif,
+            icon: XCircle,
+            activeBg: 'bg-red-500/10',
+          },
+        ].map((stat, i) => {
+          const Icon = stat.icon;
+          const isActive = filter === stat.key;
+          return (
+            <motion.button
+              key={stat.key}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setFilter(filter === stat.key ? '' : stat.key as StatusInstansi)}
+              className={`rounded-2xl p-5 text-left ${getGlassCardClass(isDark)} ${isActive ? stat.activeBg : ''}`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className={`text-xs font-medium ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{stat.label}</p>
+                <Icon size={16} className={isDark ? 'text-white/40' : 'text-slate-400'} />
+              </div>
+              <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {stat.value}
+              </p>
+            </motion.button>
+          );
+        })}
       </div>
 
-      {/* Search */}
+      {/* Search - Glass Card Style */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="relative mb-6"
+        transition={{ delay: 0.15 }}
+        className="relative"
       >
-        <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
+        <Search size={18} className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-white/40' : 'text-[#8B7355]/60'}`} />
         <input
           type="text"
           placeholder="Cari nama instansi atau alamat..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className={`w-full pl-11 pr-4 py-3 rounded-xl focus:outline-none transition-all ${
+          className={`w-full pl-11 pr-4 py-3.5 rounded-xl text-sm focus:outline-none transition-all ${
             isDark
-              ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/40 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20'
-              : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20'
+              ? 'bg-white/[0.03] border border-white/10 text-white placeholder:text-white/30 focus:border-white/30 focus:ring-2 focus:ring-white/20'
+              : 'bg-[#F9EFE8]/50 border border-[#D4CFC7]/60 text-slate-900 placeholder:text-[#8B7355]/50 focus:border-[#8b7355]/50 focus:ring-2 focus:ring-[#8b7355]/20'
           }`}
         />
       </motion.div>
 
+      {/* Results count */}
+      {!isLoading && instances && instances.length > 0 && (
+        <p className={`text-xs ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>
+          Menampilkan {instances.length} instansi
+          {filter && ` · Filter: ${INSTANSI_STATUS_LABELS[filter] ?? filter}`}
+        </p>
+      )}
+
       {/* List */}
       {isLoading ? (
-        <SkeletonList count={4} />
+        <SkeletonList count={4} isDark={isDark} />
       ) : !instances?.length ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-center py-20"
+          className={`text-center py-16 rounded-2xl ${getGlassCardClass(isDark)}`}
         >
-          <div className={`w-20 h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center ${isDark ? 'bg-white/5 border border-white/10' : 'bg-slate-100 border border-slate-200'}`}>
-            <Building2 size={40} className={isDark ? 'text-white/20' : 'text-slate-300'} />
+          <div className={`w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center backdrop-blur-xl ${isDark ? 'bg-white/[0.05] border border-white/10' : 'bg-[#f5ebe0] border border-[#d5c9bc]/50'}`}>
+            <Building2 size={32} className={isDark ? 'text-white/30' : 'text-[#8B7355]/40'} />
           </div>
-          <p className={`text-lg mb-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Tidak ada instansi ditemukan</p>
-          <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Coba ubah filter atau kata kunci pencarian</p>
+          <p className={`text-base font-medium mb-1 ${isDark ? 'text-white/60' : 'text-[#8B7355]'}`}>
+            {search || filter ? 'Tidak ada instansi ditemukan' : 'Belum ada instansi'}
+          </p>
+          <p className={`text-sm ${isDark ? 'text-white/40' : 'text-[#8B7355]/60'}`}>
+            {search || filter ? 'Coba ubah filter atau kata kunci pencarian' : 'Tambahkan instansi pertama untuk memulai'}
+          </p>
         </motion.div>
       ) : (
         <div className="grid gap-4">
@@ -419,7 +647,7 @@ export default function SuperAdminInstansiPage() {
               index={i}
               isDark={isDark}
               onDelete={(id) => {
-                if (confirm(`Hapus instansi "${instansi.namaInstansi}"?`)) {
+                if (confirm(`Hapus instansi "${instansi.namaInstansi}"?\n\nTindakan ini tidak dapat dibatalkan.`)) {
                   deleteMutation.mutate(id);
                 }
               }}

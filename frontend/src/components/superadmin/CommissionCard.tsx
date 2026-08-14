@@ -2,10 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
-
-const getGlassCardClass = (isDark: boolean) => {
-  return isDark ? 'sa-glass-dark' : 'sa-glass-light';
-};
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 export function CommissionCard() {
   const { theme } = useTheme();
@@ -57,7 +54,7 @@ export function CommissionCard() {
             <div
               className={`h-full rounded-full transition-all duration-500 ${
                 (commission?.targetProgress ?? 0) >= 100 ? 'bg-emerald-500'
-                  : (commission?.targetProgress ?? 0) >= 50 ? 'bg-blue-500'
+                  : (commission?.targetProgress ?? 0) >= 50 ? 'bg-white/50'
                     : 'bg-amber-500'
               }`}
               style={{ width: `${Math.min(commission?.targetProgress ?? 0, 100)}%` }}

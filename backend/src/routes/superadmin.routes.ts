@@ -72,7 +72,7 @@ superadminRouter.get('/dashboard', async (_req, res) => {
       // Mobil waiting approval
       prisma.car.count({ where: { statusApproval: 'menunggu_persetujuan' } }),
 
-      // Booking stats
+      // Booking stats - hanya yang sudah dibayar (tidak menunggu_pembayaran)
       prisma.booking.findMany({
         select: {
           status: true,
@@ -82,19 +82,26 @@ superadminRouter.get('/dashboard', async (_req, res) => {
       }),
     ]);
 
-    // Hitung total pendapatan
+    // Status yang dihitung sebagai pendapatan (sudah ada pembayaran)
+    const STATUS_DIHITUNG_PENDAPATAN = ['dikonfirmasi', 'berjalan', 'selesai'];
+
+    // Hitung total pendapatan (hanya booking yang sudah dibayar)
     let totalPendapatan = 0;
     const bookingCounts: Record<string, number> = {};
 
     for (const booking of bookings) {
-      totalPendapatan += Number(booking.totalHarga);
       if (!bookingCounts[booking.status]) {
         bookingCounts[booking.status] = 0;
       }
       bookingCounts[booking.status]++;
+
+      // Hanya tambahkan ke pendapatan jika statusnya sudah dikonfirmasi/berjalan/selesai
+      if (STATUS_DIHITUNG_PENDAPATAN.includes(booking.status)) {
+        totalPendapatan += Number(booking.totalHarga);
+      }
     }
 
-    // Estimasi komisi (10% default)
+    // Estimasi komisi (10% default) - hanya dari pendapatan yang sudah terealisasi
     const totalKomisi = totalPendapatan * 0.1;
 
     res.json({
@@ -150,11 +157,11 @@ superadminRouter.get('/dashboard/trends', async (_req, res) => {
       prisma.car.count({
         where: { statusApproval: 'disetujui', createdAt: { gte: startOfThisMonth } },
       }),
-      // Bookings bulan ini (untuk komisi)
+      // Bookings bulan ini (untuk komisi - hanya yang sudah dibayar)
       prisma.booking.findMany({
         where: {
           createdAt: { gte: startOfThisMonth },
-          status: { not: 'dibatalkan' },
+          status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
         },
         select: { totalHarga: true },
       }),
@@ -179,11 +186,11 @@ superadminRouter.get('/dashboard/trends', async (_req, res) => {
           createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         },
       }),
-      // Bookings bulan lalu (untuk komisi)
+      // Bookings bulan lalu (untuk komisi - hanya yang sudah dibayar)
       prisma.booking.findMany({
         where: {
           createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
-          status: { not: 'dibatalkan' },
+          status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
         },
         select: { totalHarga: true },
       }),
@@ -596,42 +603,60 @@ superadminRouter.post('/admin', async (req, res) => {
 
 /**
  * GET /api/superadmin/pengguna
- * List semua user (customer + admin)
+ * List semua user (customer + admin) dengan pagination
  */
 superadminRouter.get('/pengguna', async (req, res) => {
-  const { role, cari } = req.query;
+  const { role, cari, page = '1', limit = '10' } = req.query;
+  const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+  const limitNum = Math.min(100, Math.max(1, parseInt(String(limit), 10) || 10));
+  const skip = (pageNum - 1) * limitNum;
 
   try {
-    const users = await prisma.profile.findMany({
-      where: {
-        ...(role && role !== 'all' && { role: role as any }),
-        ...(cari && {
-          OR: [
-            { nama: { contains: String(cari), mode: 'insensitive' } },
-            { email: { contains: String(cari), mode: 'insensitive' } },
-          ],
-        }),
-      },
-      select: {
-        id: true,
-        nama: true,
-        email: true,
-        noHp: true,
-        role: true,
-        aktif: true,
-        dokumenVerified: true,
-        createdAt: true,
-        instansi: {
-          select: {
-            id: true,
-            namaInstansi: true,
+    const where = {
+      ...(role && role !== 'all' && { role: role as any }),
+      ...(cari && {
+        OR: [
+          { nama: { contains: String(cari), mode: 'insensitive' as const } },
+          { email: { contains: String(cari), mode: 'insensitive' as const } },
+        ],
+      }),
+    };
+
+    const [users, total] = await Promise.all([
+      prisma.profile.findMany({
+        where,
+        select: {
+          id: true,
+          nama: true,
+          email: true,
+          noHp: true,
+          role: true,
+          aktif: true,
+          dokumenVerified: true,
+          createdAt: true,
+          instansi: {
+            select: {
+              id: true,
+              namaInstansi: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum,
+      }),
+      prisma.profile.count({ where }),
+    ]);
 
-    res.json({ data: users });
+    res.json({
+      data: users,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
   } catch (error) {
     console.error('List Pengguna error:', error);
     res.status(500).json({ error: 'Gagal mengambil data pengguna' });
@@ -845,11 +870,11 @@ superadminRouter.get('/dashboard/analytics', async (req, res) => {
   }
 
   try {
-    // Get bookings for the period
+    // Get bookings for the period (hanya yang sudah dibayar)
     const bookings = await prisma.booking.findMany({
       where: {
         createdAt: { gte: startDate },
-        status: { not: 'dibatalkan' },
+        status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
       },
       select: {
         id: true,
@@ -921,16 +946,162 @@ superadminRouter.get('/dashboard/analytics', async (req, res) => {
 
 /**
  * GET /api/superadmin/dashboard/activities
- * Recent activities for timeline
+ * Recent activities derived from real platform data
  */
 superadminRouter.get('/dashboard/activities', async (_req, res) => {
   try {
-    const activities = await prisma.dashboardActivity.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-    });
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    res.json({ data: activities });
+    // Fetch recent data from various sources
+    const [
+      recentBookings,
+      recentInstansi,
+      recentCars,
+      recentProfiles,
+      recentPayments,
+    ] = await Promise.all([
+      // Recent bookings (last 30 days)
+      prisma.booking.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        include: {
+          profile: { select: { nama: true } },
+          car: { select: { nama: true, instansi: { select: { namaInstansi: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+
+      // Recent instansi registrations (last 30 days)
+      prisma.instansi.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+
+      // Recent car approvals (last 30 days)
+      prisma.car.findMany({
+        where: {
+          createdAt: { gte: thirtyDaysAgo },
+          statusApproval: 'disetujui',
+        },
+        include: {
+          instansi: { select: { namaInstansi: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+
+      // Recent user registrations (last 30 days)
+      prisma.profile.findMany({
+        where: {
+          createdAt: { gte: thirtyDaysAgo },
+          role: 'customer',
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+
+      // Recent payments (last 30 days)
+      prisma.payment.findMany({
+        where: { paidAt: { gte: thirtyDaysAgo } },
+        include: {
+          booking: {
+            include: {
+              car: { select: { nama: true } },
+              profile: { select: { nama: true } },
+            },
+          },
+        },
+        orderBy: { paidAt: 'desc' },
+        take: 5,
+      }),
+    ]);
+
+    // Build activities array from real data
+    const activities: Array<{
+      id: string;
+      type: string;
+      title: string;
+      description?: string;
+      createdAt: Date;
+    }> = [];
+
+    // Add booking activities
+    for (const booking of recentBookings) {
+      const statusLabels: Record<string, string> = {
+        menunggu_pembayaran: 'menunggu pembayaran',
+        dikonfirmasi: 'dikonfirmasi',
+        berjalan: 'sedang berjalan',
+        selesai: 'selesai',
+        dibatalkan: 'dibatalkan',
+      };
+      activities.push({
+        id: `booking-${booking.id}`,
+        type: booking.status === 'selesai' ? 'booking_completed' : 'booking_confirmed',
+        title: `Booking ${booking.car.nama}`,
+        description: `${booking.profile.nama} - ${statusLabels[booking.status] || booking.status}`,
+        createdAt: booking.createdAt,
+      });
+    }
+
+    // Add payment received activities
+    for (const payment of recentPayments) {
+      activities.push({
+        id: `payment-${payment.id}`,
+        type: 'payment_received',
+        title: `Pembayaran diterima`,
+        description: `${payment.booking.car.nama} - Rp ${Number(payment.jumlah).toLocaleString('id-ID')}`,
+        createdAt: payment.paidAt || payment.booking.createdAt,
+      });
+    }
+
+    // Add instansi registration activities
+    for (const inst of recentInstansi) {
+      activities.push({
+        id: `instansi-${inst.id}`,
+        type: 'instansi_registered',
+        title: `Instansi baru terdaftar`,
+        description: inst.namaInstansi,
+        createdAt: inst.createdAt,
+      });
+    }
+
+    // Add car approval activities
+    for (const car of recentCars) {
+      activities.push({
+        id: `car-${car.id}`,
+        type: 'vehicle_approved',
+        title: `Kendaraan disetujui`,
+        description: `${car.nama} - ${car.instansi.namaInstansi}`,
+        createdAt: car.createdAt,
+      });
+    }
+
+    // Add user registration activities
+    for (const profile of recentProfiles) {
+      activities.push({
+        id: `profile-${profile.id}`,
+        type: 'customer_registered',
+        title: `Pelanggan baru terdaftar`,
+        description: profile.nama,
+        createdAt: profile.createdAt,
+      });
+    }
+
+    // Sort by createdAt descending and take top 10
+    const sortedActivities = activities
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 10)
+      .map(a => ({
+        id: a.id,
+        type: a.type,
+        title: a.title,
+        description: a.description,
+        createdAt: a.createdAt.toISOString(),
+      }));
+
+    res.json({ data: sortedActivities });
   } catch (error) {
     console.error('Dashboard Activities error:', error);
     res.status(500).json({ error: 'Gagal mengambil data aktivitas' });
@@ -1026,10 +1197,10 @@ superadminRouter.patch('/dashboard/notifications/:id/read', async (req, res) => 
  */
 superadminRouter.get('/dashboard/top-companies', async (_req, res) => {
   try {
-    // Get total revenue per instansi from bookings
+    // Get total revenue per instansi from bookings (hanya yang sudah dibayar)
     const bookings = await prisma.booking.findMany({
       where: {
-        status: { not: 'dibatalkan' },
+        status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
         car: {
           instansi: { status: 'aktif' },
         },
@@ -1075,7 +1246,7 @@ superadminRouter.get('/dashboard/top-companies', async (_req, res) => {
     const recentBookings = await prisma.booking.findMany({
       where: {
         createdAt: { gte: thirtyDaysAgo },
-        status: { not: 'dibatalkan' },
+        status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
       },
       select: {
         totalHarga: true,
@@ -1086,7 +1257,7 @@ superadminRouter.get('/dashboard/top-companies', async (_req, res) => {
     const previousBookings = await prisma.booking.findMany({
       where: {
         createdAt: { gte: sixtyDaysAgo, lt: thirtyDaysAgo },
-        status: { not: 'dibatalkan' },
+        status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
       },
       select: {
         totalHarga: true,
@@ -1132,7 +1303,13 @@ superadminRouter.get('/dashboard/popular-vehicles', async (_req, res) => {
       include: {
         images: { take: 1, orderBy: { urutan: 'asc' } },
         _count: {
-          select: { bookings: true },
+          select: {
+            bookings: {
+              where: {
+                status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
+              },
+            },
+          },
         },
       },
       orderBy: {
@@ -1168,20 +1345,20 @@ superadminRouter.get('/dashboard/commission', async (_req, res) => {
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // Current month bookings
+    // Current month bookings (hanya yang sudah dibayar)
     const currentMonthBookings = await prisma.booking.findMany({
       where: {
         createdAt: { gte: startOfMonth },
-        status: { not: 'dibatalkan' },
+        status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
       },
       select: { totalHarga: true },
     });
 
-    // Last month bookings
+    // Last month bookings (hanya yang sudah dibayar)
     const lastMonthBookings = await prisma.booking.findMany({
       where: {
         createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
-        status: { not: 'dibatalkan' },
+        status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
       },
       select: { totalHarga: true },
     });
@@ -1304,7 +1481,7 @@ superadminRouter.get('/dashboard/platform-summary', async (_req, res) => {
       prisma.booking.count(),
       prisma.profile.count({ where: { role: 'customer' } }),
       prisma.booking.aggregate({
-        where: { status: { not: 'dibatalkan' } },
+        where: { status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] } },
         _sum: { totalHarga: true },
       }),
       prisma.disbursement.aggregate({
@@ -1318,13 +1495,28 @@ superadminRouter.get('/dashboard/platform-summary', async (_req, res) => {
     const yearlyRevenue = await prisma.booking.aggregate({
       where: {
         createdAt: { gte: twelveMonthsAgo },
-        status: { not: 'dibatalkan' },
+        status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
       },
       _sum: { totalHarga: true },
     });
 
+    // Hitung jumlah bulan aktual dengan data
+    const monthsWithData = await prisma.booking.groupBy({
+      by: ['createdAt'],
+      where: {
+        createdAt: { gte: twelveMonthsAgo },
+        status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
+      },
+    });
+
+    // Dapatkan bulan-bulan unik
+    const uniqueMonths = new Set(
+      monthsWithData.map(b => `${b.createdAt.getFullYear()}-${b.createdAt.getMonth()}`)
+    );
+    const divisor = Math.max(uniqueMonths.size, 1); // Minimal 1 untuk avoid division by zero
+
     const avgMonthlyRevenue = yearlyRevenue._sum.totalHarga
-      ? Number(yearlyRevenue._sum.totalHarga) / 12
+      ? Number(yearlyRevenue._sum.totalHarga) / divisor
       : 0;
 
     res.json({
@@ -1378,5 +1570,395 @@ superadminRouter.get('/dashboard/today-bookings', async (_req, res) => {
   } catch (error) {
     console.error('Dashboard Today Bookings error:', error);
     res.status(500).json({ error: 'Gagal mengambil data booking hari ini' });
+  }
+});
+
+// ============================================================================
+// BOOKINGS MANAGEMENT
+// ============================================================================
+
+/**
+ * GET /api/superadmin/bookings
+ * List semua bookings lintas platform dengan pagination
+ */
+superadminRouter.get('/bookings', async (req, res) => {
+  const { status, cari, page = '1', limit = '10', dari, sampai } = req.query;
+
+  try {
+    // Build where clause
+    const where: any = {};
+    if (status) where.status = status as string;
+
+    if (dari || sampai) {
+      where.tanggalMulai = {};
+      if (dari) where.tanggalMulai.gte = new Date(dari as string);
+      if (sampai) where.tanggalMulai.lte = new Date(sampai as string);
+    }
+
+    if (cari) {
+      where.OR = [
+        { car: { nama: { contains: cari as string, mode: 'insensitive' } } },
+        { profile: { nama: { contains: cari as string, mode: 'insensitive' } } },
+        { car: { instansi: { namaInstansi: { contains: cari as string, mode: 'insensitive' } } } },
+        { id: { contains: cari as string, mode: 'insensitive' } },
+      ];
+    }
+
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [bookings, total] = await Promise.all([
+      prisma.booking.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          car: {
+            include: {
+              images: { take: 1, orderBy: { urutan: 'asc' } },
+              instansi: { select: { id: true, namaInstansi: true } },
+            },
+          },
+          profile: { select: { id: true, nama: true, email: true } },
+        },
+      }),
+      prisma.booking.count({ where }),
+    ]);
+
+    // Transform response to match UI expectations
+    const data = bookings.map((b) => ({
+      id: b.id,
+      status: b.status,
+      tanggalMulai: b.tanggalMulai.toISOString(),
+      tanggalSelesai: b.tanggalSelesai.toISOString(),
+      totalHarga: Number(b.totalHarga),
+      createdAt: b.createdAt.toISOString(),
+      car: {
+        id: b.car.id,
+        nama: b.car.nama,
+        images: b.car.images.map((img) => ({ url: img.url })),
+      },
+      profile: { id: b.profile.id, nama: b.profile.nama },
+      instansi: { id: b.car.instansi.id, nama: b.car.instansi.namaInstansi },
+    }));
+
+    res.json({
+      data,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    });
+  } catch (error) {
+    console.error('SuperAdmin Bookings error:', error);
+    res.status(500).json({ error: 'Gagal mengambil data bookings' });
+  }
+});
+
+// ============================================================================
+// TRANSACTIONS
+// ============================================================================
+
+/**
+ * GET /api/superadmin/transactions
+ * Unified transaction view dari payments dan disbursements
+ */
+superadminRouter.get('/transactions', async (req, res) => {
+  const { type, status, cari, page = '1', limit = '10', dari, sampai } = req.query;
+
+  try {
+    let transactions: any[] = [];
+
+    // SECURITY: Validate and parse date parameters
+    let dariDate: Date | null = null;
+    let sampaiDate: Date | null = null;
+
+    if (dari) {
+      const parsed = new Date(dari as string);
+      if (!isNaN(parsed.getTime())) {
+        dariDate = parsed;
+      }
+    }
+    if (sampai) {
+      const parsed = new Date(sampai as string);
+      if (!isNaN(parsed.getTime())) {
+        sampaiDate = parsed;
+      }
+    }
+
+    // Fetch payments - using Prisma ORM to avoid raw SQL issues
+    if (!type || type === 'payment' || type === 'refund') {
+      try {
+        const paymentWhere: any = {};
+        if (status === 'success') paymentWhere.status = 'paid';
+        else if (status === 'pending') paymentWhere.status = 'pending';
+        else if (status === 'failed') paymentWhere.status = { in: ['expired', 'failed'] };
+
+        if (dariDate || sampaiDate) {
+          paymentWhere.paidAt = {};
+          if (dariDate) paymentWhere.paidAt.gte = dariDate;
+          if (sampaiDate) paymentWhere.paidAt.lte = sampaiDate;
+        }
+
+        const payments = await prisma.payment.findMany({
+          where: paymentWhere,
+          orderBy: { paidAt: 'desc' },
+          include: {
+            booking: {
+              include: {
+                car: {
+                  include: { instansi: { select: { namaInstansi: true } } },
+                },
+                profile: { select: { nama: true } },
+              },
+            },
+          },
+        });
+
+        for (const p of payments) {
+          const isRefund = p.status === 'expired' || p.status === 'failed';
+          if ((type === 'payment' && isRefund) || (type === 'refund' && !isRefund)) continue;
+
+          transactions.push({
+            id: p.id,
+            type: isRefund ? 'refund' : 'payment',
+            amount: Number(p.jumlah),
+            status: isRefund ? 'failed' : 'success',
+            description: `Pembayaran Booking #${p.bookingId.slice(0, 8)}`,
+            createdAt: (p.paidAt || new Date()).toISOString(),
+            instansi: (p as any).booking?.car?.instansi?.namaInstansi || '-',
+            customer: (p as any).booking?.profile?.nama || '-',
+            bookingId: p.bookingId,
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching payments:', err);
+        // Continue with empty payments on error
+      }
+    }
+
+    // Fetch disbursements - using Prisma ORM
+    if (!type || type === 'disbursement') {
+      try {
+        const disbursWhere: any = {};
+        if (status === 'pending') disbursWhere.status = 'diproses';
+        else if (status === 'success') disbursWhere.status = 'berhasil';
+        else if (status === 'failed') disbursWhere.status = 'gagal';
+
+        if (dariDate || sampaiDate) {
+          disbursWhere.createdAt = {};
+          if (dariDate) disbursWhere.createdAt.gte = dariDate;
+          if (sampaiDate) disbursWhere.createdAt.lte = sampaiDate;
+        }
+
+        const disbursements = await prisma.disbursement.findMany({
+          where: disbursWhere,
+          orderBy: { createdAt: 'desc' },
+          include: { instansi: { select: { namaInstansi: true } } },
+        });
+
+        for (const d of disbursements) {
+          let txnStatus: 'success' | 'pending' | 'failed';
+          if (d.status === 'berhasil') txnStatus = 'success';
+          else if (d.status === 'diproses') txnStatus = 'pending';
+          else txnStatus = 'failed';
+
+          transactions.push({
+            id: d.id,
+            type: 'disbursement',
+            amount: Number(d.jumlahKotor),
+            status: txnStatus,
+            description: d.status === 'diproses' ? 'Permintaan Pencairan Dana' : 'Pencairan Dana',
+            createdAt: (d.createdAt || new Date()).toISOString(),
+            instansi: d.instansi?.namaInstansi || '-',
+            customer: undefined,
+            bookingId: undefined,
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching disbursements:', err);
+        // Continue with empty disbursements on error
+      }
+    }
+
+    // Search filter
+    if (cari) {
+      const searchLower = (cari as string).toLowerCase();
+      transactions = transactions.filter(
+        (t) =>
+          t.description.toLowerCase().includes(searchLower) ||
+          t.instansi?.toLowerCase().includes(searchLower) ||
+          t.customer?.toLowerCase().includes(searchLower) ||
+          t.id.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Sort by createdAt descending
+    transactions.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    // Pagination
+    const total = transactions.length;
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+    const paginatedData = transactions.slice(skip, skip + limitNum);
+
+    // Calculate summary
+    const summary = {
+      totalMasuk: transactions
+        .filter((t) => t.type !== 'refund' && t.status === 'success')
+        .reduce((sum, t) => sum + t.amount, 0),
+      totalRefund: transactions
+        .filter((t) => t.type === 'refund' && t.status === 'success')
+        .reduce((sum, t) => sum + t.amount, 0),
+    };
+
+    res.json({
+      data: paginatedData,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+      summary,
+    });
+  } catch (error) {
+    console.error('SuperAdmin Transactions error:', error);
+    res.status(500).json({ error: 'Gagal mengambil data transaksi' });
+  }
+});
+
+// ============================================================================
+// REPORTS
+// ============================================================================
+
+/**
+ * GET /api/superadmin/reports
+ * Aggregated report data untuk dashboard laporan
+ */
+superadminRouter.get('/reports', async (req, res) => {
+  const { period = '30d' } = req.query;
+
+  try {
+    // Calculate date range based on period
+    const now = new Date();
+    let dari: Date;
+    let days: number;
+
+    switch (period) {
+      case '7d':
+        dari = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        days = 7;
+        break;
+      case '30d':
+        dari = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        days = 30;
+        break;
+      case '90d':
+        dari = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        days = 90;
+        break;
+      case '1y':
+        dari = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        days = 365;
+        break;
+      default:
+        dari = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        days = 30;
+    }
+
+    // Fetch aggregated data
+    const [
+      totalBookings,
+      completedBookings,
+      activeBookings,
+      totalUsers,
+      newUsers,
+      totalCars,
+      availableCars,
+      totalInstansi,
+      activeInstansi,
+      payments,
+      disbursements,
+    ] = await Promise.all([
+      // Bookings stats
+      prisma.booking.count({ where: { createdAt: { gte: dari } } }),
+      prisma.booking.count({ where: { status: 'selesai', createdAt: { gte: dari } } }),
+      prisma.booking.count({ where: { status: { in: ['dikonfirmasi', 'berjalan'] }, createdAt: { gte: dari } } }),
+
+      // Users stats
+      prisma.profile.count({ where: { role: 'customer' } }),
+      prisma.profile.count({ where: { role: 'customer', createdAt: { gte: dari } } }),
+
+      // Cars stats
+      prisma.car.count(),
+      prisma.car.count({ where: { status: 'tersedia' } }),
+
+      // Instansi stats
+      prisma.instansi.count(),
+      prisma.instansi.count({ where: { status: 'aktif' } }),
+
+      // Financial stats
+      prisma.payment.findMany({
+        where: { status: 'paid', paidAt: { gte: dari } },
+        select: { jumlah: true },
+      }),
+      prisma.disbursement.findMany({
+        where: { status: 'berhasil', createdAt: { gte: dari } },
+        select: { jumlahKotor: true, komisiPlatform: true },
+      }),
+    ]);
+
+    const totalRevenue = payments.reduce((sum, p) => sum + Number(p.jumlah), 0);
+    const totalCommission = disbursements.reduce((sum, d) => sum + Number(d.komisiPlatform), 0);
+    const completionRate = totalBookings > 0 ? (completedBookings / totalBookings) * 100 : 0;
+    const utilizationRate = totalCars > 0 ? ((totalCars - availableCars) / totalCars) * 100 : 0;
+    const dailyAvg = days > 0 ? Math.round(totalRevenue / days) : 0;
+
+    res.json({
+      revenue: {
+        total: totalRevenue,
+        thisMonth: totalRevenue,
+        daily: dailyAvg,
+      },
+      booking: {
+        total: totalBookings,
+        active: activeBookings,
+        completionRate: Math.round(completionRate * 10) / 10,
+      },
+      customer: {
+        total: totalUsers,
+        newThisPeriod: newUsers,
+        retentionRate: 78, // Placeholder - needs proper historical calculation
+      },
+      fleet: {
+        total: totalCars,
+        available: availableCars,
+        utilization: Math.round(utilizationRate),
+      },
+      rental: {
+        total: totalInstansi,
+        active: activeInstansi,
+        avgRevenue: activeInstansi > 0 ? Math.round(totalRevenue / activeInstansi) : 0,
+      },
+      commission: {
+        total: totalCommission,
+        pending: 0,
+        rate: 10,
+      },
+      period,
+      dari: dari.toISOString(),
+      sampai: now.toISOString(),
+    });
+  } catch (error) {
+    console.error('SuperAdmin Reports error:', error);
+    res.status(500).json({ error: 'Gagal mengambil data laporan' });
   }
 });

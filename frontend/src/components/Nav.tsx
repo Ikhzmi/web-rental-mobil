@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LayoutDashboard, LogOut, User, Sun, Moon } from 'lucide-react';
+import { Menu, X, LogOut, User, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import logo from '../assets/logo.webp';
 import { supabase } from '../lib/supabase';
@@ -61,7 +61,6 @@ export default function Nav() {
     navigate('/');
   };
 
-  // Hide Nav on admin/superadmin pages
   const isAdminPage = location.pathname.startsWith('/admin') || location.pathname.startsWith('/superadmin');
   if (isAdminPage) return null;
 
@@ -76,11 +75,11 @@ export default function Nav() {
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       className={`
         fixed top-0 left-0 right-0 z-[100] flex items-center justify-between p-3 sm:p-4
-        transition-all duration-500
+        transition-all duration-500 rounded-b-2xl
         ${scrolled
           ? isDark
-            ? 'glass-nav'
-            : 'glass-nav'
+            ? 'sa-glass-dark'
+            : 'sa-glass-light'
           : 'bg-transparent'
         }
       `}
@@ -119,8 +118,8 @@ export default function Nav() {
           onClick={toggleTheme}
           className={`p-2.5 rounded-full transition-all duration-300 ${
             isDark
-              ? 'bg-zinc-800/50 hover:bg-zinc-700/50 border border-zinc-700/50'
-              : 'bg-white/80 hover:bg-white border border-slate-200/50 shadow-sm'
+              ? 'bg-white/10 hover:bg-white/15 text-white'
+              : 'bg-white/80 hover:bg-white border border-slate-200/50 shadow-sm text-slate-900'
           }`}
           aria-label="Toggle theme"
         >
@@ -160,9 +159,9 @@ export default function Nav() {
             <Link
               to="/daftar"
               className={`
-                text-sm font-semibold px-6 py-2.5 rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]
+                text-sm font-semibold px-5 py-2 rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]
                 ${isDark
-                  ? 'glass-daftar-btn-dark'
+                  ? 'bg-white text-slate-900 hover:bg-white/90 shadow-lg'
                   : 'glass-daftar-btn-light'
                 }
               `}
@@ -172,20 +171,12 @@ export default function Nav() {
           </>
         ) : isSuperAdmin ? (
           <>
-            <Link
-              to="/superadmin"
-              className="flex items-center gap-1.5 text-[#e8702a] hover:text-[#f59e0b] text-sm font-medium transition-colors"
-            >
-              <LayoutDashboard size={15} />
-              Super Admin
-            </Link>
-            <span className={isDark ? 'text-white/30' : 'text-slate-300'}>|</span>
             <span className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{profile?.nama ?? 'Super Admin'}</span>
             <button
               onClick={handleLogout}
               className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
                 isDark
-                  ? 'bg-white/10 hover:bg-white/20 text-white'
+                  ? 'bg-white/10 hover:bg-white/15 text-white'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
             >
@@ -195,20 +186,12 @@ export default function Nav() {
           </>
         ) : isAdmin ? (
           <>
-            <Link
-              to="/admin"
-              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              <LayoutDashboard size={15} />
-              Dashboard Admin
-            </Link>
-            <span className={isDark ? 'text-white/30' : 'text-slate-300'}>|</span>
             <span className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{profile?.nama ?? 'Admin'}</span>
             <button
               onClick={handleLogout}
               className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
                 isDark
-                  ? 'bg-white/10 hover:bg-white/20 text-white'
+                  ? 'bg-white/10 hover:bg-white/15 text-white'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
             >
@@ -229,7 +212,7 @@ export default function Nav() {
               onClick={handleLogout}
               className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
                 isDark
-                  ? 'bg-white/10 hover:bg-white/20 text-white'
+                  ? 'bg-white/10 hover:bg-white/15 text-white'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
             >
@@ -246,8 +229,8 @@ export default function Nav() {
           onClick={toggleTheme}
           className={`p-2 rounded-full transition-all ${
             isDark
-              ? 'bg-zinc-800/50 hover:bg-zinc-700/50'
-              : 'bg-white/80 hover:bg-slate-100 shadow-sm'
+              ? 'bg-white/10 hover:bg-white/15 text-white'
+              : 'bg-white/80 hover:bg-slate-100 shadow-sm text-slate-900'
           }`}
           aria-label="Toggle theme"
         >
@@ -271,7 +254,7 @@ export default function Nav() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className={`md:hidden absolute top-full left-0 right-0 mt-3 mx-3 rounded-b-2xl p-5 flex flex-col gap-2 sa-glass-light`}
+            className={`md:hidden absolute top-full left-0 right-0 mt-3 mx-3 rounded-b-2xl p-5 flex flex-col gap-2 ${isDark ? 'sa-glass-dark' : 'sa-glass-light'}`}
           >
             {NAV_LINKS.map((link) => (
               <Link
@@ -308,7 +291,7 @@ export default function Nav() {
                   onClick={() => setOpen(false)}
                   className={`mt-1 text-center text-sm font-semibold px-6 py-2.5 rounded-full ${
                     isDark
-                      ? 'glass-daftar-btn-dark'
+                      ? 'bg-white text-slate-900 hover:bg-white/90'
                       : 'glass-daftar-btn-light'
                   }`}
                 >
@@ -317,18 +300,24 @@ export default function Nav() {
               </>
             ) : (
               <>
-                <Link
-                  to={isAdmin ? '/admin' : '/akun/pesanan'}
-                  onClick={() => setOpen(false)}
-                  className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:bg-white/10' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  {isAdmin ? 'Dashboard Admin' : (profile?.nama ?? 'Akun Saya')}
-                </Link>
+                {isAdmin ? (
+                  <span className={`text-left px-4 py-2.5 text-sm font-medium ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                    {profile?.nama ?? (isSuperAdmin ? 'Super Admin' : 'Admin')}
+                  </span>
+                ) : (
+                  <Link
+                    to="/akun/pesanan"
+                    onClick={() => setOpen(false)}
+                    className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:bg-white/10' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    {profile?.nama ?? 'Akun Saya'}
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className={`mt-1 text-center text-sm font-semibold px-6 py-2.5 rounded-full transition-colors ${
                     isDark
-                      ? 'bg-white/10 hover:bg-white/20 text-white'
+                      ? 'bg-white/10 hover:bg-white/15 text-white'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                   }`}
                 >

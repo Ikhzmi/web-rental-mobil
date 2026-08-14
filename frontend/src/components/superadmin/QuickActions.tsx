@@ -1,10 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
-import { Plus, CheckCircle, FileText, Wallet, Send, BarChart3 } from 'lucide-react';
-
-const getGlassCardClass = (isDark: boolean) => {
-  return isDark ? 'sa-glass-dark' : 'sa-glass-light';
-};
+import { Plus, CheckCircle, FileText, Wallet, Building2, Users } from 'lucide-react';
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 const vibrantActions = [
   {
@@ -16,19 +13,19 @@ const vibrantActions = [
     textClass: 'text-white/90',
   },
   {
-    label: 'Approve Kendaraan',
-    href: '/superadmin/armada/approval',
-    icon: CheckCircle,
-    gradient: 'from-blue-600/80 to-blue-700/80',
-    hoverGradient: 'hover:from-blue-500/90 hover:to-blue-600/90',
-    textClass: 'text-white/90',
-  },
-  {
-    label: 'Review Booking',
-    href: '/superadmin/instansi',
+    label: 'Lihat Pesanan',
+    href: '/superadmin/bookings',
     icon: FileText,
     gradient: 'from-violet-600/80 to-violet-700/80',
     hoverGradient: 'hover:from-violet-500/90 hover:to-violet-600/90',
+    textClass: 'text-white/90',
+  },
+  {
+    label: 'Approve Kendaraan',
+    href: '/superadmin/armada/approval',
+    icon: CheckCircle,
+    gradient: 'from-zinc-600/80 to-zinc-700/80',
+    hoverGradient: 'hover:from-zinc-500/90 hover:to-zinc-600/90',
     textClass: 'text-white/90',
   },
   {
@@ -40,19 +37,19 @@ const vibrantActions = [
     textClass: 'text-white/90',
   },
   {
-    label: 'Broadcast',
+    label: 'Kelola Instansi',
     href: '/superadmin/instansi',
-    icon: Send,
-    gradient: 'from-rose-600/80 to-rose-700/80',
-    hoverGradient: 'hover:from-rose-500/90 hover:to-rose-600/90',
+    icon: Building2,
+    gradient: 'from-teal-600/80 to-teal-700/80',
+    hoverGradient: 'hover:from-teal-500/90 hover:to-teal-600/90',
     textClass: 'text-white/90',
   },
   {
-    label: 'Lihat Laporan',
-    href: '/superadmin/instansi',
-    icon: BarChart3,
-    gradient: 'from-teal-600/80 to-teal-700/80',
-    hoverGradient: 'hover:from-teal-500/90 hover:to-teal-600/90',
+    label: 'Kelola Akun',
+    href: '/superadmin/admin',
+    icon: Users,
+    gradient: 'from-rose-600/80 to-rose-700/80',
+    hoverGradient: 'hover:from-rose-500/90 hover:to-rose-600/90',
     textClass: 'text-white/90',
   },
 ];

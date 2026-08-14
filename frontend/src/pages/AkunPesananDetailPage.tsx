@@ -17,7 +17,7 @@ const STATUS_LABEL: Record<StatusBooking, string> = {
 
 const STATUS_BADGE_DARK: Record<StatusBooking, string> = {
   menunggu_pembayaran: 'bg-amber-500/15 text-amber-400',
-  dikonfirmasi: 'bg-blue-500/15 text-blue-400',
+  dikonfirmasi: 'bg-blue-500/15 text-white/60',
   berjalan: 'bg-purple-500/15 text-purple-400',
   selesai: 'bg-emerald-500/15 text-emerald-400',
   dibatalkan: 'bg-white/10 text-white/40',
@@ -25,7 +25,7 @@ const STATUS_BADGE_DARK: Record<StatusBooking, string> = {
 
 const STATUS_BADGE_LIGHT: Record<StatusBooking, string> = {
   menunggu_pembayaran: 'bg-amber-100 text-amber-700',
-  dikonfirmasi: 'bg-blue-100 text-blue-700',
+  dikonfirmasi: 'bg-blue-100 text-slate-700',
   berjalan: 'bg-purple-100 text-purple-700',
   selesai: 'bg-emerald-100 text-emerald-700',
   dibatalkan: 'bg-slate-100 text-slate-500',
@@ -77,7 +77,7 @@ export default function AkunPesananDetailPage() {
     return (
       <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
         <Loader2 size={18} className="animate-spin" />
@@ -90,11 +90,11 @@ export default function AkunPesananDetailPage() {
     return (
       <main className={`min-h-screen flex flex-col items-center justify-center gap-3 text-center px-5 transition-colors duration-300 ${
         isDark
-          ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+          ? 'bg-[#0a0a0a]'
           : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
         <p className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Pesanan tidak ditemukan.</p>
-        <Link to="/akun/pesanan" className={isDark ? 'text-blue-400 text-sm hover:underline' : 'text-blue-600 text-sm hover:underline'}>
+        <Link to="/akun/pesanan" className={isDark ? 'text-white/60 text-sm hover:underline' : 'text-slate-600 text-sm hover:underline'}>
           Kembali ke Riwayat Pesanan
         </Link>
       </main>
@@ -104,7 +104,7 @@ export default function AkunPesananDetailPage() {
   return (
     <main className={`min-h-screen pt-24 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
       isDark
-        ? 'bg-gradient-to-b from-[#0b1220] via-[#0a0f1a] to-[#070b10]'
+        ? 'bg-[#0a0a0a]'
         : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
     }`}>
       <div className="max-w-lg mx-auto">
@@ -165,7 +165,7 @@ export default function AkunPesananDetailPage() {
               </Fragment>
             ))}
             <span className={`font-medium pt-2 border-t ${isDark ? 'text-white border-white/10' : 'text-slate-900 border-slate-200'}`}>Total</span>
-            <span className={`font-medium text-right pt-2 border-t ${isDark ? 'text-blue-400 border-white/10' : 'text-blue-600 border-slate-200'}`}>
+            <span className={`font-medium text-right pt-2 border-t ${isDark ? 'text-white/60 border-white/10' : 'text-slate-600 border-slate-200'}`}>
               {formatRupiah(Number(booking.totalHarga))}
             </span>
           </div>
