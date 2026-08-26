@@ -78,6 +78,10 @@ export default function PaymentPage() {
   const [showPaymentDetails, setShowPaymentDetails] = useState(false);
   const [copied, setCopied] = useState(false);
   const [countdown, setCountdown] = useState('');
+  // Hasil dari createPayment (paymentUrl, qrisString) — endpoint status
+  // (getBookingPaymentStatus) yang di-poll berkala TIDAK mengembalikan ini,
+  // jadi disimpan terpisah dari hasil mutation saat pertama dibuat.
+  const [paymentDetails, setPaymentDetails] = useState<{ paymentUrl: string; qrisString?: string } | null>(null);
 
   // Fetch booking details
   const bookingQuery = useQuery({
@@ -90,7 +94,8 @@ export default function PaymentPage() {
   const createPaymentMutation = useMutation({
     mutationFn: (paymentMethod: string) =>
       api.createPayment(id!, { paymentMethod }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      setPaymentDetails({ paymentUrl: result.paymentUrl, qrisString: result.qrisString });
       setShowPaymentDetails(true);
       paymentStatusQuery.refetch();
     },
@@ -183,7 +188,7 @@ export default function PaymentPage() {
   const paymentData = paymentStatusQuery.data;
 
   // If payment already created, show payment details
-  if (showPaymentDetails || paymentData?.dokuInvoiceId) {
+  if (showPaymentDetails || paymentData?.gatewayInvoiceId) {
     return (
       <main className={`min-h-screen pt-24 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
         isDark ? 'bg-[#0a0a0a]' : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
@@ -216,7 +221,12 @@ export default function PaymentPage() {
             </div>
           )}
 
-          {/* Payment Instructions */}
+          {/* Payment Action — arahkan ke halaman pembayaran bayar.gg yang
+              sebenarnya. Sebelumnya bagian ini menampilkan instruksi
+              generik (kode VA/cstore) yang tidak pernah terisi karena
+              bayar.gg tidak mengembalikan kode semacam itu — pembayaran
+              QRIS/VA/e-wallet semuanya diselesaikan di halaman ter-hosted
+              bayar.gg, bukan direplikasi manual di sini. */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -230,95 +240,56 @@ export default function PaymentPage() {
               </h2>
             </div>
 
-            {paymentData?.dokuPaymentCode && (
-              <div className={`p-4 rounded-xl mb-4 ${
-                isDark ? 'bg-white/5' : 'bg-slate-50'
-              }`}>
-                <p className={`text-xs mb-2 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                  Kode Pembayaran
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className={`text-2xl font-mono font-bold tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {paymentData.dokuPaymentCode}
-                  </span>
+            <p className={`text-sm mb-4 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+              Klik tombol di bawah untuk membuka halaman pembayaran aman dari bayar.gg.
+              Kamu bisa scan QRIS atau bayar via metode yang dipilih di sana.
+            </p>
+
+            {paymentDetails?.paymentUrl && (
+              <a
+                href={paymentDetails.paymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-xl text-sm font-semibold transition-colors ${
+                  isDark
+                    ? 'bg-orange-500 hover:bg-orange-400 text-white'
+                    : 'bg-orange-500 hover:bg-orange-600 text-white'
+                }`}
+              >
+                <CreditCard size={16} />
+                Buka Halaman Pembayaran
+              </a>
+            )}
+
+            {paymentDetails?.qrisString && (
+              <div className={`mt-4 p-4 rounded-xl ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                    Kode QRIS (untuk aplikasi yang mendukung input manual)
+                  </p>
                   <button
-                    onClick={() => handleCopy(paymentData.dokuPaymentCode!)}
-                    className={`p-2 rounded-lg transition-colors ${
-                      isDark ? 'hover:bg-white/10' : 'hover:bg-slate-200'
-                    }`}
+                    onClick={() => handleCopy(paymentDetails.qrisString!)}
+                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10' : 'hover:bg-slate-200'}`}
+                    aria-label="Salin kode QRIS"
                   >
                     {copied ? (
-                      <Check size={18} className="text-emerald-500" />
+                      <Check size={14} className="text-emerald-500" />
                     ) : (
-                      <Copy size={18} className={isDark ? 'text-white/50' : 'text-slate-400'} />
+                      <Copy size={14} className={isDark ? 'text-white/50' : 'text-slate-400'} />
                     )}
                   </button>
                 </div>
+                <p className={`text-xs font-mono break-all ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
+                  {paymentDetails.qrisString}
+                </p>
               </div>
             )}
 
-            <div className="space-y-3 text-sm">
-              {selectedMethod?.includes('va') && (
-                <>
-                  <div className={`p-3 rounded-lg ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
-                    <p className={`font-medium mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      Instruksi Pembayaran:
-                    </p>
-                    <ol className={`space-y-1 text-xs ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                      <li>1. Buka aplikasi {selectedMethod.replace('_va', '').toUpperCase()} atau kunjungi ATM</li>
-                      <li>2. Pilih menu "Transfer Virtual Account"</li>
-                      <li>3. Masukkan nomor Virtual Account di atas</li>
-                      <li>4. Masukkan jumlah pembayaran sesuai nominal</li>
-                      <li>5. Konfirmasi dan selesaikan pembayaran</li>
-                    </ol>
-                  </div>
-                </>
-              )}
-
-              {selectedMethod === 'qris' && (
-                <div className={`p-3 rounded-lg ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
-                  <p className={`font-medium mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    Instruksi Pembayaran:
-                  </p>
-                  <ol className={`space-y-1 text-xs ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                    <li>1. Buka aplikasi e-wallet atau m-banking Anda</li>
-                    <li>2. Pilih menu "Scan QR" atau "QRIS"</li>
-                    <li>3. Scan kode QR yang tersedia</li>
-                    <li>4. Pastikan nominal sesuai dengan jumlah pembayaran</li>
-                    <li>5. Konfirmasi dan selesaikan pembayaran</li>
-                  </ol>
-                </div>
-              )}
-
-              {(selectedMethod === 'alfamart' || selectedMethod === 'indomaret') && (
-                <div className={`p-3 rounded-lg ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
-                  <p className={`font-medium mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    Instruksi Pembayaran:
-                  </p>
-                  <ol className={`space-y-1 text-xs ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                    <li>1. Kunjungi {selectedMethod === 'alfamart' ? 'Alfamart' : 'Indomaret'} terdekat</li>
-                    <li>2. Beritahu kasir Anda ingin melakukan pembayaran</li>
-                    <li>3. Berikan kode pembayaran: {paymentData?.dokuPaymentCode || 'N/A'}</li>
-                    <li>4. Bayarkan jumlah sesuai nominal</li>
-                    <li>5. Simpan struk sebagai bukti pembayaran</li>
-                  </ol>
-                </div>
-              )}
-
-              {(selectedMethod === 'shopeepay' || selectedMethod === 'dana' || selectedMethod === 'ovo') && (
-                <div className={`p-3 rounded-lg ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
-                  <p className={`font-medium mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    Instruksi Pembayaran:
-                  </p>
-                  <ol className={`space-y-1 text-xs ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                    <li>1. Buka aplikasi {selectedMethod.charAt(0).toUpperCase() + selectedMethod.slice(1)}</li>
-                    <li>2. Pilih menu "Bayar" atau "Scan"</li>
-                    <li>3. Scan kode QR atau masukkan kode pembayaran</li>
-                    <li>4. Konfirmasi dan selesaikan pembayaran</li>
-                  </ol>
-                </div>
-              )}
-            </div>
+            {!paymentDetails?.paymentUrl && (
+              <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                Memuat detail pembayaran... Kalau tidak muncul, klik "Periksa Status Pembayaran" di bawah.
+              </p>
+            )}
           </motion.div>
 
           {/* Booking Summary */}

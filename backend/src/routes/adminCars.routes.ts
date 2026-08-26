@@ -21,12 +21,23 @@ adminCarsRouter.get('/', asyncHandler(async (req, res) => {
     throw new AppError('Query tidak valid', 400);
   }
 
+  // KRITIS: sebelumnya endpoint ini TIDAK memfilter instansiId sama sekali
+  // — Admin dari instansi manapun akan melihat SELURUH mobil dari SELURUH
+  // instansi di platform di halaman "Armada Saya" mereka, bukan cuma
+  // miliknya sendiri. Kebocoran data lintas-tenant yang serius (Admin bisa
+  // melihat inventaris kompetitor/instansi lain).
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Akun admin tidak terikat ke instansi manapun', 403);
+  }
+
   const { page, limit, cari } = parsed.data;
   const skip = (page - 1) * limit;
 
-  const where = cari
-    ? { nama: { contains: cari, mode: 'insensitive' as const } }
-    : {};
+  const where = {
+    instansiId,
+    ...(cari && { nama: { contains: cari, mode: 'insensitive' as const } }),
+  };
 
   const [cars, total] = await Promise.all([
     prisma.car.findMany({

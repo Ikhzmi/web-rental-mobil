@@ -6,9 +6,15 @@ import {
   TrendingUp, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon,
   Clock, CheckCircle, Car as CarIcon,
   CreditCard, AlertTriangle,
-  CarFront, CalendarClock
+  CarFront, CalendarClock,
+  type LucideIcon,
 } from 'lucide-react';
-import { api, type InstansiDashboardData } from '../../lib/api';
+import {
+  api,
+  type InstansiDashboardData,
+  type InstansiDashboardTrends,
+  type InstansiRevenueSeries,
+} from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { SkeletonStatsGrid, SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
@@ -22,11 +28,7 @@ const TIME_FILTERS = [
   { id: '7days', label: '7 Hari' },
   { id: 'month', label: 'Bulan Ini' },
   { id: 'year', label: 'Tahun Ini' },
-];
-
-// Indonesian day names
-const DAYS_ID = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+] as const;
 
 // Section 1: Stats Card - Clean style like SuperAdmin (no icon)
 
@@ -34,20 +36,26 @@ function StatCard({
   label,
   value,
   change,
-  trend,
   sparklineData,
+  caption,
   index,
   isDark,
 }: {
   label: string;
   value: string | number;
+  /** Persentase perubahan nyata vs kemarin. Undefined = tidak ada data historis
+   *  yang jujur untuk dihitung, jadi badge tren tidak ditampilkan sama sekali
+   *  (lebih baik daripada menampilkan angka rekaan). */
   change?: number;
-  trend?: 'up' | 'down';
+  /** Data sparkline nyata 7 hari terakhir. Opsional, sejalan dengan `change`. */
   sparklineData?: number[];
+  /** Teks kecil pengganti badge tren untuk metrik snapshot (mis. "dari 12 unit"). */
+  caption?: string;
   index: number;
   isDark: boolean;
 }) {
-  const isPositive = trend === 'up';
+  const hasTrend = change !== undefined;
+  const isPositive = (change ?? 0) >= 0;
   const TrendIcon = isPositive ? TrendingUpIcon : TrendingDownIcon;
   const sparklineColor = isPositive ? '#22c55e' : '#ef4444';
 
@@ -64,17 +72,21 @@ function StatCard({
       {/* Value - Large Number */}
       <p className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{value}</p>
 
-      {/* Trend Badge + Sparkline on right */}
+      {/* Trend Badge + Sparkline on right (hanya jika ada data nyata) */}
       <div className="flex items-center justify-between">
-        <div className={`flex items-center gap-2 text-xs font-semibold px-2.5 py-1.5 rounded-full ${
-          isPositive
-            ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
-            : isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-600'
-        }`}>
-          <TrendIcon size={12} />
-          {change !== undefined ? Math.abs(change) : '0'}%
-          <span className={`font-normal ${isDark ? 'text-white/40' : 'text-slate-400'}`}>vs yesterday</span>
-        </div>
+        {hasTrend ? (
+          <div className={`flex items-center gap-2 text-xs font-semibold px-2.5 py-1.5 rounded-full ${
+            isPositive
+              ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+              : isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-600'
+          }`}>
+            <TrendIcon size={12} />
+            {Math.abs(change ?? 0)}%
+            <span className={`font-normal ${isDark ? 'text-white/40' : 'text-slate-400'}`}>vs kemarin</span>
+          </div>
+        ) : (
+          <span className={`text-xs ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{caption}</span>
+        )}
 
         {/* Sparkline */}
         {sparklineData && (
@@ -93,79 +105,21 @@ function StatCard({
 }
 
 // Section 3: Revenue Line Chart
-function RevenueChart({ isDark }: { isDark: boolean }) {
-  const [selectedFilter, setSelectedFilter] = useState('7days');
+function RevenueChart({ isDark, trendPendapatan }: { isDark: boolean; trendPendapatan?: number }) {
+  const [selectedFilter, setSelectedFilter] = useState<'today' | '7days' | 'month' | 'year'>('7days');
   const [hoveredPoint, setHoveredPoint] = useState<{ index: number; x: number; y: number } | null>(null);
 
-  // Fetch bookings for chart
-  const { data: bookingsData } = useQuery({
-    queryKey: ['admin-revenue-bookings', selectedFilter],
-    queryFn: async () => {
-      // For simplicity, use total from instansi dashboard
-      const dashboardData = await api.getInstansiDashboard();
-      return dashboardData;
-    },
+  // Data agregat nyata dari booking asli, dihitung server-side per bucket
+  // waktu (bukan rata-rata/acak seperti implementasi sebelumnya).
+  const { data: seriesData, isLoading: isSeriesLoading } = useQuery<InstansiRevenueSeries>({
+    queryKey: ['admin-revenue-series', selectedFilter],
+    queryFn: () => api.getInstansiRevenueSeries(selectedFilter),
     staleTime: 5 * 60 * 1000,
   });
 
-  // Process bookings into chart data
-  const processChartData = () => {
-    const dashboardData = bookingsData;
-    if (!dashboardData) return { chartDays: [] as string[], chartValues: [] as number[] };
+  const chartDays = seriesData?.labels ?? [];
+  const chartValues = seriesData?.values ?? [];
 
-    const chartDays: string[] = [];
-    const chartValues: number[] = [];
-
-    switch (selectedFilter) {
-      case 'today': {
-        // Hourly breakdown
-        for (let h = 0; h < 24; h += 4) {
-          chartDays.push(`${String(h).padStart(2, '0')}:00`);
-        }
-        // Simplified - use total divided by estimated hours
-        const hourlyAvg = Number(dashboardData.totalPendapatanBulanIni) / 30 / 24;
-        const valuesPer4h = Array(6).fill(0).map((_, i) => {
-          if (i === 0) return 0; // Before 8am
-          return hourlyAvg * 4 * (0.5 + Math.random() * 0.5);
-        });
-        chartValues.push(...valuesPer4h);
-        break;
-      }
-      case '7days': {
-        // Daily breakdown for last 7 days
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          chartDays.push(DAYS_ID[d.getDay() === 0 ? 6 : d.getDay() - 1]);
-          // Simplified - use average per day
-          chartValues.push(Number(dashboardData.totalPendapatanBulanIni) / 30);
-        }
-        break;
-      }
-      case 'month': {
-        // Weekly breakdown
-        for (let w = 1; w <= 4; w++) {
-          chartDays.push(`Minggu ${w}`);
-          chartValues.push(Number(dashboardData.totalPendapatanBulanIni) / 4);
-        }
-        break;
-      }
-      case 'year': {
-        // Monthly breakdown
-        for (let m = 11; m >= 0; m--) {
-          const d = new Date();
-          d.setMonth(d.getMonth() - m);
-          chartDays.push(MONTHS_ID[d.getMonth()]);
-          chartValues.push(Number(dashboardData.totalPendapatanBulanIni) / 12);
-        }
-        break;
-      }
-    }
-
-    return { chartDays, chartValues };
-  };
-
-  const { chartDays, chartValues } = processChartData();
   const values = chartValues.length > 0 ? chartValues : [0];
   const days = chartDays.length > 0 ? chartDays : ['No Data'];
   const maxValue = Math.max(...values);
@@ -248,15 +202,33 @@ function RevenueChart({ isDark }: { isDark: boolean }) {
               {formatRupiah(values.reduce((a, b) => a + b, 0))}
             </p>
           </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20">
-            <TrendingUp size={10} className="text-emerald-400" />
-            <span className="text-[10px] font-medium text-emerald-400">+15%</span>
-            <span className="text-[10px] text-emerald-400/70">dari kemarin</span>
-          </div>
+          {/* Badge tren hanya tampil untuk filter "Hari Ini" — satu-satunya
+              perbandingan periode yang bisa dihitung jujur dari data booking
+              (hari ini vs kemarin). Untuk filter lain, badge disembunyikan
+              daripada menampilkan angka rekaan. */}
+          {selectedFilter === 'today' && trendPendapatan !== undefined && (
+            <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${
+              trendPendapatan >= 0 ? 'bg-emerald-500/20' : 'bg-red-500/20'
+            }`}>
+              {trendPendapatan >= 0 ? (
+                <TrendingUp size={10} className="text-emerald-400" />
+              ) : (
+                <TrendingDownIcon size={10} className="text-red-400" />
+              )}
+              <span className={`text-[10px] font-medium ${trendPendapatan >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {trendPendapatan >= 0 ? '+' : ''}{trendPendapatan}%
+              </span>
+              <span className={`text-[10px] ${trendPendapatan >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'}`}>dari kemarin</span>
+            </div>
+          )}
         </div>
 
         {/* Line Chart Container */}
         <div className="relative w-full min-h-[150px] flex-1">
+          {isSeriesLoading ? (
+            <div className={`absolute inset-0 rounded-xl animate-pulse ${isDark ? 'bg-white/[0.03]' : 'bg-slate-100'}`} />
+          ) : (
+          <>
           <svg
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
             preserveAspectRatio="xMidYMid meet"
@@ -415,6 +387,8 @@ function RevenueChart({ isDark }: { isDark: boolean }) {
               </p>
             </div>
           )}
+          </>
+          )}
         </div>
       </div>
     </motion.div>
@@ -526,7 +500,7 @@ function TodayBookingsCard({ isDark }: { isDark: boolean }) {
       dari: today.toISOString(),
       sampai: tomorrow.toISOString(),
       limit: 10,
-    } as any),
+    }),
   });
 
   const statusColors: Record<string, string> = {
@@ -632,7 +606,7 @@ function RentedVehiclesCard({ isDark }: { isDark: boolean }) {
     queryFn: () => api.listAdminBookings({
       status: 'berjalan',
       limit: 5,
-    } as any),
+    }),
   });
 
   const bookings = ongoingBookings?.data ?? [];
@@ -704,7 +678,7 @@ function RentedVehiclesCard({ isDark }: { isDark: boolean }) {
 }
 
 // Section 7: Recent Activities
-function RecentActivitiesCard({ isDark, recentBookings }: { isDark: boolean; recentBookings?: any[] }) {
+function RecentActivitiesCard({ isDark, recentBookings }: { isDark: boolean; recentBookings?: InstansiDashboardData['recentBookings'] }) {
   const colorMap: Record<string, string> = {
     emerald: isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600',
     blue: isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600',
@@ -712,9 +686,13 @@ function RecentActivitiesCard({ isDark, recentBookings }: { isDark: boolean; rec
     purple: isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600',
     pink: isDark ? 'bg-pink-500/20 text-pink-400' : 'bg-pink-100 text-pink-600',
     cyan: isDark ? 'bg-cyan-500/20 text-cyan-400' : 'bg-cyan-100 text-cyan-600',
+    // 'dibatalkan' pakai warna 'red' di statusIcons di bawah, tapi
+    // sebelumnya tidak ada entry 'red' di sini — badge aktivitas booking
+    // yang dibatalkan tampil tanpa warna latar sama sekali.
+    red: isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-600',
   };
 
-  const statusIcons: Record<string, { icon: any; color: string }> = {
+  const statusIcons: Record<string, { icon: LucideIcon; color: string }> = {
     menunggu_pembayaran: { icon: Clock, color: 'amber' },
     dikonfirmasi: { icon: CheckCircle, color: 'blue' },
     berjalan: { icon: CarIcon, color: 'purple' },
@@ -798,12 +776,12 @@ function TodayReturnsCard({ isDark }: { isDark: boolean }) {
     queryFn: () => api.listAdminBookings({
       status: 'berjalan',
       limit: 50,
-    } as any),
+    }),
   });
 
   // Filter bookings that are supposed to return today
   const todayStr = today.toISOString().split('T')[0];
-  const returnsToday = (allOngoing?.data ?? []).filter((b: any) => {
+  const returnsToday = (allOngoing?.data ?? []).filter((b) => {
     const endDate = new Date(b.tanggalSelesai).toISOString().split('T')[0];
     return endDate === todayStr;
   }).slice(0, 5);
@@ -839,7 +817,7 @@ function TodayReturnsCard({ isDark }: { isDark: boolean }) {
             <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tidak ada pengembalian hari ini</p>
           </div>
         ) : (
-          returnsToday.map((booking: any) => (
+          returnsToday.map((booking) => (
             <div key={booking.id} className="flex items-center gap-3 p-4">
               <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center ${
                 isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'
@@ -924,6 +902,15 @@ export default function AdminDashboardPage() {
     queryFn: () => api.getInstansiDashboard(),
   });
 
+  // Tren nyata (hari ini vs kemarin), dihitung dari booking asli — dipakai
+  // untuk badge persentase di StatCard, bukan angka statis lagi.
+  const { data: trends } = useQuery<InstansiDashboardTrends>({
+    queryKey: ['instansi-dashboard-trends'],
+    queryFn: () => api.getInstansiDashboardTrends(),
+    retry: 1,
+    throwOnError: false,
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -959,37 +946,30 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Pendapatan Hari Ini"
-          value={formatRupiah(data.totalPendapatanBulanIni / 30)}
-          change={12}
-          trend="up"
-          sparklineData={[3, 5, 4, 6, 5, 7, 6]}
+          value={formatRupiah(trends?.pendapatanHariIni ?? 0)}
+          change={trends?.trendPendapatan}
+          sparklineData={trends?.sparklinePendapatan}
           index={0}
           isDark={isDark}
         />
         <StatCard
           label="Booking Aktif"
           value={activeBookings}
-          change={5}
-          trend="up"
-          sparklineData={[2, 3, 2, 4, 3, 5, 4]}
+          caption="pesanan berjalan saat ini"
           index={1}
           isDark={isDark}
         />
         <StatCard
           label="Armada Tersedia"
           value={data.mobilTersedia}
-          change={2}
-          trend="down"
-          sparklineData={[8, 7, 8, 7, 6, 7, 6]}
+          caption={`dari ${data.totalMobil} unit total`}
           index={2}
           isDark={isDark}
         />
         <StatCard
           label="Saldo Tertunda"
           value={formatRupiah(data.saldoTertunda)}
-          change={8}
-          trend="up"
-          sparklineData={[10, 12, 11, 14, 13, 15, 14]}
+          caption="menunggu pencairan"
           index={3}
           isDark={isDark}
         />
@@ -998,7 +978,7 @@ export default function AdminDashboardPage() {
       {/* Section 2: Chart + Stats + Rented Vehicles Row */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-2 h-full">
-          <RevenueChart isDark={isDark} />
+          <RevenueChart isDark={isDark} trendPendapatan={trends?.trendPendapatan} />
         </div>
         <div className="h-full">
           <BookingStatsChart isDark={isDark} bookingStats={data.bookingStats} />

@@ -594,11 +594,11 @@ export default function AdminLayout() {
                     </div>
 
                     {/* Popup Footer */}
-                    <div className={`px-4 py-3 text-center border-t ${isDark ? 'border-white/10' : 'border-[#D4CFC7]/40'}`}>
-                      <button className={`text-sm font-medium ${isDark ? 'text-white/70 hover:text-white' : 'text-[#8B7355] hover:text-[#6B5344]'}`}>
-                        Lihat semua notifikasi
-                      </button>
-                    </div>
+                    {notifications.length > 0 && (
+                      <div className={`px-4 py-2.5 text-center border-t ${isDark ? 'border-white/10 text-white/30' : 'border-[#D4CFC7]/40 text-[#8B7355]/60'}`}>
+                        <span className="text-xs">Menampilkan {notifications.length} notifikasi terbaru</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

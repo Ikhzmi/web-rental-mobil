@@ -7,6 +7,12 @@ import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
 import { useTheme } from '../hooks/useTheme';
 
+// Cocok persis dengan limit yang dipasang di level bucket Supabase
+// Storage (dokumen-penyewa) — sebelumnya bucket ini TIDAK punya batas
+// ukuran atau tipe file sama sekali.
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+
 async function uploadDokumen(userId: string, tipe: 'ktp' | 'sim', file: File): Promise<string> {
   const ext = file.name.split('.').pop();
   const path = `${userId}/${tipe}.${ext}`;
@@ -39,6 +45,15 @@ function DokumenUploadRow({
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError('Format file harus JPG, PNG, atau PDF');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setError('Ukuran file maksimal 5MB');
+      return;
+    }
 
     setUploading(true);
     setError(null);

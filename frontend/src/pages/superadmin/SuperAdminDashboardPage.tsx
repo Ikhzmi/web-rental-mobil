@@ -126,12 +126,11 @@ export default function SuperAdminDashboardPage() {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { data, isError, isLoading, refetch, error } = useQuery<DashboardData>({
+  const { data, isError, isLoading, refetch } = useQuery<DashboardData>({
     queryKey: ['superadmin-dashboard'],
     queryFn: api.getSuperAdminDashboard,
     retry: 1,
     throwOnError: false,
-    gcTime: 0,
     enabled: !useMockData,
   });
 
@@ -141,7 +140,6 @@ export default function SuperAdminDashboardPage() {
     enabled: !!data && !useMockData,
     retry: 1,
     throwOnError: false,
-    gcTime: 0,
   });
 
   // Use mock data when toggle is active
@@ -175,146 +173,15 @@ export default function SuperAdminDashboardPage() {
   const pendingApprovals = (displayData as DashboardData).mobilMenungguApproval ?? 0;
   const pendingInstansi = (displayData as DashboardData).totalInstansiMenunggu ?? 0;
 
-  // DEBUG: Return content WITHOUT motion wrapper
-  if ((!isLoading && !isError && displayData) || useMockData) {
-    return (
-      <div className="space-y-6 lg:pl-0 xl:pl-0">
-        {/* Header with Quick Summary */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Ringkasan Dashboard
-            </h1>
-            {/* Quick Summary Badges */}
-            <div className="flex flex-wrap items-center gap-3 mt-2">
-              {pendingApprovals > 0 && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  <AlertTriangle size={12} />
-                  {pendingApprovals} Kendaraan Pending
-                </span>
-              )}
-              {pendingInstansi > 0 && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                  <Clock size={12} />
-                  {pendingInstansi} Instansi Pending
-                </span>
-              )}
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${isDark ? 'bg-white/10 text-white/60' : 'bg-slate-100 text-slate-600'}`}>
-                <Clock size={12} />
-                {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Refresh Button */}
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing || useMockData}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
-                isRefreshing
-                  ? isDark ? 'bg-white/5 text-white/40 border-white/10' : 'bg-slate-50 text-slate-300 border-slate-200'
-                  : isDark
-                  ? 'bg-white/10 text-white/70 border-white/20 hover:bg-white/20 hover:text-white'
-                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-900'
-              }`}
-            >
-              <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
-              Refresh
-            </button>
-
-            {/* Mock Data Toggle */}
-            <button
-              onClick={() => setUseMockData(!useMockData)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
-                useMockData
-                  ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                  : isDark
-                  ? 'bg-white/10 text-white/70 border-white/20 hover:bg-white/20'
-                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-              }`}
-            >
-              <Database size={16} />
-              {useMockData ? 'Data Mockup' : 'Mockup'}
-            </button>
-          </div>
-        </div>
-
-        {/* ROW 1: 4 Statistics Cards - NO MOTION */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard label="Instansi Aktif" value={displayData.totalInstansiAktif} trend={trendInstansi} sparklineData={sparklineInstansi} isDark={isDark} href="/superadmin/instansi" />
-          <StatCard label="Total Pengguna" value={displayData.totalUsers.toLocaleString('id-ID')} trend={trendUsers} sparklineData={sparklineUsers} isDark={isDark} href="/superadmin/reports" />
-          <StatCard label="Total Armada" value={displayData.totalMobil} trend={trendArmada} sparklineData={sparklineArmada} isDark={isDark} href="/superadmin/armada/approval" />
-          <StatCard label="Total Komisi" value={formatRupiah(displayData.totalKomisiTerkumpul ?? 0)} trend={trendKomisi} sparklineData={sparklineKomisi} isDark={isDark} href="/superadmin/pencairan" />
-        </div>
-
-        {/* ROW 2: Quick Actions */}
-        <QuickActions />
-
-        {/* ROW 3: Charts - TodayBookings below Statistik Booking */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: Revenue Chart */}
-          <div className="lg:col-span-7"><RevenueChart /></div>
-
-          {/* Right: Statistik Booking + TodayBookings (stacked) */}
-          <div className="lg:col-span-5 flex flex-col gap-6">
-            <BookingDoughnutChart />
-            <TodayBookings />
-          </div>
-        </div>
-
-        {/* ROW 4: Activity + Approval + Transactions (3 columns) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <ActivitiesTimeline />
-          <ApprovalCenter />
-          <RecentTransactions />
-        </div>
-
-        {/* ROW 5: Top Companies + Popular Vehicles */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <TopCompanies />
-          {useMockData ? (
-            <div className={`p-5 rounded-2xl ${getGlassCardClass(isDark)}`}>
-              <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Kendaraan Populer</h3>
-              <div className="space-y-3">
-                {MOCK_POPULAR_VEHICLES.map((vehicle) => (
-                  <div key={vehicle.id} className="flex items-center justify-between">
-                    <div>
-                      <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{vehicle.nama}</p>
-                      <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{vehicle.kategori} • {vehicle.totalBooking}x</p>
-                    </div>
-                    <div className={`flex items-center gap-1 text-xs font-medium ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
-                      ⭐ {vehicle.rating}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <PopularVehicles />
-          )}
-        </div>
-
-        {/* ROW 6: Notification, System, Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <NotificationCenter />
-          <SystemHealth />
-          <PlatformSummary />
-        </div>
-
-        {/* Footer - Last Updated */}
-        <div className={`flex items-center justify-between text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-          <span>Dashboard SuperAdmin - KerenTal Kita</span>
-          <span>Terakhir diupdate: {new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
+  // Kondisi urut: loading dulu, lalu error (kecuali sedang pakai mock data),
+  // baru render konten. Sebelumnya ada dua blok return yang isinya nyaris
+  // identik — satu ditandai komentar "DEBUG" yang selalu tereksekusi lebih
+  // dulu, sehingga blok animasi di bawahnya jadi dead code. Sudah disatukan.
+  if (isLoading && !useMockData) {
     return (
       <motion.div
-        initial={{ opacity: 0 }}
+        key="dashboard-loading"
+        initial={false}
         animate={{ opacity: 1 }}
         className="space-y-6"
       >
@@ -335,10 +202,11 @@ export default function SuperAdminDashboardPage() {
     );
   }
 
-  if (isError || !data) {
+  if ((isError || !data) && !useMockData) {
     return (
       <motion.div
-        initial={{ opacity: 0 }}
+        key="dashboard-error"
+        initial={false}
         animate={{ opacity: 1 }}
         className={`flex flex-col items-center justify-center min-h-[60vh] ${isDark ? 'text-white/60' : 'text-slate-600'}`}
       >
@@ -349,12 +217,6 @@ export default function SuperAdminDashboardPage() {
         <p className={`text-sm mb-2 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
           Pastikan database dan server berjalan
         </p>
-        {/* DEBUG INFO */}
-        <pre className={`text-xs text-left p-3 rounded-lg mb-4 max-w-md overflow-auto ${
-          isDark ? 'bg-black/30 text-white/70' : 'bg-slate-100 text-slate-600'
-        }`}>
-          {JSON.stringify({ isError, hasData: !!data, errorMessage: error?.message }, null, 2)}
-        </pre>
         <button
           onClick={() => refetch()}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
@@ -371,52 +233,74 @@ export default function SuperAdminDashboardPage() {
   }
 
   return (
-    <motion.div
-      initial="initial"
-      animate="animate"
-      variants={staggerContainer}
-      className="space-y-6"
-    >
-      {/* Header */}
-      <motion.div variants={fadeInUp}>
-        <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-          Ringkasan Dashboard
-        </h1>
-        <p className={`text-sm mt-1 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-          Pantau performa platform KerenTal
-        </p>
+    <motion.div key="dashboard-content" initial={false} animate="animate" variants={staggerContainer} className="space-y-6 lg:pl-0 xl:pl-0">
+      {/* Header with Quick Summary */}
+      <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            Ringkasan Dashboard
+          </h1>
+          {/* Quick Summary Badges */}
+          <div className="flex flex-wrap items-center gap-3 mt-2">
+            {pendingApprovals > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                <AlertTriangle size={12} />
+                {pendingApprovals} Kendaraan Pending
+              </span>
+            )}
+            {pendingInstansi > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                <Clock size={12} />
+                {pendingInstansi} Instansi Pending
+              </span>
+            )}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${isDark ? 'bg-white/10 text-white/60' : 'bg-slate-100 text-slate-600'}`}>
+              <Clock size={12} />
+              {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Refresh Button */}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing || useMockData}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+              isRefreshing
+                ? isDark ? 'bg-white/5 text-white/40 border-white/10' : 'bg-slate-50 text-slate-300 border-slate-200'
+                : isDark
+                ? 'bg-white/10 text-white/70 border-white/20 hover:bg-white/20 hover:text-white'
+                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 hover:text-slate-900'
+            }`}
+          >
+            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+
+          {/* Mock Data Toggle */}
+          <button
+            onClick={() => setUseMockData(!useMockData)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
+              useMockData
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                : isDark
+                ? 'bg-white/10 text-white/70 border-white/20 hover:bg-white/20'
+                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+            }`}
+          >
+            <Database size={16} />
+            {useMockData ? 'Data Mockup' : 'Mockup'}
+          </button>
+        </div>
       </motion.div>
 
       {/* ROW 1: 4 Statistics Cards */}
       <motion.div variants={fadeInUp} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          label="Instansi Aktif"
-          value={data.totalInstansiAktif}
-          trend={trendInstansi}
-          sparklineData={sparklineInstansi}
-          isDark={isDark}
-        />
-        <StatCard
-          label="Total Pengguna"
-          value={data.totalUsers.toLocaleString('id-ID')}
-          trend={trendUsers}
-          sparklineData={sparklineUsers}
-          isDark={isDark}
-        />
-        <StatCard
-          label="Total Armada"
-          value={data.totalMobil}
-          trend={trendArmada}
-          sparklineData={sparklineArmada}
-          isDark={isDark}
-        />
-        <StatCard
-          label="Total Komisi"
-          value={formatRupiah(data.totalKomisiTerkumpul ?? 0)}
-          trend={trendKomisi}
-          sparklineData={sparklineKomisi}
-          isDark={isDark}
-        />
+        <StatCard label="Instansi Aktif" value={displayData.totalInstansiAktif} trend={trendInstansi} sparklineData={sparklineInstansi} isDark={isDark} href="/superadmin/instansi" />
+        <StatCard label="Total Pengguna" value={displayData.totalUsers.toLocaleString('id-ID')} trend={trendUsers} sparklineData={sparklineUsers} isDark={isDark} href="/superadmin/reports" />
+        <StatCard label="Total Armada" value={displayData.totalMobil} trend={trendArmada} sparklineData={sparklineArmada} isDark={isDark} href="/superadmin/armada/approval" />
+        <StatCard label="Total Komisi" value={formatRupiah(displayData.totalKomisiTerkumpul ?? 0)} trend={trendKomisi} sparklineData={sparklineKomisi} isDark={isDark} href="/superadmin/pencairan" />
       </motion.div>
 
       {/* ROW 2: Quick Actions */}
@@ -426,9 +310,7 @@ export default function SuperAdminDashboardPage() {
 
       {/* ROW 3: Charts - TodayBookings below Statistik Booking */}
       <motion.div variants={fadeInUp} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7">
-          <RevenueChart />
-        </div>
+        <div className="lg:col-span-7"><RevenueChart /></div>
         <div className="lg:col-span-5 flex flex-col gap-6">
           <BookingDoughnutChart />
           <TodayBookings />
@@ -445,14 +327,39 @@ export default function SuperAdminDashboardPage() {
       {/* ROW 5: Top Companies + Popular Vehicles */}
       <motion.div variants={fadeInUp} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <TopCompanies />
-        <PopularVehicles />
+        {useMockData ? (
+          <div className={`p-5 rounded-2xl ${getGlassCardClass(isDark)}`}>
+            <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Kendaraan Populer</h3>
+            <div className="space-y-3">
+              {MOCK_POPULAR_VEHICLES.map((vehicle) => (
+                <div key={vehicle.id} className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{vehicle.nama}</p>
+                    <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{vehicle.kategori} • {vehicle.totalBooking}x</p>
+                  </div>
+                  <div className={`flex items-center gap-1 text-xs font-medium ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                    ⭐ {vehicle.rating}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <PopularVehicles />
+        )}
       </motion.div>
 
-      {/* ROW 6: Notification + System + Summary */}
+      {/* ROW 6: Notification, System, Summary */}
       <motion.div variants={fadeInUp} className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <NotificationCenter />
         <SystemHealth />
         <PlatformSummary />
+      </motion.div>
+
+      {/* Footer - Last Updated */}
+      <motion.div variants={fadeInUp} className={`flex items-center justify-between text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+        <span>Dashboard SuperAdmin - KerenTal Kita</span>
+        <span>Terakhir diupdate: {new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
       </motion.div>
     </motion.div>
   );

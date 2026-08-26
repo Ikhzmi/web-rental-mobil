@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 type Theme = 'dark' | 'light';
 
@@ -24,16 +24,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
 
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
     const root = document.documentElement;
 
-    // Add transitioning class for smooth animation
-    root.classList.add('theme-transitioning');
-
-    // Small delay to ensure CSS transitions work
-    setIsTransitioning(true);
-
+    // Set class tema (dark/light) di setiap render, termasuk mount pertama.
     if (theme === 'light') {
       root.classList.add('light');
       root.classList.remove('dark');
@@ -43,7 +39,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
     localStorage.setItem(STORAGE_KEY, theme);
 
-    // Remove transitioning class after animation completes
+    // Class 'theme-transitioning' HANYA ditambahkan saat tema benar-benar
+    // berubah (toggle), bukan saat mount pertama aplikasi. Sebelumnya efek
+    // ini juga jalan di mount pertama (karena effect selalu jalan sekali
+    // setelah render awal), sehingga transisi 600ms aktif tepat saat
+    // komponen lain (mis. dashboard) baru pertama kali mount — bentrok
+    // dengan animasi Framer Motion & compositing backdrop-blur, membuat
+    // konten ada di DOM tapi tidak ter-render sampai ada reflow lain.
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    root.classList.add('theme-transitioning');
+    setIsTransitioning(true);
+
     const timer = setTimeout(() => {
       root.classList.remove('theme-transitioning');
       setIsTransitioning(false);

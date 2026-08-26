@@ -51,8 +51,8 @@ function CreateAdminModal({ onClose, onSuccess, isDark }: { onClose: () => void;
       onSuccess();
       onClose();
     },
-    onError: (err: any) => {
-      setError(err?.message ?? 'Gagal membuat akun');
+    onError: (err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Gagal membuat akun');
     },
   });
 

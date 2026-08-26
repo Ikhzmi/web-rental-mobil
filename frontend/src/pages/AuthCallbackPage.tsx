@@ -85,11 +85,14 @@ export default function AuthCallbackPage() {
             }, 1500);
           }
         } else if (type === 'recovery') {
-          // Password reset - redirect ke login dengan param reset
-          setStatus('success');
-          setTimeout(() => {
-            navigate('/login?reset=true', { replace: true });
-          }, 1500);
+          // PENTING: sebelumnya di sini langsung redirect ke /login?reset=true
+          // TANPA PERNAH memberi kesempatan user set password baru — sesi
+          // recovery yang sudah aktif ini cuma dibuang begitu saja, padahal
+          // update password (supabase.auth.updateUser) wajib dipanggil
+          // SELAGI sesi recovery masih aktif. Sekarang diarahkan ke halaman
+          // khusus yang benar-benar menjalankan itu.
+          navigate('/reset-password', { replace: true });
+          return;
         } else if (type === 'email_change') {
           // Email change confirmation
           setStatus('success');

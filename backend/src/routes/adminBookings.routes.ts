@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireAdmin } from '../middleware/verifySupabaseToken';
+import { sendBookingConfirmedEmail, sendBookingCancelledEmail } from '../services/email.service';
 
 export const adminBookingsRouter = Router();
 
@@ -113,6 +114,10 @@ adminBookingsRouter.patch('/:id/status', async (req, res) => {
 
   const booking = await prisma.booking.findFirst({
     where: { id: req.params.id, car: { instansiId } },
+    include: {
+      car: { select: { nama: true } },
+      profile: { select: { nama: true, email: true } },
+    },
   });
   if (!booking) {
     res.status(404).json({ error: 'Booking tidak ditemukan' });
@@ -142,6 +147,24 @@ adminBookingsRouter.patch('/:id/status', async (req, res) => {
     });
     return b;
   });
+
+  // Kirim email notifikasi ke customer — sengaja TIDAK di-await sebelum
+  // respons dikirim (fire-and-forget) supaya request admin tidak ikut
+  // lambat/gagal kalau pengiriman email lambat/error. Kalau belum
+  // dikonfigurasi (RESEND_API_KEY kosong), fungsi ini no-op.
+  const emailPayload = {
+    to: booking.profile.email,
+    namaPenyewa: booking.profile.nama,
+    namaMobil: booking.car.nama,
+    bookingId: booking.id,
+    tanggalMulai: booking.tanggalMulai.toISOString(),
+    tanggalSelesai: booking.tanggalSelesai.toISOString(),
+  };
+  if (parsed.data.status === 'dikonfirmasi') {
+    void sendBookingConfirmedEmail(emailPayload);
+  } else if (parsed.data.status === 'dibatalkan') {
+    void sendBookingCancelledEmail(emailPayload, 'ditolak_admin');
+  }
 
   res.json({ data: updated });
 });

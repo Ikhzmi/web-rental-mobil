@@ -5,6 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Car, CreditCard, Key, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { AmbientGlow, RouteWaypoint, StepRouteLine } from './decor/RouteMotifs';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -105,11 +106,14 @@ export default function HowItWorks() {
             backgroundSize: '64px 64px'
           }}
         />
+        <AmbientGlow isDark={isDark} position="top-left" size="md" />
+        <AmbientGlow isDark={isDark} position="bottom-right" size="sm" />
       </div>
 
       <div className="relative max-w-5xl mx-auto">
         {/* Header */}
         <div className="text-center mb-16">
+          <RouteWaypoint isDark={isDark} />
           <h2 className={`text-3xl md:text-4xl font-bold mb-3 ${
             isDark ? 'text-white' : 'text-zinc-900'
           }`}>
@@ -123,7 +127,8 @@ export default function HowItWorks() {
         </div>
 
         {/* Steps */}
-        <div ref={stepsRef} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div ref={stepsRef} className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StepRouteLine isDark={isDark} steps={steps.length} />
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (
@@ -184,9 +189,13 @@ export default function HowItWorks() {
 
                 {/* Mobile connector */}
                 {index < steps.length - 1 && (
-                  <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full lg:hidden ${
-                    isDark ? 'bg-white/30' : 'bg-zinc-300'
-                  }`} />
+                  <div
+                    aria-hidden="true"
+                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-px h-3 lg:hidden"
+                    style={{
+                      background: `repeating-linear-gradient(to bottom, ${isDark ? 'rgba(201,151,75,0.5)' : 'rgba(180,130,60,0.4)'} 0px, ${isDark ? 'rgba(201,151,75,0.5)' : 'rgba(180,130,60,0.4)'} 3px, transparent 3px, transparent 6px)`,
+                    }}
+                  />
                 )}
               </div>
             );

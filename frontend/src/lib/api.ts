@@ -103,9 +103,21 @@ export interface Booking {
   statusLogs?: BookingStatusLogEntry[];
   // Ditambahkan ke include backend supaya admin bisa lihat data penyewa
   // dari endpoint yang sama (lihat AdminPesananDetailPage.tsx).
-  profile?: { nama: string; email: string; noHp: string };
+  profile?: { nama: string; email: string; noHp: string; dokumenVerified?: boolean };
   // expiresAt from checkout API response
   expiresAt?: string;
+}
+
+export interface Review {
+  id: string;
+  bookingId: string;
+  userId: string;
+  carId: string;
+  rating: number;
+  komentar: string | null;
+  createdAt: string;
+  profile?: { nama: string };
+  car?: { nama: string };
 }
 
 export interface CreateBookingInput {
@@ -131,6 +143,10 @@ export interface InstansiDashboardData {
     profile: { nama: string };
     totalHarga: string;
     status: string;
+    // Backend mengirim ini via Prisma `include` (semua kolom scalar Booking
+    // ikut terbawa) — sebelumnya tidak dideklarasikan di sini walau dipakai
+    // di UI, sehingga kode terpaksa pakai `as any` untuk mengaksesnya.
+    createdAt: string;
   }>;
   recentDisbursements: Array<{
     id: string;
@@ -138,6 +154,23 @@ export interface InstansiDashboardData {
     status: string;
     dicairkanPada: string | null;
   }>;
+}
+
+// Data tren nyata (hari ini vs kemarin) untuk StatCard di Admin Dashboard —
+// dihitung server-side dari booking asli, bukan angka statis/acak.
+export interface InstansiDashboardTrends {
+  pendapatanHariIni: number;
+  bookingBaruHariIni: number;
+  trendPendapatan: number;
+  trendBookingBaru: number;
+  sparklinePendapatan: number[];
+  sparklineBookingBaru: number[];
+}
+
+// Data grafik pendapatan per bucket waktu, dihitung dari booking asli.
+export interface InstansiRevenueSeries {
+  labels: string[];
+  values: number[];
 }
 
 export interface DashboardSummary {
@@ -263,6 +296,19 @@ export interface DisbursementItem {
     tanggalSelesai: string;
     profile: { nama: string };
   };
+}
+
+// Saldo tertunda per instansi (dari sudut pandang SuperAdmin, lintas
+// seluruh instansi) — dipakai saat membuat pencairan dana baru secara
+// manual. Beda dengan `InstansiSaldo` di bawah yang khusus untuk halaman
+// saldo instansi itu sendiri.
+export interface SaldoTertundaInstansi {
+  id: string;
+  namaInstansi: string;
+  rekeningBank: string | null;
+  komisiPlatformPersen: number;
+  saldoTertunda: number;
+  jumlahBookingTertunda: number;
 }
 
 export interface SuperAdminDashboardData {
@@ -640,6 +686,12 @@ export const api = {
   // ── Admin: Dashboard (F9) ──
   getDashboardSummary: () => apiFetch<DashboardSummary>('/api/admin/dashboard/summary'),
   getInstansiDashboard: () => apiFetch<InstansiDashboardData>('/api/instansi/dashboard'),
+  getInstansiDashboardTrends: () =>
+    apiFetch<InstansiDashboardTrends>('/api/instansi/dashboard/trends'),
+  getInstansiRevenueSeries: (period: 'today' | '7days' | 'month' | 'year') =>
+    apiFetch<InstansiRevenueSeries>(
+      `/api/instansi/dashboard/revenue-series?period=${period}`
+    ),
 
   // ── Admin: Notifications ──
   getAdminNotifications: (unreadOnly?: boolean) =>
@@ -699,11 +751,27 @@ export const api = {
     apiFetch<{ signedUrl: string; expiresInSeconds: number }>(
       `/api/admin/dokumen/${userId}/signed-url?tipe=${tipe}`
     ),
+  setDokumenVerified: (userId: string, verified: boolean) =>
+    apiFetch<{ id: string; dokumenVerified: boolean }>(
+      `/api/admin/dokumen/${userId}/verify`,
+      { method: 'PATCH', body: JSON.stringify({ verified }) }
+    ),
 
     // ── Customer: Riwayat Pesanan (F7) ──
   listMyBookings: () => apiFetch<Booking[]>('/api/bookings/mine'),
   cancelBooking: (id: string) =>
     apiFetch<Booking>(`/api/bookings/${id}/cancel`, { method: 'PATCH' }),
+
+  // ── Ulasan (Review) ──
+  listReviews: (carId?: string) =>
+    apiFetch<Review[]>(`/api/reviews${carId ? `?carId=${carId}` : ''}`),
+  listFeaturedReviews: () => apiFetch<Review[]>('/api/reviews/featured'),
+  getBookingReviewStatus: (bookingId: string) =>
+    apiFetch<{ canReview: boolean; alreadyReviewed: boolean; review: Review | null }>(
+      `/api/reviews/booking/${bookingId}`
+    ),
+  createReview: (input: { bookingId: string; rating: number; komentar?: string }) =>
+    apiFetch<Review>('/api/reviews', { method: 'POST', body: JSON.stringify(input) }),
 
   // ── Customer: Profil (F8) ──
   updateMyProfile: (input: Partial<Pick<Profile, 'nama' | 'noHp' | 'noKtp' | 'noSim'>>) =>
@@ -833,6 +901,23 @@ export const api = {
     const query = qs.toString();
     return apiFetch<Disbursement[]>(`/api/superadmin/disbursements${query ? `?${query}` : ''}`);
   },
+  // Saldo tertunda per instansi — untuk memilih instansi saat membuat
+  // pencairan dana manual baru.
+  listInstansiSaldo: () => apiFetch<SaldoTertundaInstansi[]>('/api/superadmin/instansi-saldo'),
+  // Membuat batch pencairan dana manual untuk satu instansi (semua booking
+  // 'selesai' yang belum pernah dicairkan akan dibungkus jadi satu batch).
+  createDisbursement: (input: { instansiId: string; bankTransferId?: string }) =>
+    apiFetch<Disbursement>('/api/superadmin/disbursements', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  // Menandai hasil transfer manual (berhasil/gagal) untuk batch yang masih
+  // berstatus 'diproses'.
+  updateDisbursementStatus: (id: string, input: { status: 'berhasil' | 'gagal'; bankTransferId?: string }) =>
+    apiFetch<Disbursement>(`/api/superadmin/disbursements/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
 
   // Bookings Management
   listSuperAdminBookings: (params?: {
@@ -889,7 +974,7 @@ export const api = {
     return apiFetchFull<SuperAdminReportsData>(`/api/superadmin/reports${query}`);
   },
 
-  // Checkout (Customer) - DOKU
+  // Checkout (Customer) — via bayar.gg
   checkoutBooking: (bookingId: string) =>
     apiFetch<{
       bookingId: string;
@@ -898,23 +983,23 @@ export const api = {
       orderId?: string;
       amount: number;
       expiresAt: string;
-      gateway: 'DOKU';
+      gateway: 'bayar.gg';
     }>(
       `/api/bookings/${bookingId}/checkout`,
       { method: 'POST' }
     ),
 
-  // Create Payment - DOKU
+  // Create Payment — via bayar.gg
   createPayment: (bookingId: string, data: { paymentMethod: string }) =>
     apiFetch<{
       bookingId: string;
-      dokuOrderId: string;
-      dokuInvoiceId: string;
-      paymentCode: string;
+      gatewayInvoiceId: string;
+      paymentUrl: string;
+      qrisString?: string;
       expiresAt: string;
       paymentMethod: string;
       amount: number;
-      gateway: 'DOKU';
+      gateway: 'bayar.gg';
     }>(
       `/api/bookings/${bookingId}/payment`,
       {
@@ -929,10 +1014,9 @@ export const api = {
       bookingId: string;
       bookingStatus: StatusBooking;
       paymentStatus: string | null;
-      dokuInvoiceId?: string | null;
-      dokuOrderId?: string | null;
-      dokuPaymentCode?: string | null;
-      gateway: 'DOKU';
+      paymentId?: string | null;
+      gatewayInvoiceId?: string | null;
+      gateway: 'bayar.gg';
     }>(
       `/api/bookings/${bookingId}/payment-status`
     ),

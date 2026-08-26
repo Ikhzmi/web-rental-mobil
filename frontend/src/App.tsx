@@ -21,6 +21,7 @@ import FaqPage from './pages/FaqPage';
 import LoginPage from './pages/LoginPage';
 import DaftarPage from './pages/DaftarPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 // Lazy loaded public pages
 const BookingPage = lazy(() => import('./pages/BookingPage'));
@@ -36,6 +37,9 @@ const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage')
 const AdminArmadaPage = lazy(() => import('./pages/admin/AdminArmadaPage'));
 const AdminPesananPage = lazy(() => import('./pages/admin/AdminPesananPage'));
 const AdminPesananDetailPage = lazy(() => import('./pages/admin/AdminPesananDetailPage'));
+const AdminMessagesPage = lazy(() => import('./pages/admin/AdminMessagesPage'));
+const AdminCalendarPage = lazy(() => import('./pages/admin/AdminCalendarPage'));
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 
 // Super Admin Pages - Lazy loaded (only loaded when super admin visits)
 const SuperAdminLayout = lazy(() => import('./pages/superadmin/SuperAdminLayout'));
@@ -92,15 +96,9 @@ function App() {
                         />
                         <Route path="admin/pesanan" element={<AdminPesananPage />} />
                         <Route path="admin/pesanan/:id" element={<AdminPesananDetailPage />} />
-                        <Route path="admin/messages" element={
-                          <ComingSoonPage title="Messages" description="Pusat pesan dan notifikasi" />
-                        } />
-                        <Route path="admin/calendar" element={
-                          <ComingSoonPage title="Calendar" description="Kalender booking dan jadwal" />
-                        } />
-                        <Route path="admin/settings" element={
-                          <ComingSoonPage title="Settings" description="Pengaturan akun dan preferensi" />
-                        } />
+                        <Route path="admin/messages" element={<AdminMessagesPage />} />
+                        <Route path="admin/calendar" element={<AdminCalendarPage />} />
+                        <Route path="admin/settings" element={<AdminSettingsPage />} />
                       </Route>
                     </Route>
 
@@ -130,6 +128,7 @@ function App() {
                       <Route path="login" element={<LoginPage />} />
                       <Route path="daftar" element={<DaftarPage />} />
                       <Route path="auth/callback" element={<AuthCallbackPage />} />
+                      <Route path="reset-password" element={<ResetPasswordPage />} />
 
                       {/* Customer */}
                       <Route element={<RequireAuth />}>

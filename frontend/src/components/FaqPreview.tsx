@@ -5,6 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { AmbientGlow, RouteWaypoint } from './decor/RouteMotifs';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -85,11 +86,13 @@ export default function FaqPreview() {
             backgroundSize: '64px 64px'
           }}
         />
+        <AmbientGlow isDark={isDark} position="bottom-right" size="md" />
       </div>
 
       <div className="relative max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
+          <RouteWaypoint isDark={isDark} />
           <h2 className={`text-3xl md:text-4xl font-bold mb-3 ${
             isDark ? 'text-white' : 'text-zinc-900'
           }`}>

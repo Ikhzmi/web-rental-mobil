@@ -4,6 +4,7 @@ import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ShieldCheck, Clock, MapPin, Sparkles } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
+import { AmbientGlow, RouteWaypoint } from './decor/RouteMotifs';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -111,11 +112,14 @@ export default function FeaturesSection() {
             backgroundSize: '64px 64px'
           }}
         />
+        <AmbientGlow isDark={isDark} position="top-right" size="lg" />
+        <AmbientGlow isDark={isDark} position="bottom-left" size="sm" />
       </div>
 
       <div className="relative max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-16">
+          <RouteWaypoint isDark={isDark} />
           <p className={`text-sm tracking-widest font-medium uppercase mb-3 ${
             isDark ? 'text-zinc-400' : 'text-zinc-600'
           }`}>
@@ -181,7 +185,20 @@ export default function FeaturesSection() {
                   }
                 `} />
 
-                <div className="flex flex-col gap-4">
+                {/* Angka spec-sheet — data yang sudah ada tapi sebelumnya
+                    tak pernah dirender, dipakai sebagai tekstur editorial
+                    samar, bukan penanda urutan (4 fitur ini independen,
+                    tidak berurutan) */}
+                <span
+                  aria-hidden="true"
+                  className={`absolute top-4 right-5 font-playfair italic text-5xl select-none ${
+                    isDark ? 'text-white/[0.06]' : 'text-zinc-900/[0.05]'
+                  }`}
+                >
+                  {feature.num}
+                </span>
+
+                <div className="relative flex flex-col gap-4">
                   <div className={`
                     w-12 h-12 rounded-xl flex items-center justify-center
                     ${isDark ? 'bg-white/[0.05]' : 'bg-zinc-100'}

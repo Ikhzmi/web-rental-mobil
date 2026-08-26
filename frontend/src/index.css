@@ -664,9 +664,16 @@ html {
   color: #0f172a;
 }
 
-/* Theme transition indicator */
+/* Theme transition indicator — HANYA transisi warna/background/border, bukan
+   "all". Sebelumnya `transition: all !important` diterapkan ke SETIAP elemen
+   selama 600ms di setiap mount pertama aplikasi (bukan cuma saat toggle
+   tema, karena efek ini juga jalan saat mount). Ini bentrok dengan animasi
+   JS Framer Motion dan compositing GPU untuk backdrop-blur (glassmorphism),
+   menyebabkan konten yang baru di-mount (mis. dashboard SuperAdmin) ada di
+   DOM tapi tidak ter-render dengan benar sampai ada re-render/reflow lain
+   (seperti navigasi keluar-masuk halaman) memaksa browser mengulang paint. */
 .theme-transitioning * {
-  transition: all 0.4s ease !important;
+  transition: background-color 0.4s ease, border-color 0.4s ease, color 0.4s ease;
 }
 
 /* Shimmer Animation */

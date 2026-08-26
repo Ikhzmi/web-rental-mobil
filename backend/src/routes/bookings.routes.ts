@@ -81,12 +81,30 @@ bookingsRouter.post('/', async (req, res) => {
   }
 
   try {
-    // SECURITY: Use Serializable isolation level to prevent race conditions
-    // This ensures that concurrent booking requests for the same car/date
-    // are properly serialized and no double-booking can occur
-    const booking = await prisma.$transaction(async (tx) => {
+    // SECURITY: Serializable isolation level benar-benar dipasang di sini
+    // (sebelumnya komentar ini ada tapi isolationLevel TIDAK PERNAH di-set,
+    // sehingga Prisma diam-diam pakai default PostgreSQL yaitu Read
+    // Committed — di mana dua transaksi concurrent BISA SAMA-SAMA lolos
+    // pengecekan isCarAvailable() sebelum salah satunya commit, alias
+    // double-booking tetap mungkin terjadi walau kelihatannya "aman"
+    // karena dibungkus $transaction).
+    //
+    // Konsekuensi pakai Serializable: PostgreSQL bisa GAGALKAN salah satu
+    // transaksi yang bentrok saat commit (error P2034), bukan mencegahnya
+    // di awal — makanya perlu retry loop di bawah ini, ini perilaku normal
+    // dan yang diharapkan dari Serializable isolation, bukan bug.
+    const MAX_RETRY = 3;
+    let booking: Awaited<ReturnType<typeof createBookingTx>> | undefined;
+    let lastError: unknown;
+
+    async function createBookingTx(tx: Prisma.TransactionClient) {
       const car = await tx.car.findUnique({ where: { id: carId } });
-      if (!car || car.status !== 'tersedia') {
+      // PENTING: sebelumnya hanya cek car.status, TIDAK PERNAH cek
+      // statusApproval — ini lapisan pertahanan terakhir (endpoint katalog
+      // & detail sudah diperbaiki juga di cars.routes.ts) supaya mobil yang
+      // belum disetujui SuperAdmin benar-benar tidak bisa dibooking, bahkan
+      // kalau ID-nya didapat dari luar jalur normal (mis. link lama/bocor).
+      if (!car || car.status !== 'tersedia' || car.statusApproval !== 'disetujui') {
         throw new Error('MOBIL_TIDAK_TERSEDIA');
       }
 
@@ -109,7 +127,7 @@ bookingsRouter.post('/', async (req, res) => {
           totalAddon: rincian.totalAddon,
           totalHarga: rincian.totalHarga,
           // v2: Status changed from 'pending' to 'menunggu_pembayaran'
-          // because now waiting for DOKU confirmation, not manual admin verification
+          // because now waiting for payment gateway confirmation, not manual admin verification
           status: 'menunggu_pembayaran',
           addons: {
             createMany: {
@@ -119,7 +137,33 @@ bookingsRouter.post('/', async (req, res) => {
         },
         include: { addons: true, car: true },
       });
-    });
+    }
+
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+      try {
+        booking = await prisma.$transaction(createBookingTx, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+        lastError = undefined;
+        break;
+      } catch (err) {
+        lastError = err;
+        // P2034 = write conflict/deadlock terdeteksi PostgreSQL di bawah
+        // Serializable isolation — ini kasus yang MEMANG harus di-retry,
+        // bukan dianggap gagal permanen.
+        const isSerializationConflict =
+          err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034';
+        if (!isSerializationConflict || attempt === MAX_RETRY) {
+          throw err;
+        }
+        // Backoff singkat sebelum retry supaya tidak langsung tabrakan lagi
+        await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
+      }
+    }
+
+    if (!booking) {
+      throw lastError ?? new Error('GAGAL_SETELAH_RETRY');
+    }
 
     res.status(201).json({ data: booking });
   } catch (err) {
@@ -129,6 +173,14 @@ bookingsRouter.post('/', async (req, res) => {
     }
     if (err instanceof Error && err.message === 'MOBIL_TIDAK_TERSEDIA') {
       res.status(409).json({ error: 'Mobil ini sedang tidak tersedia untuk disewa' });
+      return;
+    }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
+      // Sudah di-retry MAX_RETRY kali dan tetap bentrok dengan booking lain
+      // yang diproses persis bersamaan — beri tahu user untuk coba lagi,
+      // bukan MOBIL_TIDAK_TERSEDIA yang menyesatkan (mobilnya tersedia,
+      // cuma sedang diperebutkan).
+      res.status(409).json({ error: 'Terjadi permintaan booking bersamaan untuk mobil ini, silakan coba lagi' });
       return;
     }
     console.error('POST /api/bookings error:', err);
@@ -161,7 +213,7 @@ bookingsRouter.get('/:id', async (req, res) => {
       car: true,
       addons: true,
       statusLogs: { orderBy: { createdAt: 'asc' } },
-      profile: { select: { nama: true, email: true, noHp: true } },
+      profile: { select: { nama: true, email: true, noHp: true, dokumenVerified: true } },
     },
   });
 

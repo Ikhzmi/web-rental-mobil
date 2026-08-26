@@ -4,6 +4,7 @@ import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Link } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { AmbientGlow } from './decor/RouteMotifs';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -93,11 +94,10 @@ export default function CtaBanner() {
             }
           `} />
 
-          {/* Decorative corner glow */}
-          <div className={`
-            absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl
-            ${isDark ? 'bg-white/[0.02]' : 'bg-zinc-200/50'}
-          `} />
+          {/* Decorative corner glow — retinted hangat supaya sejalan
+              dengan aksen emas yang dipakai di section lain */}
+          <AmbientGlow isDark={isDark} position="top-right" size="lg" />
+          <AmbientGlow isDark={isDark} position="bottom-left" size="sm" />
 
           <div className="relative text-center cta-content">
             {/* Badge */}

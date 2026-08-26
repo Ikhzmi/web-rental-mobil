@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { createHash } from 'crypto';
 import { prisma } from '../lib/prisma';
 import { verifyBayarGGWebhook, mapBayarGGStatusToPayment } from '../services/bayargg.service';
+import { getSystemActorId } from '../lib/systemActor';
+import { sendBookingConfirmedEmail, sendBookingCancelledEmail } from '../services/email.service';
 
 export const webhooksRouter = Router();
 
@@ -234,6 +236,15 @@ async function handleBayarGGPaymentPaid(
   transactionId: string,
   paidAt?: string
 ) {
+  const systemActorId = await getSystemActorId();
+  let confirmedBookingInfo: {
+    email: string;
+    nama: string;
+    carNama: string;
+    tanggalMulai: Date;
+    tanggalSelesai: Date;
+  } | null = null;
+
   await prisma.$transaction(async (tx) => {
     // Check current state first
     const payment = await tx.payment.findUnique({
@@ -262,6 +273,10 @@ async function handleBayarGGPaymentPaid(
     // Update booking status atomically
     const booking = await tx.booking.findUnique({
       where: { id: bookingId },
+      include: {
+        car: { select: { nama: true } },
+        profile: { select: { nama: true, email: true } },
+      },
     });
 
     if (booking?.status === 'menunggu_pembayaran') {
@@ -270,17 +285,50 @@ async function handleBayarGGPaymentPaid(
         data: { status: 'dikonfirmasi' },
       });
 
-      await tx.bookingStatusLog.create({
-        data: {
-          bookingId,
-          statusLama: 'menunggu_pembayaran',
-          statusBaru: 'dikonfirmasi',
-          diubahOleh: 'system',
-          keterangan: `Pembayaran berhasil via bayar.gg. Invoice ID: ${transactionId}`,
-        },
-      });
+      // PENTING: `diubahOleh` adalah foreign key WAJIB ke Profile (UUID),
+      // bukan kolom teks bebas — sebelumnya diisi 'system' (string biasa)
+      // yang SELALU melanggar foreign key constraint, menyebabkan seluruh
+      // transaksi ini rollback (termasuk update status booking di atas!).
+      // Field `keterangan` juga sebelumnya dipakai padahal tidak ada di
+      // skema BookingStatusLog sama sekali. Lihat lib/systemActor.ts.
+      if (systemActorId) {
+        await tx.bookingStatusLog.create({
+          data: {
+            bookingId,
+            statusLama: 'menunggu_pembayaran',
+            statusBaru: 'dikonfirmasi',
+            diubahOleh: systemActorId,
+          },
+        });
+      }
+
+      confirmedBookingInfo = {
+        email: booking.profile.email,
+        nama: booking.profile.nama,
+        carNama: booking.car.nama,
+        tanggalMulai: booking.tanggalMulai,
+        tanggalSelesai: booking.tanggalSelesai,
+      };
     }
   });
+
+  if (confirmedBookingInfo) {
+    const info: {
+      email: string;
+      nama: string;
+      carNama: string;
+      tanggalMulai: Date;
+      tanggalSelesai: Date;
+    } = confirmedBookingInfo;
+    void sendBookingConfirmedEmail({
+      to: info.email,
+      namaPenyewa: info.nama,
+      namaMobil: info.carNama,
+      bookingId,
+      tanggalMulai: info.tanggalMulai.toISOString(),
+      tanggalSelesai: info.tanggalSelesai.toISOString(),
+    });
+  }
 
   logPaymentAudit('BAYARGG_BOOKING_CONFIRMED', {
     bookingId,
@@ -294,6 +342,15 @@ async function handleBayarGGPaymentPaid(
  * Uses transaction for atomicity
  */
 async function handleBayarGGPaymentExpired(paymentId: string, bookingId: string) {
+  const systemActorId = await getSystemActorId();
+  let cancelledBookingInfo: {
+    email: string;
+    nama: string;
+    carNama: string;
+    tanggalMulai: Date;
+    tanggalSelesai: Date;
+  } | null = null;
+
   await prisma.$transaction(async (tx) => {
     // Update payment status
     await tx.payment.update({
@@ -304,6 +361,10 @@ async function handleBayarGGPaymentExpired(paymentId: string, bookingId: string)
     // Cancel booking atomically
     const booking = await tx.booking.findUnique({
       where: { id: bookingId },
+      include: {
+        car: { select: { nama: true } },
+        profile: { select: { nama: true, email: true } },
+      },
     });
 
     if (booking?.status === 'menunggu_pembayaran') {
@@ -312,17 +373,49 @@ async function handleBayarGGPaymentExpired(paymentId: string, bookingId: string)
         data: { status: 'dibatalkan' },
       });
 
-      await tx.bookingStatusLog.create({
-        data: {
-          bookingId,
-          statusLama: 'menunggu_pembayaran',
-          statusBaru: 'dibatalkan',
-          diubahOleh: 'system',
-          keterangan: 'Pembayaran kedaluwarsa via bayar.gg',
-        },
-      });
+      // Lihat catatan di handleBayarGGPaymentPaid soal kenapa
+      // diubahOleh & keterangan diubah dari versi sebelumnya.
+      if (systemActorId) {
+        await tx.bookingStatusLog.create({
+          data: {
+            bookingId,
+            statusLama: 'menunggu_pembayaran',
+            statusBaru: 'dibatalkan',
+            diubahOleh: systemActorId,
+          },
+        });
+      }
+
+      cancelledBookingInfo = {
+        email: booking.profile.email,
+        nama: booking.profile.nama,
+        carNama: booking.car.nama,
+        tanggalMulai: booking.tanggalMulai,
+        tanggalSelesai: booking.tanggalSelesai,
+      };
     }
   });
+
+  if (cancelledBookingInfo) {
+    const info: {
+      email: string;
+      nama: string;
+      carNama: string;
+      tanggalMulai: Date;
+      tanggalSelesai: Date;
+    } = cancelledBookingInfo;
+    void sendBookingCancelledEmail(
+      {
+        to: info.email,
+        namaPenyewa: info.nama,
+        namaMobil: info.carNama,
+        bookingId,
+        tanggalMulai: info.tanggalMulai.toISOString(),
+        tanggalSelesai: info.tanggalSelesai.toISOString(),
+      },
+      'dibatalkan_otomatis'
+    );
+  }
 
   logPaymentAudit('BAYARGG_BOOKING_EXPIRED', {
     bookingId,

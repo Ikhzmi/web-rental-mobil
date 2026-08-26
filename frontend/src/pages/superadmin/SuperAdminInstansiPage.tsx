@@ -5,11 +5,11 @@ import {
   Building2,
   Search,
   Plus,
-  Eye,
   CheckCircle,
   XCircle,
   AlertCircle,
   Trash2,
+  Pencil,
   X,
   Phone,
   Mail,
@@ -148,8 +148,8 @@ function CreateInstansiModal({ onClose, onSuccess, isDark }: { onClose: () => vo
       onSuccess();
       onClose();
     },
-    onError: (err: any) => {
-      setError(err?.message ?? 'Gagal membuat instansi');
+    onError: (err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Gagal membuat instansi');
     },
   });
 
@@ -356,10 +356,254 @@ function CreateInstansiModal({ onClose, onSuccess, isDark }: { onClose: () => vo
   );
 }
 
-function InstansiCard({ instansi, index, onDelete, isDark }: {
+/**
+ * Modal edit instansi — sebelumnya tidak ada sama sekali di UI walau
+ * backend (PUT /api/superadmin/instansi/:id) dan API client
+ * (api.updateInstansi) sudah lengkap. Satu-satunya jalan sebelumnya adalah
+ * hapus lalu buat ulang, yang diblokir kalau instansi sudah punya
+ * mobil/pengguna. Sekalian menggantikan link "Detail" yang ternyata
+ * menuju route yang tidak pernah dibuat (/superadmin/instansi/:id — 404).
+ */
+function EditInstansiModal({
+  instansi,
+  onClose,
+  onSuccess,
+  isDark,
+}: {
+  instansi: Instansi;
+  onClose: () => void;
+  onSuccess: () => void;
+  isDark: boolean;
+}) {
+  const [form, setForm] = useState({
+    namaInstansi: instansi.namaInstansi,
+    alamat: instansi.alamat,
+    noHpPic: instansi.noHpPic,
+    emailPic: instansi.emailPic,
+    rekeningBank: instansi.rekeningBank ?? '',
+    komisiPlatformPersen: Math.round(Number(instansi.komisiPlatformPersen)),
+  });
+  const [error, setError] = useState('');
+
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      api.updateInstansi(instansi.id, {
+        ...form,
+        rekeningBank: form.rekeningBank || null,
+      }),
+    onSuccess: () => {
+      onSuccess();
+      onClose();
+    },
+    onError: (err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Gagal mengubah instansi');
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    updateMutation.mutate();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full max-w-lg rounded-2xl overflow-hidden my-10 ${
+          isDark ? 'login-card-dark' : 'login-card-light'
+        }`}
+      >
+        {/* Header */}
+        <div className={`relative px-6 py-5 ${isDark ? 'border-b border-white/10' : 'border-b border-[#D4CFC7]/40'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${
+              isDark ? 'bg-white/10' : 'bg-[#f5ebe0]'
+            }`}>
+              <Building2 size={22} className={isDark ? 'text-white' : 'text-[#6b5545]'} />
+            </div>
+            <div>
+              <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                Edit Instansi
+              </h2>
+              <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                {instansi.namaInstansi}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className={`absolute top-4 right-4 p-2 rounded-lg transition-all ${
+              isDark ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`rounded-xl p-3 text-sm flex items-center gap-2 ${
+                isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'
+              }`}
+            >
+              <AlertCircle size={16} />
+              {error}
+            </motion.div>
+          )}
+
+          {/* Info readonly: statistik pemakaian, supaya SuperAdmin lihat
+              konteks sebelum ubah data (mis. jangan asal ganti komisi kalau
+              instansi sudah punya banyak mobil aktif) */}
+          <div className={`flex items-center gap-4 rounded-xl p-3 text-xs ${
+            isDark ? 'bg-white/[0.03] border border-white/10 text-white/50' : 'bg-slate-50 border border-slate-200 text-slate-500'
+          }`}>
+            <span className="flex items-center gap-1.5"><Car size={12} /> {instansi._count?.cars ?? 0} mobil</span>
+            <span className="flex items-center gap-1.5"><Users size={12} /> {instansi._count?.profiles ?? 0} pengguna</span>
+            <span className="ml-auto"><StatusBadge status={instansi.status} isDark={isDark} /></span>
+          </div>
+
+          <FormField
+            label="Nama Instansi"
+            icon={Building2}
+            value={form.namaInstansi}
+            onChange={(val) => setForm({ ...form, namaInstansi: val })}
+            required
+            dark={isDark}
+          />
+
+          <FormArea
+            label="Alamat Lengkap"
+            icon={MapPin}
+            value={form.alamat}
+            onChange={(val) => setForm({ ...form, alamat: val })}
+            required
+            rows={2}
+            dark={isDark}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              label="No. HP PIC"
+              icon={Phone}
+              type="tel"
+              value={form.noHpPic}
+              onChange={(val) => setForm({ ...form, noHpPic: val })}
+              required
+              dark={isDark}
+            />
+            <FormField
+              label="Email PIC"
+              icon={Mail}
+              type="email"
+              value={form.emailPic}
+              onChange={(val) => setForm({ ...form, emailPic: val })}
+              required
+              dark={isDark}
+            />
+          </div>
+
+          <FormField
+            label="Nomor Rekening"
+            icon={CreditCard}
+            value={form.rekeningBank}
+            onChange={(val) => setForm({ ...form, rekeningBank: val })}
+            placeholder="BCA - 1234567890 (opsional)"
+            dark={isDark}
+          />
+
+          <div>
+            <label className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+              <Percent size={13} />
+              Komisi Platform
+              <span className="text-red-400">*</span>
+            </label>
+            <div className={`rounded-xl p-4 ${isDark ? 'bg-white/[0.03] border border-white/10' : 'bg-slate-50 border border-slate-200'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <span className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {form.komisiPlatformPersen}%
+                </span>
+                <span className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                  dari setiap transaksi
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={form.komisiPlatformPersen}
+                onChange={(e) => setForm({ ...form, komisiPlatformPersen: parseInt(e.target.value) })}
+                className="w-full h-2 rounded-full appearance-none cursor-pointer accent-white"
+                style={{
+                  background: `linear-gradient(to right, ${isDark ? '#666666' : '#888888'} 0%, ${isDark ? '#666666' : '#888888'} ${(form.komisiPlatformPersen / 30) * 100}%, ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'} ${(form.komisiPlatformPersen / 30) * 100}%, ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'} 100%)`
+                }}
+              />
+              <div className={`flex justify-between text-[10px] mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
+                <span>1%</span>
+                <span>15%</span>
+                <span>30%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className={`flex-1 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
+                isDark
+                  ? 'bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className={`flex-1 px-4 py-3 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                isDark
+                  ? 'bg-[#6b5545] hover:bg-[#5b4535] text-white shadow-lg shadow-[#6b5545]/25'
+                  : 'bg-[#6b5545] hover:bg-[#5b4535] text-white shadow-lg shadow-[#6b5545]/20'
+              }`}
+            >
+              {updateMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Pencil size={16} />
+                  Simpan Perubahan
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function InstansiCard({ instansi, index, onDelete, onEdit, isDark }: {
   instansi: Instansi;
   index: number;
   onDelete: (id: string) => void;
+  onEdit: (instansi: Instansi) => void;
   isDark: boolean;
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -397,17 +641,17 @@ function InstansiCard({ instansi, index, onDelete, isDark }: {
           </div>
 
           <div className="flex items-center gap-2">
-            <a
-              href={`/superadmin/instansi/${instansi.id}`}
+            <button
+              onClick={() => onEdit(instansi)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all backdrop-blur-xl ${
                 isDark
                   ? 'bg-white/[0.08] text-white/80 hover:bg-white/[0.12] border border-white/10 hover:border-white/20'
                   : 'bg-white/60 text-[#6b5545] hover:bg-[#f5ebe0] border border-[#d5c9bc]/50 hover:border-[#d5c9bc]'
               }`}
             >
-              <Eye size={14} />
-              Detail
-            </a>
+              <Pencil size={14} />
+              Edit
+            </button>
 
             {(instansi._count?.cars ?? 0) === 0 && (instansi._count?.profiles ?? 0) === 0 && (
               <button
@@ -484,6 +728,7 @@ export default function SuperAdminInstansiPage() {
   const [filter, setFilter] = useState<StatusInstansi | ''>('');
   const [search, setSearch] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingInstansi, setEditingInstansi] = useState<Instansi | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -500,8 +745,8 @@ export default function SuperAdminInstansiPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['superadmin-instansi'] });
     },
-    onError: (err: any) => {
-      alert(err?.message ?? 'Gagal menghapus');
+    onError: (err: unknown) => {
+      alert(err instanceof Error ? err.message : 'Gagal menghapus');
     },
   });
 
@@ -646,6 +891,7 @@ export default function SuperAdminInstansiPage() {
               instansi={instansi}
               index={i}
               isDark={isDark}
+              onEdit={setEditingInstansi}
               onDelete={(id) => {
                 if (confirm(`Hapus instansi "${instansi.namaInstansi}"?\n\nTindakan ini tidak dapat dibatalkan.`)) {
                   deleteMutation.mutate(id);
@@ -660,6 +906,14 @@ export default function SuperAdminInstansiPage() {
         {showCreateModal && (
           <CreateInstansiModal
             onClose={() => setShowCreateModal(false)}
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: ['superadmin-instansi'] })}
+            isDark={isDark}
+          />
+        )}
+        {editingInstansi && (
+          <EditInstansiModal
+            instansi={editingInstansi}
+            onClose={() => setEditingInstansi(null)}
             onSuccess={() => queryClient.invalidateQueries({ queryKey: ['superadmin-instansi'] })}
             isDark={isDark}
           />

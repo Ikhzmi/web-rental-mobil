@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { ClipboardList, Search, ChevronRight, Car, Clock } from 'lucide-react';
-import { api, type StatusBooking } from '../../lib/api';
+import { api, type StatusBooking, type AdminBooking } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
@@ -43,13 +43,12 @@ function StatusBadge({ status, isDark }: { status: StatusBooking; isDark: boolea
 }
 
 function BookingCard({ booking, index, onStatusChange, isDark }: {
-  booking: any;
+  booking: AdminBooking;
   index: number;
   onStatusChange: (id: string, status: StatusBooking) => void;
   isDark: boolean;
 }) {
-  const bookingTyped = booking as { status: StatusBooking };
-  const nextOptions = NEXT_STATUS[bookingTyped.status] || [];
+  const nextOptions = NEXT_STATUS[booking.status] || [];
 
   return (
     <motion.div

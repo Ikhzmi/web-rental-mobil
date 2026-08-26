@@ -91,9 +91,9 @@ enum StatusInstansi {
 }
 
 /// Status booking dengan payment gateway - updated v2
-/// 'pending' diubah menjadi 'menunggu_pembayaran' karena payment via DOKU
+/// 'pending' diubah menjadi 'menunggu_pembayaran' karena payment via payment gateway
 enum StatusBooking {
-  menunggu_pembayaran  // Baru dibuat, menunggu pembayaran DOKU
+  menunggu_pembayaran  // Baru dibuat, menunggu pembayaran
   dikonfirmasi         // Pembayaran berhasil
   berjalan             // Sedang disewa
   selesai              // Sewa selesai
@@ -102,7 +102,7 @@ enum StatusBooking {
   @@map("status_booking")
 }
 
-/// Metode pembayaran DOKU - v2
+/// Metode pembayaran - v2
 enum MetodeBayar {
   virtual_account
   qris
@@ -112,7 +112,7 @@ enum MetodeBayar {
   @@map("metode_bayar")
 }
 
-/// Status payment DOKU - v2
+/// Status payment - v2
 enum StatusPayment {
   pending   // Invoice dibuat, belum dibayar
   paid      // Pembayaran berhasil
@@ -164,6 +164,7 @@ model Profile {
 
   bookings          Booking[]
   statusLogsDiubah  BookingStatusLog[] @relation("StatusLogDiubahOleh")
+  reviews           Review[]
 
   @@map("profiles")
 }
@@ -197,6 +198,7 @@ model Car {
 
   images   CarImage[]
   bookings Booking[]
+  reviews  Review[]
 
   @@map("cars")
 }
@@ -216,7 +218,7 @@ model CarImage {
 /// Model booking/pemesanan sewa mobil.
 /// Updated v2:
 /// - Status default adalah 'menunggu_pembayaran'
-/// - Relasi ke Payment (DOKU)
+/// - Relasi ke Payment
 /// - Relasi ke DisbursementItem (untuk tracking pencairan)
 model Booking {
   id             String        @id @default(uuid()) @db.Uuid
@@ -229,7 +231,7 @@ model Booking {
   hargaDasar     Decimal       @map("harga_dasar") @db.Decimal(12, 2)
   totalAddon     Decimal       @default(0) @map("total_addon") @db.Decimal(12, 2)
   totalHarga     Decimal       @map("total_harga") @db.Decimal(12, 2)
-  /// Default 'menunggu_pembayaran' karena menunggu konfirmasi dari DOKU
+  /// Default 'menunggu_pembayaran' karena menunggu konfirmasi dari payment gateway
   status         StatusBooking @default(menunggu_pembayaran)
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
@@ -239,9 +241,12 @@ model Booking {
   addons     BookingAddon[]
   statusLogs BookingStatusLog[]
 
-  /// v2: Relasi ke Payment (DOKU)
+  /// v2: Relasi ke Payment
   payment    Payment?
   disbursementItems DisbursementItem[]
+  /// Ulasan customer untuk booking ini — hanya bisa dibuat setelah status
+  /// 'selesai', satu ulasan per booking (lihat model Review).
+  review     Review?
 
   @@map("bookings")
   @@index([carId, tanggalMulai, tanggalSelesai])
@@ -274,6 +279,32 @@ model BookingStatusLog {
 
   @@map("booking_status_log")
   @@index([bookingId])
+}
+
+/// Ulasan customer untuk mobil, ditulis setelah masa sewa selesai.
+/// Keputusan produk (bukan bug, disengaja):
+///   - Hanya bisa dibuat kalau booking.status = 'selesai' (dicek di backend,
+///     bukan di skema — lihat reviews.routes.ts)
+///   - Satu ulasan per booking (bookingId unik), bukan dibatasi per car+user,
+///     supaya rental yang sama tidak bisa dinilai berkali-kali
+///   - Langsung tayang publik, TANPA moderasi admin
+///   - TIDAK ADA endpoint hapus, bahkan untuk admin — ulasan permanen
+///     begitu dibuat customer
+model Review {
+  id        String   @id @default(uuid()) @db.Uuid
+  bookingId String   @unique @map("booking_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  carId     String   @map("car_id") @db.Uuid
+  rating    Int      // 1-5, divalidasi di backend
+  komentar  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [userId], references: [id])
+  car     Car     @relation(fields: [carId], references: [id])
+
+  @@map("reviews")
+  @@index([carId, createdAt(sort: Desc)])
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -359,7 +390,7 @@ model Disbursement {
   /// Jumlah bersih yang ditransfer ke rekening instansi
   jumlahBersih           Decimal            @map("jumlah_bersih") @db.Decimal(12, 2)
   status                 StatusDisbursement @default(diproses)
-  /// ID dari DOKU/Bank Transfer untuk tracking
+  /// ID referensi transfer bank untuk tracking manual
   bankTransferId         String?           @map("bank_transfer_id")
   /// Timestamp saat dana berhasil dicairkan
   dicairkanPada          DateTime?         @map("dicairkan_pada")

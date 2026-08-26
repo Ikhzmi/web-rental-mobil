@@ -14,7 +14,9 @@ import { adminDashboardRouter } from './routes/adminDashboard.routes';
 import { superadminRouter } from './routes/superadmin.routes';
 import { instansiRouter } from './routes/instansi.routes';
 import { webhooksRouter } from './routes/webhooks.routes';
+import { reviewsRouter } from './routes/reviews.routes';
 import { globalErrorHandler, notFoundHandler } from './lib/errorHandler';
+import { startBookingExpiryJob } from './services/bookingExpiry.service';
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
@@ -52,7 +54,7 @@ const authLimiter = rateLimit({
 const paymentLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 5, // 5 payment requests per minute per user
-  keyGenerator: (req) => req.user?.id || req.ip || 'anonymous',
+  keyGenerator: (req) => req.user?.id || (req.ip ? ipKeyGenerator(req.ip) : 'anonymous'),
   validate: { ip: false },
   message: { error: 'Terlalu banyak request pembayaran, coba lagi dalam 1 menit' },
   standardHeaders: true,
@@ -63,7 +65,7 @@ const paymentLimiter = rateLimit({
 const webhookLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 30, // 30 webhook requests per minute per IP
-  keyGenerator: (req) => req.ip || 'anonymous',
+  keyGenerator: (req) => (req.ip ? ipKeyGenerator(req.ip) : 'anonymous'),
   validate: { ip: false },
   message: { error: 'Too many requests' },
   standardHeaders: true,
@@ -84,6 +86,7 @@ app.use('/api/cars', carsRouter);
 // Stricter rate limit for checkout (payment endpoint)
 app.use('/api/bookings', authLimiter, bookingsRouter);
 app.use('/api/profiles', authLimiter, profilesRouter);
+app.use('/api/reviews', reviewsRouter);
 
 // Admin (verifySupabaseToken + requireAdmin dipasang di dalam masing-masing router)
 app.use('/api/admin/cars', adminCarsRouter);
@@ -98,7 +101,7 @@ app.use('/api/superadmin', superadminRouter);
 // Instansi routes (public + admin scoped)
 app.use('/api/instansi', authLimiter, instansiRouter);
 
-// Webhooks (DOKU) - with rate limiting to prevent webhook spam
+// Webhooks (payment gateway) - with rate limiting to prevent webhook spam
 app.use('/api/webhooks', webhookLimiter, webhooksRouter);
 
 // 404 handler
@@ -109,4 +112,9 @@ app.use(globalErrorHandler);
 
 app.listen(PORT, () => {
   console.log(`KerenTal Kita API berjalan di http://localhost:${PORT}`);
+  // Jaring pengaman: batalkan otomatis booking yang mengendap di status
+  // menunggu_pembayaran (lihat bookingExpiry.service.ts untuk penjelasan
+  // kenapa ini perlu — tanpa ini, booking yang tidak pernah checkout bisa
+  // memblokir tanggal mobil untuk penyewa lain selamanya).
+  startBookingExpiryJob();
 });

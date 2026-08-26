@@ -18,6 +18,14 @@ const KATEGORI_LABELS: Record<string, string> = {
 const KATEGORI_OPTIONS: Kategori[] = ['city_car', 'hatchback', 'suv', 'mpv', 'minibus', 'pickup', 'mewah', 'electric'];
 const TRANSMISI_OPTIONS: Transmisi[] = ['manual', 'matic'];
 
+// Cocok persis dengan limit yang dipasang di level bucket Supabase
+// Storage (car-photos) — sebelumnya bucket ini TIDAK punya batas ukuran
+// atau tipe file sama sekali. Pengecekan di sini cuma untuk UX (kasih
+// tahu user instan, tanpa nunggu round-trip network gagal); penegakan
+// sesungguhnya tetap di level storage, tidak bisa dilewati dari client.
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
 async function uploadCarPhoto(carId: string, file: File): Promise<string> {
   const ext = file.name.split('.').pop();
   const path = `${carId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -41,6 +49,16 @@ function PhotoManager({ car, isDark }: { car: Car; isDark: boolean }) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setUploadError('Format file harus JPG, PNG, atau WebP');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadError('Ukuran file maksimal 5MB');
+      return;
+    }
+
     setUploading(true);
     setUploadError(null);
     try {
@@ -118,11 +136,7 @@ function EditCarModal({ car, onClose, isDark }: { car: Car; onClose: () => void;
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-md rounded-2xl p-5 sm:p-6 ${
-          isDark
-            ? 'bg-gradient-to-br from-[#0d1424]/95 to-[#0a0f1a]/95 backdrop-blur-xl border border-white/10'
-            : 'bg-white/95 backdrop-blur-xl border border-white/80 shadow-xl'
-        }`}
+        className={`w-full max-w-md rounded-2xl p-5 sm:p-6 ${isDark ? 'login-card-dark' : 'login-card-light'}`}
       >
         <div className="flex items-center justify-between mb-5">
           <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{car.nama}</h3>
@@ -230,11 +244,7 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-md rounded-2xl p-5 sm:p-6 my-10 ${
-          isDark
-            ? 'bg-gradient-to-br from-[#0d1424]/95 to-[#0a0f1a]/95 backdrop-blur-xl border border-white/10'
-            : 'bg-white/95 backdrop-blur-xl border border-white/80 shadow-xl'
-        }`}
+        className={`w-full max-w-md rounded-2xl p-5 sm:p-6 my-10 ${isDark ? 'login-card-dark' : 'login-card-light'}`}
       >
         <div className="flex items-center justify-between mb-5">
           <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Tambah Mobil</h3>

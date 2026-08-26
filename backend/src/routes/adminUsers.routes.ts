@@ -168,3 +168,43 @@ adminDokumenRouter.get('/:userId/signed-url', async (req, res) => {
 
   res.json({ data: { signedUrl: data.signedUrl, expiresInSeconds: 120 } });
 });
+
+const verifySchema = z.object({
+  verified: z.boolean(),
+});
+
+/**
+ * PATCH /api/admin/dokumen/:userId/verify — tandai dokumen KTP+SIM
+ * penyewa sebagai terverifikasi/belum. Sebelumnya field ini (dokumenVerified)
+ * cuma pernah DITAMPILKAN di badge profil customer, tidak pernah ada
+ * endpoint untuk benar-benar mengubahnya — jadi badge "Terverifikasi"
+ * mustahil pernah menyala untuk siapa pun. Endpoint ini melengkapi itu.
+ */
+adminDokumenRouter.patch('/:userId/verify', async (req, res) => {
+  const parsed = verifySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Data tidak valid' });
+    return;
+  }
+
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    res.status(403).json({ error: 'Instansi tidak ditemukan untuk admin ini' });
+    return;
+  }
+
+  const profile = await prisma.profile
+    .update({
+      where: { id: req.params.userId, instansiId },
+      data: { dokumenVerified: parsed.data.verified },
+      select: { id: true, dokumenVerified: true },
+    })
+    .catch(() => null);
+
+  if (!profile) {
+    res.status(404).json({ error: 'Pengguna tidak ditemukan' });
+    return;
+  }
+
+  res.json({ data: profile });
+});

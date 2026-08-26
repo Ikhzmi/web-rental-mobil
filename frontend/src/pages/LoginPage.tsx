@@ -1,7 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Loader2, X, Mail } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
 import { useTheme } from '../hooks/useTheme';
@@ -36,6 +36,31 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Lupa password — sebelumnya tidak ada entry point sama sekali dari
+  // halaman ini untuk mulai alur reset password (satu-satunya cara
+  // sebelumnya cuma dari halaman Profil, yang perlu login dulu — kontradiktif
+  // untuk skenario "lupa password").
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+
+  const handleForgotPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotError(null);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    });
+    setForgotLoading(false);
+    if (resetError) {
+      setForgotError(resetError.message);
+      return;
+    }
+    setForgotSent(true);
+  };
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -220,7 +245,16 @@ export default function LoginPage() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-stone-600'}`}>Password</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={`text-xs ${isDark ? 'text-white/60' : 'text-stone-600'}`}>Password</label>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                className={`text-xs hover:underline ${isDark ? 'text-white/50 hover:text-white' : 'text-stone-500 hover:text-stone-900'}`}
+              >
+                Lupa password?
+              </button>
+            </div>
             <input
               type="password"
               required
@@ -320,6 +354,81 @@ export default function LoginPage() {
           </Link>
         </motion.p>
       </motion.div>
+
+      {/* Modal lupa password */}
+      <AnimatePresence>
+        {showForgotModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setShowForgotModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full max-w-sm rounded-2xl overflow-hidden p-6 ${isDark ? 'login-card-dark' : 'login-card-light'}`}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h2 className={`font-playfair italic text-xl ${isDark ? 'text-white' : 'text-stone-900'}`}>
+                  Reset Password
+                </h2>
+                <button
+                  onClick={() => setShowForgotModal(false)}
+                  className={isDark ? 'text-white/40 hover:text-white' : 'text-stone-400 hover:text-stone-700'}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {forgotSent ? (
+                <div className="text-center py-4">
+                  <Mail size={28} className={`mx-auto mb-3 ${isDark ? 'text-white/40' : 'text-stone-400'}`} />
+                  <p className={`text-sm ${isDark ? 'text-white/70' : 'text-stone-600'}`}>
+                    Kalau email <strong>{forgotEmail}</strong> terdaftar, link reset password sudah dikirim. Cek inbox (dan folder spam).
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotPassword} className="flex flex-col gap-4">
+                  <p className={`text-sm ${isDark ? 'text-white/50' : 'text-stone-500'}`}>
+                    Masukkan email akunmu, kami kirim link untuk buat password baru.
+                  </p>
+                  {forgotError && (
+                    <p className={`text-xs px-3 py-2 rounded-xl ${
+                      isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'
+                    }`}>
+                      {forgotError}
+                    </p>
+                  )}
+                  <input
+                    type="email"
+                    required
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="nama@email.com"
+                    className={`w-full rounded-xl px-4 py-3 text-sm transition-all duration-200 focus:outline-none ${
+                      isDark ? 'login-input-dark' : 'login-input-light'
+                    }`}
+                  />
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className={`py-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2 ${
+                      isDark ? 'glass-cta-dark' : 'glass-booking-btn-light'
+                    }`}
+                  >
+                    {forgotLoading && <Loader2 size={16} className="animate-spin" />}
+                    Kirim Link Reset
+                  </button>
+                </form>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </LoginBackgroundV4>
   );
 }

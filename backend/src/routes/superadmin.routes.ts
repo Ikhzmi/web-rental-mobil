@@ -831,6 +831,184 @@ superadminRouter.get('/disbursements', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/superadmin/instansi-saldo
+ * Saldo tertunda per instansi aktif — booking berstatus 'selesai' yang
+ * belum masuk batch disbursement manapun. Dipakai untuk memilih instansi
+ * saat membuat pencairan dana baru secara manual.
+ */
+superadminRouter.get('/instansi-saldo', async (_req, res) => {
+  try {
+    const instansiList = await prisma.instansi.findMany({
+      where: { status: 'aktif' },
+      select: { id: true, namaInstansi: true, rekeningBank: true, komisiPlatformPersen: true },
+      orderBy: { namaInstansi: 'asc' },
+    });
+
+    const result = await Promise.all(
+      instansiList.map(async (inst) => {
+        const bookings = await prisma.booking.findMany({
+          where: {
+            car: { instansiId: inst.id },
+            status: 'selesai',
+            disbursementItems: { none: {} },
+          },
+          select: { id: true, totalHarga: true },
+        });
+        const saldoTertunda = bookings.reduce((sum, b) => sum + Number(b.totalHarga), 0);
+        return {
+          id: inst.id,
+          namaInstansi: inst.namaInstansi,
+          rekeningBank: inst.rekeningBank,
+          komisiPlatformPersen: Number(inst.komisiPlatformPersen),
+          saldoTertunda,
+          jumlahBookingTertunda: bookings.length,
+        };
+      })
+    );
+
+    // Instansi dengan saldo tertunda ditampilkan lebih dulu
+    result.sort((a, b) => b.saldoTertunda - a.saldoTertunda);
+
+    res.json({ data: result });
+  } catch (error) {
+    console.error('GET /api/superadmin/instansi-saldo error:', error);
+    res.status(500).json({ error: 'Gagal mengambil data saldo instansi' });
+  }
+});
+
+const createDisbursementSchema = z.object({
+  instansiId: z.string().uuid(),
+  bankTransferId: z.string().trim().min(1).optional(),
+});
+
+/**
+ * POST /api/superadmin/disbursements
+ * Membuat batch pencairan dana MANUAL untuk satu instansi — mengambil
+ * semua booking 'selesai' milik instansi tsb yang belum pernah masuk
+ * disbursement lain, lalu membungkusnya jadi satu Disbursement baru
+ * berstatus 'diproses'. Transfer bank dilakukan manual di luar sistem;
+ * SuperAdmin menandai hasilnya lewat PATCH /disbursements/:id/status.
+ */
+superadminRouter.post('/disbursements', async (req, res) => {
+  const parsed = createDisbursementSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
+    return;
+  }
+  const { instansiId, bankTransferId } = parsed.data;
+
+  try {
+    const instansi = await prisma.instansi.findUnique({ where: { id: instansiId } });
+    if (!instansi) {
+      res.status(404).json({ error: 'Instansi tidak ditemukan' });
+      return;
+    }
+
+    const pendingBookings = await prisma.booking.findMany({
+      where: {
+        car: { instansiId },
+        status: 'selesai',
+        disbursementItems: { none: {} },
+      },
+      select: { id: true, totalHarga: true },
+    });
+
+    if (pendingBookings.length === 0) {
+      res.status(400).json({ error: 'Tidak ada saldo tertunda untuk instansi ini' });
+      return;
+    }
+
+    const jumlahKotor = pendingBookings.reduce((sum, b) => sum + Number(b.totalHarga), 0);
+    const komisiPersen = Number(instansi.komisiPlatformPersen);
+    const komisiPlatform = Math.round(jumlahKotor * (komisiPersen / 100));
+    const jumlahBersih = jumlahKotor - komisiPlatform;
+
+    const disbursement = await prisma.$transaction(async (tx) => {
+      const created = await tx.disbursement.create({
+        data: {
+          instansiId,
+          jumlahKotor,
+          komisiPlatform,
+          jumlahBersih,
+          status: 'diproses',
+          bankTransferId: bankTransferId ?? null,
+        },
+      });
+      await tx.disbursementItem.createMany({
+        data: pendingBookings.map((b) => ({
+          disbursementId: created.id,
+          bookingId: b.id,
+          jumlahKotor: b.totalHarga,
+        })),
+      });
+      return tx.disbursement.findUnique({
+        where: { id: created.id },
+        include: {
+          instansi: { select: { id: true, namaInstansi: true } },
+          items: { select: { id: true, bookingId: true, jumlahKotor: true } },
+        },
+      });
+    });
+
+    res.status(201).json({ data: disbursement });
+  } catch (error) {
+    console.error('POST /api/superadmin/disbursements error:', error);
+    res.status(500).json({ error: 'Gagal membuat pencairan dana' });
+  }
+});
+
+const updateDisbursementStatusSchema = z.object({
+  status: z.enum(['berhasil', 'gagal']),
+  bankTransferId: z.string().trim().min(1).optional(),
+});
+
+/**
+ * PATCH /api/superadmin/disbursements/:id/status
+ * Menandai hasil transfer manual. Hanya bisa dilakukan dari status
+ * 'diproses' — sekali ditandai berhasil/gagal, batch dianggap final
+ * (kalau gagal dan mau diulang, buat batch baru; booking yang sama tetap
+ * bisa dipilih lagi karena disbursementItems dari batch gagal tidak
+ * dihapus, jadi butuh keputusan eksplisit alih-alih auto-retry diam-diam).
+ */
+superadminRouter.patch('/disbursements/:id/status', async (req, res) => {
+  const parsed = updateDisbursementStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
+    return;
+  }
+
+  try {
+    const existing = await prisma.disbursement.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      res.status(404).json({ error: 'Pencairan tidak ditemukan' });
+      return;
+    }
+    if (existing.status !== 'diproses') {
+      res.status(409).json({ error: `Pencairan ini sudah berstatus '${existing.status}', tidak bisa diubah lagi` });
+      return;
+    }
+
+    const updated = await prisma.disbursement.update({
+      where: { id: req.params.id },
+      data: {
+        status: parsed.data.status,
+        ...(parsed.data.bankTransferId && { bankTransferId: parsed.data.bankTransferId }),
+        ...(parsed.data.status === 'berhasil' && { dicairkanPada: new Date() }),
+      },
+      include: {
+        instansi: { select: { id: true, namaInstansi: true } },
+        items: { select: { id: true, bookingId: true, jumlahKotor: true } },
+      },
+    });
+
+    res.json({ data: updated });
+  } catch (error) {
+    console.error('PATCH /api/superadmin/disbursements/:id/status error:', error);
+    res.status(500).json({ error: 'Gagal memperbarui status pencairan' });
+  }
+});
+
 // ============================================================================
 // DASHBOARD ANALYTICS ENDPOINTS
 // ============================================================================
