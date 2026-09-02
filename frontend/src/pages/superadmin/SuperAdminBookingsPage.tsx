@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Search, Car, Clock, Building2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ClipboardList, Search, Car, Clock, Building2, ChevronLeft, ChevronRight, Loader2, X, Mail, Phone, MapPin, User } from 'lucide-react';
 import { api, type StatusBooking, type SuperAdminBookingItem } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
@@ -36,6 +36,154 @@ function StatusBadge({ status, isDark }: { status: string; isDark: boolean }) {
   );
 }
 
+/**
+ * Modal detail booking — sebelumnya SuperAdmin sama sekali tidak bisa
+ * drill-down dari daftar booking ke satu booking pun. Read-only (murni
+ * pengawasan lintas-instansi, bukan untuk mengubah status — itu tetap
+ * wewenang Admin instansi terkait lewat AdminPesananDetailPage).
+ */
+function BookingDetailModal({ bookingId, onClose, isDark }: { bookingId: string; onClose: () => void; isDark: boolean }) {
+  const { data: booking, isLoading } = useQuery({
+    queryKey: ['superadmin-booking-detail', bookingId],
+    queryFn: () => api.getSuperAdminBookingDetail(bookingId),
+  });
+
+  const cardClass = isDark ? 'login-card-dark' : 'login-card-light';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full max-w-lg rounded-2xl overflow-hidden my-10 ${cardClass}`}
+      >
+        <div className={`px-6 py-5 flex items-center justify-between ${isDark ? 'border-b border-white/10' : 'border-b border-[#D4CFC7]/40'}`}>
+          <h2 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Detail Pesanan</h2>
+          <button
+            onClick={onClose}
+            className={`p-2 rounded-lg transition-colors ${isDark ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-6">
+          {isLoading || !booking ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className={`h-14 rounded-xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex items-center gap-3">
+                <div className={`w-16 h-16 rounded-xl overflow-hidden shrink-0 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
+                  {booking.car?.images?.[0]?.url ? (
+                    <img src={booking.car.images[0].url} alt={booking.car.nama} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Car size={20} className={isDark ? 'text-white/20' : 'text-slate-300'} />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.car?.nama}</p>
+                  <p className={`text-xs flex items-center gap-1 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                    <Building2 size={11} /> {booking.car?.instansi?.namaInstansi}
+                  </p>
+                </div>
+                <span className={`ml-auto shrink-0 text-xs px-2.5 py-1 rounded-full font-medium ${getBookingStatusWithIcon(booking.status, isDark).bg}`}>
+                  {getBookingStatusWithIcon(booking.status, isDark).label}
+                </span>
+              </div>
+
+              <div className={`rounded-xl p-4 space-y-2.5 text-sm ${isDark ? 'bg-white/[0.03]' : 'bg-slate-50'}`}>
+                <div className="flex items-center gap-2">
+                  <User size={13} className={isDark ? 'text-white/40' : 'text-slate-400'} />
+                  <span className={isDark ? 'text-white/80' : 'text-slate-700'}>{booking.profile?.nama}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail size={13} className={isDark ? 'text-white/40' : 'text-slate-400'} />
+                  <span className={isDark ? 'text-white/80' : 'text-slate-700'}>{booking.profile?.email}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone size={13} className={isDark ? 'text-white/40' : 'text-slate-400'} />
+                  <span className={isDark ? 'text-white/80' : 'text-slate-700'}>{booking.profile?.noHp}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin size={13} className={isDark ? 'text-white/40' : 'text-slate-400'} />
+                  <span className={isDark ? 'text-white/80' : 'text-slate-700'}>{booking.lokasiAmbil} → {booking.lokasiKembali}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Periode Sewa</span>
+                <span className={isDark ? 'text-white' : 'text-slate-900'}>
+                  {formatTanggal(booking.tanggalMulai)} — {formatTanggal(booking.tanggalSelesai)}
+                </span>
+              </div>
+
+              {booking.addons && booking.addons.length > 0 && (
+                <div>
+                  <p className={`text-xs mb-2 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Add-on</p>
+                  <div className="space-y-1.5">
+                    {booking.addons.map((a) => (
+                      <div key={a.id} className="flex items-center justify-between text-sm">
+                        <span className={isDark ? 'text-white/70' : 'text-slate-600'}>{a.jenis}</span>
+                        <span className={isDark ? 'text-white/70' : 'text-slate-600'}>{formatRupiah(Number(a.harga))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className={`flex items-center justify-between pt-3 ${isDark ? 'border-t border-white/10' : 'border-t border-slate-200'}`}>
+                <span className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>Total</span>
+                <span className={`font-bold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {formatRupiah(Number(booking.totalHarga))}
+                </span>
+              </div>
+
+              {booking.payment && (
+                <div className={`rounded-xl p-4 text-sm ${isDark ? 'bg-white/[0.03]' : 'bg-slate-50'}`}>
+                  <p className={`text-xs mb-2 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Pembayaran</p>
+                  <div className="flex items-center justify-between">
+                    <span className={isDark ? 'text-white/70' : 'text-slate-600'}>{booking.payment.metodeBayar}</span>
+                    <span className={isDark ? 'text-white/70' : 'text-slate-600'}>{booking.payment.status}</span>
+                  </div>
+                </div>
+              )}
+
+              {booking.statusLogs && booking.statusLogs.length > 0 && (
+                <div>
+                  <p className={`text-xs mb-2 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Riwayat Status</p>
+                  <div className="space-y-1.5">
+                    {booking.statusLogs.map((log) => (
+                      <div key={log.id} className={`text-xs flex items-center gap-2 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                        <span>{log.statusLama} → {log.statusBaru}</span>
+                        <span className="opacity-60">· {formatTanggal(log.createdAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function SuperAdminBookingsPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -43,6 +191,7 @@ export default function SuperAdminBookingsPage() {
   const [filterStatus, setFilterStatus] = useState<StatusBooking | ''>('');
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const itemsPerPage = 10;
 
   // Fetch bookings from API
@@ -185,7 +334,8 @@ export default function SuperAdminBookingsPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.03 }}
-              className={`rounded-2xl overflow-hidden ${getGlassCardClass(isDark)}`}
+              onClick={() => setSelectedBookingId(booking.id)}
+              className={`rounded-2xl overflow-hidden cursor-pointer transition-transform hover:scale-[1.01] ${getGlassCardClass(isDark)}`}
             >
               <div className="p-4 sm:p-5">
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -304,6 +454,16 @@ export default function SuperAdminBookingsPage() {
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {selectedBookingId && (
+          <BookingDetailModal
+            bookingId={selectedBookingId}
+            onClose={() => setSelectedBookingId(null)}
+            isDark={isDark}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

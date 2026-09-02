@@ -84,6 +84,40 @@ instansiRouter.use(verifySupabaseToken, async (req, res, next) => {
 });
 
 /**
+ * GET /api/instansi/profile
+ * Info dasar instansi milik admin yang login, termasuk rate komisi
+ * platform. Sebelumnya Admin TIDAK PUNYA cara sama sekali melihat rate
+ * komisinya sendiri (padahal otomatis dipotong tiap pencairan dana) —
+ * cuma SuperAdmin yang bisa lihat/ubah lewat halaman kelola instansi.
+ */
+instansiRouter.get('/profile', async (req, res) => {
+  const instansiId = req.instansiScope!.instansiId;
+
+  try {
+    const instansi = await prisma.instansi.findUnique({
+      where: { id: instansiId },
+      select: {
+        id: true,
+        namaInstansi: true,
+        status: true,
+        komisiPlatformPersen: true,
+        rekeningBank: true,
+      },
+    });
+
+    if (!instansi) {
+      res.status(404).json({ error: 'Instansi tidak ditemukan' });
+      return;
+    }
+
+    res.json({ data: instansi });
+  } catch (error) {
+    console.error('GET /api/instansi/profile error:', error);
+    res.status(500).json({ error: 'Gagal mengambil data instansi' });
+  }
+});
+
+/**
  * GET /api/instansi/dashboard
  * Statistik ringkasan milik instansi sendiri
  */

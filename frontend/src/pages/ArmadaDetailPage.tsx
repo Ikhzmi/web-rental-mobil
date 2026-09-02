@@ -6,7 +6,7 @@ import 'react-day-picker/style.css';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Gauge, Users, Loader2, ArrowLeft, CheckCircle, Building2, Calendar as CalendarIcon, ShieldCheck, Star } from 'lucide-react';
+import { Gauge, Users, Loader2, ArrowLeft, CheckCircle, Building2, Calendar as CalendarIcon, ShieldCheck, Star, Wind, Music, Sparkles, Fuel, FileText, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api, type Kategori, type TipeSewa } from '../lib/api';
 import { supabase } from '../lib/supabase';
@@ -60,6 +60,18 @@ export default function ArmadaDetailPage() {
     queryFn: () => api.getCarAvailability(id!),
     enabled: !!id,
   });
+
+  // Rating & ulasan asli — sebelumnya di sini ada badge "5.0 bintang"
+  // hardcode yang tidak pernah terhubung ke data review sungguhan.
+  const reviewsQuery = useQuery({
+    queryKey: ['car-reviews', id],
+    queryFn: () => api.listReviews(id!),
+    enabled: !!id,
+  });
+  const reviews = reviewsQuery.data ?? [];
+  const avgRating = reviews.length > 0
+    ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+    : 0;
 
   useGSAP(
     () => {
@@ -182,12 +194,6 @@ export default function ArmadaDetailPage() {
               </div>
               <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Penyedia rental terpercaya</p>
             </div>
-            <div className="hidden sm:flex items-center gap-1.5">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Star key={i} size={14} className="text-yellow-400 fill-yellow-400" />
-              ))}
-              <span className={`text-sm ml-1 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>5.0</span>
-            </div>
           </motion.div>
         )}
 
@@ -267,18 +273,33 @@ export default function ArmadaDetailPage() {
               }`}>
                 {KATEGORI_LABEL[car.kategori]}
               </p>
-              <h1 className={`font-playfair italic text-3xl sm:text-4xl lg:text-5xl mb-6 ${
-                isDark ? 'text-white' : 'text-slate-900'
-              }`}>
-                {car.nama}
-              </h1>
+              <div className="flex items-center flex-wrap gap-3 mb-6">
+                <h1 className={`font-playfair italic text-3xl sm:text-4xl lg:text-5xl ${
+                  isDark ? 'text-white' : 'text-slate-900'
+                }`}>
+                  {car.nama}
+                </h1>
+                {reviews.length > 0 && (
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${
+                    isDark ? 'bg-white/10' : 'bg-slate-100'
+                  }`}>
+                    <Star size={14} className="text-yellow-400 fill-yellow-400" />
+                    <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      {avgRating.toFixed(1)}
+                    </span>
+                    <span className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                      ({reviews.length} ulasan)
+                    </span>
+                  </div>
+                )}
+              </div>
 
               {/* Specs Grid */}
               <div className="grid grid-cols-3 gap-4 mb-6">
                 {[
                   { icon: Gauge, label: 'Transmisi', value: car.transmisi },
                   { icon: Users, label: 'Kapasitas', value: `${car.kapasitasKursi} Kursi` },
-                  { icon: ShieldCheck, label: 'Asuransi', value: 'Full' },
+                  { icon: ShieldCheck, label: 'Asuransi', value: 'Full Cover' },
                 ].map((spec, index) => (
                   <motion.div
                     key={spec.label}
@@ -304,13 +325,84 @@ export default function ArmadaDetailPage() {
                 ))}
               </div>
 
+              {/* Fasilitas & Keunggulan Armada */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.45 }}
+                className={`rounded-xl p-5 mb-6 ${
+                  isDark
+                    ? 'sa-glass-light'
+                    : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm'
+                }`}
+              >
+                <h3 className={`text-sm font-semibold mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  Fasilitas & Keunggulan Unit
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { icon: Wind, text: 'AC Dingin Merata' },
+                    { icon: Music, text: 'Audio & Bluetooth' },
+                    { icon: Sparkles, text: 'Unit Bersih & Wangi' },
+                    { icon: Fuel, text: 'Mesin Irit BBM' },
+                  ].map((feat) => (
+                    <div
+                      key={feat.text}
+                      className={`flex items-center gap-2 p-2.5 rounded-lg text-xs font-medium ${
+                        isDark ? 'bg-white/5 text-white/80' : 'bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <feat.icon size={15} className="text-orange-500 shrink-0" />
+                      <span>{feat.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+
+              {/* Syarat & Ketentuan Sewa Praktis */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.55 }}
+                className={`rounded-xl p-5 mb-6 ${
+                  isDark
+                    ? 'bg-amber-500/10 border border-amber-500/20'
+                    : 'bg-amber-50/70 border border-amber-200/80 shadow-sm'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText size={18} className="text-amber-500" />
+                  <h3 className={`text-sm font-semibold ${isDark ? 'text-amber-400' : 'text-amber-800'}`}>
+                    Persyaratan Sewa Mudah
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className={`flex items-start gap-1.5 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>e-KTP Asli Penyewa</span>
+                  </div>
+                  <div className={`flex items-start gap-1.5 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>SIM A Aktif (Lepas Kunci)</span>
+                  </div>
+                  <div className={`flex items-start gap-1.5 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>Durasi sewa dihitung per 24 jam</span>
+                  </div>
+                  <div className={`flex items-start gap-1.5 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>Deposit / jaminan dikembalikan utuh</span>
+                  </div>
+                </div>
+              </motion.div>
+
               {/* Description */}
               {car.deskripsi && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.6 }}
-                  className={`rounded-xl p-6 ${
+                  className={`rounded-xl p-6 mb-6 ${
                     isDark
                       ? 'sa-glass-light'
                       : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm'
@@ -323,6 +415,73 @@ export default function ArmadaDetailPage() {
                   />
                 </motion.div>
               )}
+
+              {/* Ulasan — data asli dari customer yang sudah selesai sewa
+                  mobil ini (lihat AkunPesananDetailPage.tsx). Kosong dulu
+                  kalau belum ada, bukan dipaksa isi data palsu. */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.65 }}
+                className={`animate-section rounded-xl p-6 ${
+                  isDark
+                    ? 'sa-glass-light'
+                    : 'bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm'
+                }`}
+              >
+                <h3 className={`font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  Ulasan {reviews.length > 0 && `(${reviews.length})`}
+                </h3>
+                {reviewsQuery.isLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2].map((i) => (
+                      <div key={i} className={`h-16 rounded-lg animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                    ))}
+                  </div>
+                ) : reviews.length === 0 ? (
+                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                    Belum ada ulasan untuk mobil ini.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {reviews.map((review) => (
+                      <div
+                        key={review.id}
+                        className={`pb-4 last:pb-0 border-b last:border-0 ${
+                          isDark ? 'border-white/10' : 'border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${
+                              isDark ? 'bg-white/10 text-white/80' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {(review.profile?.nama ?? '?').charAt(0).toUpperCase()}
+                            </div>
+                            <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                              {review.profile?.nama ?? 'Pelanggan'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map((s) => (
+                              <Star
+                                key={s}
+                                size={12}
+                                className={s <= review.rating ? 'fill-yellow-400 text-yellow-400' : isDark ? 'text-white/15' : 'text-slate-200'}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        {review.komentar && (
+                          <p className={`text-sm leading-relaxed ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                            {review.komentar}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
             </motion.div>
           </div>
 
@@ -472,6 +631,30 @@ export default function ArmadaDetailPage() {
             </motion.div>
           </div>
         </div>
+      </div>
+
+      {/* Floating Mobile Bottom Action Bar (Hanya tampil di viewport mobile) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#121212]/95 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 p-3.5 px-5 shadow-2xl flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[11px] text-slate-500 dark:text-white/40">Mulai dari</p>
+          <div className="flex items-baseline gap-1">
+            <span className="text-lg font-bold text-slate-900 dark:text-white">
+              {formatRupiah(car.hargaPerHari)}
+            </span>
+            <span className="text-xs text-slate-400">/hari</span>
+          </div>
+        </div>
+        <button
+          onClick={handleSewaSekarang}
+          disabled={car.status !== 'tersedia'}
+          className={`py-3 px-6 rounded-xl font-semibold text-sm transition-all shadow-lg ${
+            car.status === 'tersedia'
+              ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/25 active:scale-95'
+              : 'bg-slate-300 dark:bg-white/10 text-slate-500 dark:text-white/40 cursor-not-allowed'
+          }`}
+        >
+          {car.status === 'tersedia' ? 'Sewa Sekarang' : 'Tidak Tersedia'}
+        </button>
       </div>
 
       <style>{`

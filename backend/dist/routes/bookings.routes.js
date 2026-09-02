@@ -7,11 +7,13 @@ exports.bookingsRouter = void 0;
 const express_1 = require("express");
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const zod_1 = require("zod");
+const client_1 = require("@prisma/client");
 const prisma_1 = require("../lib/prisma");
 const verifySupabaseToken_1 = require("../middleware/verifySupabaseToken");
 const availability_service_1 = require("../services/availability.service");
 const pricing_service_1 = require("../services/pricing.service");
-const bayargg_service_1 = require("../services/bayargg.service");
+const pakasir_service_1 = require("../services/pakasir.service");
+const webhooks_routes_1 = require("./webhooks.routes");
 exports.bookingsRouter = (0, express_1.Router)();
 exports.bookingsRouter.use(verifySupabaseToken_1.verifySupabaseToken);
 // SECURITY: Rate limiting for payment endpoint
@@ -38,15 +40,24 @@ const createBookingSchema = zod_1.z.object({
     }))
         .default([]),
 });
-// SECURITY: Payment method validation (bayar.gg supported methods)
+// SECURITY: Payment method validation (Pakasir supported methods)
 const ALLOWED_PAYMENT_METHODS = [
-    // Virtual Account
+    'qris', // QRIS (GoPay, OVO, DANA, ShopeePay, LinkAja, dll)
     'bri_va', // BRI Virtual Account
-    'livin_va', // Livin by Mandiri
-    // QRIS
-    'qris', // QRIS (GoPay, OVO, DANA, ShopeePay, dll)
-    // E-Wallet
+    'bni_va', // BNI Virtual Account
+    'cimb_niaga_va', // CIMB Niaga VA
+    'permata_va', // Permata VA
+    'maybank_va', // Maybank VA
+    'sampoerna_va', // Bank Sahabat Sampoerna VA
+    'bnc_va', // Bank Neo Commerce VA
+    'artha_graha_va', // Bank Artha Graha VA
+    'atm_bersama_va', // ATM Bersama VA
+    'bca_va', // Bank BCA (via ATM Bersama / Prima)
+    'mandiri_va', // Bank Mandiri (via ATM Bersama)
     'ovo', // OVO
+    'dana', // DANA
+    'shopeepay', // ShopeePay
+    'gopay', // GoPay
 ];
 function isValidPaymentMethod(method) {
     return ALLOWED_PAYMENT_METHODS.includes(method);
@@ -72,12 +83,29 @@ exports.bookingsRouter.post('/', async (req, res) => {
         return;
     }
     try {
-        // SECURITY: Use Serializable isolation level to prevent race conditions
-        // This ensures that concurrent booking requests for the same car/date
-        // are properly serialized and no double-booking can occur
-        const booking = await prisma_1.prisma.$transaction(async (tx) => {
+        // SECURITY: Serializable isolation level benar-benar dipasang di sini
+        // (sebelumnya komentar ini ada tapi isolationLevel TIDAK PERNAH di-set,
+        // sehingga Prisma diam-diam pakai default PostgreSQL yaitu Read
+        // Committed — di mana dua transaksi concurrent BISA SAMA-SAMA lolos
+        // pengecekan isCarAvailable() sebelum salah satunya commit, alias
+        // double-booking tetap mungkin terjadi walau kelihatannya "aman"
+        // karena dibungkus $transaction).
+        //
+        // Konsekuensi pakai Serializable: PostgreSQL bisa GAGALKAN salah satu
+        // transaksi yang bentrok saat commit (error P2034), bukan mencegahnya
+        // di awal — makanya perlu retry loop di bawah ini, ini perilaku normal
+        // dan yang diharapkan dari Serializable isolation, bukan bug.
+        const MAX_RETRY = 3;
+        let booking;
+        let lastError;
+        async function createBookingTx(tx) {
             const car = await tx.car.findUnique({ where: { id: carId } });
-            if (!car || car.status !== 'tersedia') {
+            // PENTING: sebelumnya hanya cek car.status, TIDAK PERNAH cek
+            // statusApproval — ini lapisan pertahanan terakhir (endpoint katalog
+            // & detail sudah diperbaiki juga di cars.routes.ts) supaya mobil yang
+            // belum disetujui SuperAdmin benar-benar tidak bisa dibooking, bahkan
+            // kalau ID-nya didapat dari luar jalur normal (mis. link lama/bocor).
+            if (!car || car.status !== 'tersedia' || car.statusApproval !== 'disetujui') {
                 throw new Error('MOBIL_TIDAK_TERSEDIA');
             }
             const available = await (0, availability_service_1.isCarAvailable)(tx, { carId, tanggalMulai, tanggalSelesai });
@@ -97,7 +125,7 @@ exports.bookingsRouter.post('/', async (req, res) => {
                     totalAddon: rincian.totalAddon,
                     totalHarga: rincian.totalHarga,
                     // v2: Status changed from 'pending' to 'menunggu_pembayaran'
-                    // because now waiting for DOKU confirmation, not manual admin verification
+                    // because now waiting for payment gateway confirmation, not manual admin verification
                     status: 'menunggu_pembayaran',
                     addons: {
                         createMany: {
@@ -107,7 +135,31 @@ exports.bookingsRouter.post('/', async (req, res) => {
                 },
                 include: { addons: true, car: true },
             });
-        });
+        }
+        for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+            try {
+                booking = await prisma_1.prisma.$transaction(createBookingTx, {
+                    isolationLevel: client_1.Prisma.TransactionIsolationLevel.Serializable,
+                });
+                lastError = undefined;
+                break;
+            }
+            catch (err) {
+                lastError = err;
+                // P2034 = write conflict/deadlock terdeteksi PostgreSQL di bawah
+                // Serializable isolation — ini kasus yang MEMANG harus di-retry,
+                // bukan dianggap gagal permanen.
+                const isSerializationConflict = err instanceof client_1.Prisma.PrismaClientKnownRequestError && err.code === 'P2034';
+                if (!isSerializationConflict || attempt === MAX_RETRY) {
+                    throw err;
+                }
+                // Backoff singkat sebelum retry supaya tidak langsung tabrakan lagi
+                await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
+            }
+        }
+        if (!booking) {
+            throw lastError ?? new Error('GAGAL_SETELAH_RETRY');
+        }
         res.status(201).json({ data: booking });
     }
     catch (err) {
@@ -117,6 +169,14 @@ exports.bookingsRouter.post('/', async (req, res) => {
         }
         if (err instanceof Error && err.message === 'MOBIL_TIDAK_TERSEDIA') {
             res.status(409).json({ error: 'Mobil ini sedang tidak tersedia untuk disewa' });
+            return;
+        }
+        if (err instanceof client_1.Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
+            // Sudah di-retry MAX_RETRY kali dan tetap bentrok dengan booking lain
+            // yang diproses persis bersamaan — beri tahu user untuk coba lagi,
+            // bukan MOBIL_TIDAK_TERSEDIA yang menyesatkan (mobilnya tersedia,
+            // cuma sedang diperebutkan).
+            res.status(409).json({ error: 'Terjadi permintaan booking bersamaan untuk mobil ini, silakan coba lagi' });
             return;
         }
         console.error('POST /api/bookings error:', err);
@@ -146,7 +206,7 @@ exports.bookingsRouter.get('/:id', async (req, res) => {
             car: true,
             addons: true,
             statusLogs: { orderBy: { createdAt: 'asc' } },
-            profile: { select: { nama: true, email: true, noHp: true } },
+            profile: { select: { nama: true, email: true, noHp: true, dokumenVerified: true } },
         },
     });
     if (!booking) {
@@ -245,24 +305,24 @@ exports.bookingsRouter.post('/:id/checkout', async (req, res) => {
                 data: {
                     bookingId: booking.id,
                     status: booking.payment.status,
-                    invoiceUrl: (0, bayargg_service_1.getBayarGGPaymentUrl)(booking.payment.gatewayInvoiceId),
+                    invoiceUrl: (0, pakasir_service_1.getPakasirPaymentUrl)(booking.payment.gatewayInvoiceId, Number(booking.totalHarga)),
                     invoiceId: booking.payment.gatewayInvoiceId,
-                    gateway: 'bayar.gg',
+                    gateway: 'pakasir',
                     message: 'Invoice sudah dibuat sebelumnya',
                 },
             });
             return;
         }
-        // Check if bayar.gg is configured
-        if (!(0, bayargg_service_1.isBayarGGConfigured)()) {
+        // Check if Pakasir is configured
+        if (!(0, pakasir_service_1.isPakasirConfigured)()) {
             res.status(503).json({
                 error: 'Payment gateway belum dikonfigurasi',
-                hint: 'Hubungi admin untuk setup bayar.gg',
+                hint: 'Hubungi admin untuk setup Pakasir',
             });
             return;
         }
-        // Create bayar.gg payment
-        const result = await (0, bayargg_service_1.createBayarGGPayment)({
+        // Create Pakasir payment
+        const result = await (0, pakasir_service_1.createPakasirPayment)({
             bookingId: booking.id,
             amount: Number(booking.totalHarga),
             customerEmail: booking.profile.email,
@@ -280,7 +340,7 @@ exports.bookingsRouter.post('/:id/checkout', async (req, res) => {
                 bookingId: booking.id,
                 gatewayInvoiceId: result.invoiceId,
                 gatewayOrderId: result.invoiceId,
-                metodeBayar: 'virtual_account',
+                metodeBayar: 'qris',
                 jumlah: Number(booking.totalHarga),
                 status: 'pending',
             },
@@ -292,7 +352,7 @@ exports.bookingsRouter.post('/:id/checkout', async (req, res) => {
                 invoiceId: result.invoiceId,
                 qrisString: result.qrisString,
                 amount: Number(booking.totalHarga),
-                gateway: 'bayar.gg',
+                gateway: 'pakasir',
                 expiresAt: result.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             },
         });
@@ -324,6 +384,33 @@ exports.bookingsRouter.get('/:id/payment-status', async (req, res) => {
             res.status(403).json({ error: 'Tidak berhak mengakses booking ini' });
             return;
         }
+        // Active status sync: If booking is awaiting payment and payment invoice exists, query Pakasir API directly
+        if (booking.status === 'menunggu_pembayaran' && booking.payment?.gatewayInvoiceId) {
+            const pakasirStatus = await (0, pakasir_service_1.getPakasirPaymentStatus)(booking.payment.gatewayInvoiceId, Number(booking.totalHarga));
+            if (pakasirStatus.success && pakasirStatus.status) {
+                const normStatus = pakasirStatus.status.toLowerCase();
+                if (normStatus === 'completed' || normStatus === 'paid' || normStatus === 'success') {
+                    await (0, webhooks_routes_1.handlePakasirPaymentPaid)(booking.payment.id, booking.id, booking.payment.gatewayInvoiceId, undefined, pakasirStatus.totalPayment || (pakasirStatus.amount ? Number(pakasirStatus.amount) : undefined));
+                    // Re-fetch updated booking & payment data from database
+                    const updatedBooking = await prisma_1.prisma.booking.findUnique({
+                        where: { id: bookingId },
+                        include: { payment: true },
+                    });
+                    if (updatedBooking) {
+                        booking.status = updatedBooking.status;
+                        if (booking.payment && updatedBooking.payment) {
+                            booking.payment.status = updatedBooking.payment.status;
+                        }
+                    }
+                }
+                else if (normStatus === 'expired') {
+                    await (0, webhooks_routes_1.handlePakasirPaymentExpired)(booking.payment.id, booking.id);
+                }
+            }
+        }
+        const paymentUrl = booking.payment?.gatewayInvoiceId
+            ? (0, pakasir_service_1.getPakasirPaymentUrl)(booking.payment.gatewayInvoiceId, Number(booking.totalHarga))
+            : null;
         res.json({
             data: {
                 bookingId: booking.id,
@@ -331,7 +418,8 @@ exports.bookingsRouter.get('/:id/payment-status', async (req, res) => {
                 paymentStatus: booking.payment?.status ?? null,
                 paymentId: booking.payment?.id ?? null,
                 gatewayInvoiceId: booking.payment?.gatewayInvoiceId ?? null,
-                gateway: 'bayar.gg',
+                paymentUrl: paymentUrl,
+                gateway: 'pakasir',
             },
         });
     }
@@ -400,30 +488,15 @@ exports.bookingsRouter.post('/:id/payment', paymentLimiter, async (req, res) => 
             });
             return;
         }
-        // Check if payment already exists
-        if (booking.payment?.gatewayInvoiceId) {
-            // Return existing payment info
-            res.json({
-                data: {
-                    bookingId: booking.id,
-                    gatewayInvoiceId: booking.payment.gatewayInvoiceId,
-                    paymentMethod: booking.payment.metodeBayar,
-                    status: booking.payment.status,
-                    gateway: 'bayar.gg',
-                    message: 'Pembayaran sudah dibuat sebelumnya',
-                },
-            });
-            return;
-        }
-        // Check if bayar.gg is configured
-        if (!(0, bayargg_service_1.isBayarGGConfigured)()) {
+        // Check if Pakasir is configured
+        if (!(0, pakasir_service_1.isPakasirConfigured)()) {
             res.status(503).json({
                 error: 'Payment gateway belum dikonfigurasi',
             });
             return;
         }
-        // Create bayar.gg payment with selected payment method
-        const result = await (0, bayargg_service_1.createBayarGGPayment)({
+        // Create Pakasir payment with selected payment method
+        const result = await (0, pakasir_service_1.createPakasirPayment)({
             bookingId: booking.id,
             amount: Number(booking.totalHarga),
             customerEmail: booking.profile.email,
@@ -436,33 +509,90 @@ exports.bookingsRouter.post('/:id/payment', paymentLimiter, async (req, res) => 
             res.status(500).json({ error: result.error || 'Gagal membuat pembayaran' });
             return;
         }
-        // Create payment record with gateway IDs
-        await prisma_1.prisma.payment.create({
-            data: {
-                bookingId: booking.id,
-                gatewayInvoiceId: result.invoiceId,
-                gatewayOrderId: result.invoiceId,
-                metodeBayar: paymentMethodToMetodeBayar(paymentMethod),
-                jumlah: Number(booking.totalHarga),
-                status: 'pending',
-            },
-        });
+        const totalToRecord = result.totalPayment || Number(booking.totalHarga);
+        if (booking.payment) {
+            await prisma_1.prisma.payment.update({
+                where: { id: booking.payment.id },
+                data: {
+                    gatewayInvoiceId: result.invoiceId,
+                    gatewayOrderId: result.invoiceId,
+                    metodeBayar: paymentMethodToMetodeBayar(paymentMethod),
+                    jumlah: totalToRecord,
+                },
+            });
+        }
+        else {
+            await prisma_1.prisma.payment.create({
+                data: {
+                    bookingId: booking.id,
+                    gatewayInvoiceId: result.invoiceId,
+                    gatewayOrderId: result.invoiceId,
+                    metodeBayar: paymentMethodToMetodeBayar(paymentMethod),
+                    jumlah: totalToRecord,
+                    status: 'pending',
+                },
+            });
+        }
         res.json({
             data: {
                 bookingId: booking.id,
                 gatewayInvoiceId: result.invoiceId,
                 paymentUrl: result.paymentUrl,
+                paymentNumber: result.paymentNumber,
                 qrisString: result.qrisString,
                 expiresAt: result.expiresAt,
                 paymentMethod: paymentMethod,
                 amount: Number(booking.totalHarga),
-                gateway: 'bayar.gg',
+                fee: result.fee,
+                totalPayment: result.totalPayment,
+                gateway: 'pakasir',
             },
         });
     }
     catch (error) {
         console.error('POST /api/bookings/:id/payment error:', error);
         res.status(500).json({ error: 'Gagal memproses pembayaran' });
+    }
+});
+/**
+ * POST /api/bookings/:id/simulate-payment
+ * Simulasi pembayaran berhasil untuk mode sandbox
+ */
+exports.bookingsRouter.post('/:id/simulate-payment', async (req, res) => {
+    const bookingId = req.params.id;
+    try {
+        const booking = await prisma_1.prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: { payment: true },
+        });
+        if (!booking) {
+            res.status(404).json({ error: 'Booking tidak ditemukan' });
+            return;
+        }
+        if (booking.userId !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+            res.status(403).json({ error: 'Tidak berhak mengakses booking ini' });
+            return;
+        }
+        if (!booking.payment) {
+            res.status(400).json({ error: 'Pembayaran belum dibuat' });
+            return;
+        }
+        // Try calling Pakasir simulation API
+        if (booking.payment.gatewayInvoiceId) {
+            await (0, pakasir_service_1.simulatePakasirPayment)(booking.payment.gatewayInvoiceId, Number(booking.payment.jumlah || booking.totalHarga));
+        }
+        // Confirm payment locally in database atomically
+        await (0, webhooks_routes_1.handlePakasirPaymentPaid)(booking.payment.id, booking.id, booking.payment.gatewayInvoiceId || `SIM-${Date.now()}`);
+        res.json({
+            data: {
+                success: true,
+                message: 'Pembayaran berhasil disimulasikan',
+            },
+        });
+    }
+    catch (error) {
+        console.error('POST /api/bookings/:id/simulate-payment error:', error);
+        res.status(500).json({ error: 'Gagal memproses simulasi pembayaran' });
     }
 });
 /**
@@ -473,7 +603,7 @@ function paymentMethodToMetodeBayar(method) {
         return 'virtual_account';
     if (method === 'qris')
         return 'qris';
-    if (['shopeepay', 'dana', 'ovo'].includes(method))
+    if (['shopeepay', 'dana', 'ovo', 'gopay'].includes(method))
         return 'ewallet';
     return 'virtual_account'; // default
 }

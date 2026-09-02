@@ -75,6 +75,37 @@ exports.instansiRouter.use(verifySupabaseToken_1.verifySupabaseToken, async (req
     next();
 });
 /**
+ * GET /api/instansi/profile
+ * Info dasar instansi milik admin yang login, termasuk rate komisi
+ * platform. Sebelumnya Admin TIDAK PUNYA cara sama sekali melihat rate
+ * komisinya sendiri (padahal otomatis dipotong tiap pencairan dana) —
+ * cuma SuperAdmin yang bisa lihat/ubah lewat halaman kelola instansi.
+ */
+exports.instansiRouter.get('/profile', async (req, res) => {
+    const instansiId = req.instansiScope.instansiId;
+    try {
+        const instansi = await prisma_1.prisma.instansi.findUnique({
+            where: { id: instansiId },
+            select: {
+                id: true,
+                namaInstansi: true,
+                status: true,
+                komisiPlatformPersen: true,
+                rekeningBank: true,
+            },
+        });
+        if (!instansi) {
+            res.status(404).json({ error: 'Instansi tidak ditemukan' });
+            return;
+        }
+        res.json({ data: instansi });
+    }
+    catch (error) {
+        console.error('GET /api/instansi/profile error:', error);
+        res.status(500).json({ error: 'Gagal mengambil data instansi' });
+    }
+});
+/**
  * GET /api/instansi/dashboard
  * Statistik ringkasan milik instansi sendiri
  */
@@ -171,6 +202,167 @@ exports.instansiRouter.get('/dashboard', async (req, res) => {
     catch (error) {
         console.error('GET /api/instansi/dashboard error:', error);
         res.status(500).json({ error: 'Gagal mengambil data dashboard' });
+    }
+});
+const STATUS_DIHITUNG_PENDAPATAN = ['dikonfirmasi', 'berjalan', 'selesai'];
+/**
+ * GET /api/instansi/dashboard/trends
+ * Tren harian nyata (hari ini vs kemarin) + sparkline 7 hari terakhir,
+ * dihitung dari data booking asli — bukan angka statis/acak.
+ */
+exports.instansiRouter.get('/dashboard/trends', async (req, res) => {
+    const instansiId = req.instansiScope.instansiId;
+    try {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfYesterday = new Date(startOfToday);
+        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        const sevenDaysAgo = new Date(startOfToday);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // termasuk hari ini = 7 hari
+        // Ambil semua booking 7 hari terakhir sekali jalan, lalu bucket-kan di memory
+        const recentBookings = await prisma_1.prisma.booking.findMany({
+            where: { car: { instansiId }, createdAt: { gte: sevenDaysAgo } },
+            select: { totalHarga: true, status: true, createdAt: true },
+        });
+        const dayKey = (d) => d.toISOString().split('T')[0];
+        const todayKey = dayKey(startOfToday);
+        const yesterdayKey = dayKey(startOfYesterday);
+        const revenueByDay = {};
+        const bookingCountByDay = {};
+        for (const b of recentBookings) {
+            const key = dayKey(new Date(b.createdAt));
+            bookingCountByDay[key] = (bookingCountByDay[key] ?? 0) + 1;
+            if (STATUS_DIHITUNG_PENDAPATAN.includes(b.status)) {
+                revenueByDay[key] = (revenueByDay[key] ?? 0) + Number(b.totalHarga);
+            }
+        }
+        const calcTrend = (current, previous) => {
+            if (previous === 0)
+                return current > 0 ? 100 : 0;
+            return Math.round(((current - previous) / previous) * 100);
+        };
+        const pendapatanHariIni = revenueByDay[todayKey] ?? 0;
+        const pendapatanKemarin = revenueByDay[yesterdayKey] ?? 0;
+        const bookingBaruHariIni = bookingCountByDay[todayKey] ?? 0;
+        const bookingBaruKemarin = bookingCountByDay[yesterdayKey] ?? 0;
+        const sparklinePendapatan = [];
+        const sparklineBookingBaru = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(startOfToday);
+            d.setDate(d.getDate() - i);
+            const key = dayKey(d);
+            sparklinePendapatan.push(revenueByDay[key] ?? 0);
+            sparklineBookingBaru.push(bookingCountByDay[key] ?? 0);
+        }
+        res.json({
+            data: {
+                pendapatanHariIni,
+                bookingBaruHariIni,
+                trendPendapatan: calcTrend(pendapatanHariIni, pendapatanKemarin),
+                trendBookingBaru: calcTrend(bookingBaruHariIni, bookingBaruKemarin),
+                sparklinePendapatan,
+                sparklineBookingBaru,
+            },
+        });
+    }
+    catch (error) {
+        console.error('GET /api/instansi/dashboard/trends error:', error);
+        res.status(500).json({ error: 'Gagal mengambil data trend' });
+    }
+});
+/**
+ * GET /api/instansi/dashboard/revenue-series?period=today|7days|month|year
+ * Grafik pendapatan dengan data nyata per bucket waktu (bukan estimasi
+ * rata-rata atau angka acak seperti implementasi lama di frontend).
+ */
+exports.instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
+    const instansiId = req.instansiScope.instansiId;
+    const period = req.query.period || '7days';
+    const DAYS_ID = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+    const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    try {
+        const now = new Date();
+        let rangeStart;
+        if (period === 'today') {
+            rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        }
+        else if (period === '7days') {
+            rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+        }
+        else if (period === 'month') {
+            rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
+        else {
+            rangeStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+        }
+        const bookings = await prisma_1.prisma.booking.findMany({
+            where: {
+                car: { instansiId },
+                createdAt: { gte: rangeStart },
+                status: { in: [...STATUS_DIHITUNG_PENDAPATAN] },
+            },
+            select: { totalHarga: true, createdAt: true },
+        });
+        let labels = [];
+        let values = [];
+        if (period === 'today') {
+            // Bucket per 4 jam
+            labels = Array.from({ length: 6 }, (_, i) => `${String(i * 4).padStart(2, '0')}:00`);
+            values = new Array(6).fill(0);
+            for (const b of bookings) {
+                const hour = new Date(b.createdAt).getHours();
+                values[Math.floor(hour / 4)] += Number(b.totalHarga);
+            }
+        }
+        else if (period === '7days') {
+            const days = [];
+            const keys = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+                days.push(DAYS_ID[d.getDay()]);
+                keys.push(d.toISOString().split('T')[0]);
+            }
+            labels = days;
+            values = new Array(7).fill(0);
+            for (const b of bookings) {
+                const key = new Date(b.createdAt).toISOString().split('T')[0];
+                const idx = keys.indexOf(key);
+                if (idx !== -1)
+                    values[idx] += Number(b.totalHarga);
+            }
+        }
+        else if (period === 'month') {
+            const weeksInMonth = Math.ceil((new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) / 7);
+            labels = Array.from({ length: weeksInMonth }, (_, i) => `Minggu ${i + 1}`);
+            values = new Array(weeksInMonth).fill(0);
+            for (const b of bookings) {
+                const dayOfMonth = new Date(b.createdAt).getDate();
+                const weekIdx = Math.min(Math.floor((dayOfMonth - 1) / 7), weeksInMonth - 1);
+                values[weekIdx] += Number(b.totalHarga);
+            }
+        }
+        else {
+            // year — 12 bulan terakhir
+            const monthKeys = [];
+            for (let i = 11; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                labels.push(MONTHS_ID[d.getMonth()]);
+                monthKeys.push(`${d.getFullYear()}-${d.getMonth()}`);
+            }
+            values = new Array(12).fill(0);
+            for (const b of bookings) {
+                const d = new Date(b.createdAt);
+                const key = `${d.getFullYear()}-${d.getMonth()}`;
+                const idx = monthKeys.indexOf(key);
+                if (idx !== -1)
+                    values[idx] += Number(b.totalHarga);
+            }
+        }
+        res.json({ data: { labels, values } });
+    }
+    catch (error) {
+        console.error('GET /api/instansi/dashboard/revenue-series error:', error);
+        res.status(500).json({ error: 'Gagal mengambil data grafik pendapatan' });
     }
 });
 /**

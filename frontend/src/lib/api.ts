@@ -515,6 +515,13 @@ export interface SuperAdminReportsData {
     pending: number;
     rate: number;
   };
+  // Tren periode-vs-periode asli (dihitung dari data booking/pembayaran
+  // sungguhan) — sebelumnya SEMUA badge tren di halaman Laporan
+  // hardcode `change: 0` di frontend, tidak pernah dihitung sama sekali.
+  trends: {
+    revenue: number;
+    booking: number;
+  };
   period: string;
   dari: string;
   sampai: string;
@@ -685,6 +692,10 @@ export const api = {
 
   // ── Admin: Dashboard (F9) ──
   getDashboardSummary: () => apiFetch<DashboardSummary>('/api/admin/dashboard/summary'),
+  getInstansiProfile: () =>
+    apiFetch<{ id: string; namaInstansi: string; status: string; komisiPlatformPersen: string; rekeningBank: string | null }>(
+      '/api/instansi/profile'
+    ),
   getInstansiDashboard: () => apiFetch<InstansiDashboardData>('/api/instansi/dashboard'),
   getInstansiDashboardTrends: () =>
     apiFetch<InstansiDashboardTrends>('/api/instansi/dashboard/trends'),
@@ -859,7 +870,7 @@ export const api = {
     if (params.page) qs.set('page', String(params.page));
     if (params.limit) qs.set('limit', String(params.limit));
     const query = qs.toString();
-    return apiFetch<PaginatedResponse<SuperAdminUser>>(`/api/superadmin/pengguna${query ? `?${query}` : ''}`);
+    return apiFetchFull<PaginatedResponse<SuperAdminUser>>(`/api/superadmin/pengguna${query ? `?${query}` : ''}`);
   },
   toggleUserStatus: (id: string, aktif: boolean) =>
     apiFetch<SuperAdminUser>(`/api/superadmin/pengguna/${id}/status`, {
@@ -941,6 +952,12 @@ export const api = {
       pagination: PaginationMeta;
     }>(`/api/superadmin/bookings${query ? `?${query}` : ''}`);
   },
+  getSuperAdminBookingDetail: (id: string) =>
+    apiFetch<Booking & {
+      car: Car & { instansi: { id: string; namaInstansi: string } };
+      profile: { id: string; nama: string; email: string; noHp: string };
+      payment: { status: string; metodeBayar: string; jumlah: string; paidAt: string | null } | null;
+    }>(`/api/superadmin/bookings/${id}`),
 
   // Transactions
   listSuperAdminTransactions: (params?: {
@@ -974,7 +991,7 @@ export const api = {
     return apiFetchFull<SuperAdminReportsData>(`/api/superadmin/reports${query}`);
   },
 
-  // Checkout (Customer) — via bayar.gg
+  // Checkout (Customer) — via Pakasir
   checkoutBooking: (bookingId: string) =>
     apiFetch<{
       bookingId: string;
@@ -983,23 +1000,26 @@ export const api = {
       orderId?: string;
       amount: number;
       expiresAt: string;
-      gateway: 'bayar.gg';
+      gateway: 'pakasir';
     }>(
       `/api/bookings/${bookingId}/checkout`,
       { method: 'POST' }
     ),
 
-  // Create Payment — via bayar.gg
+  // Create Payment — via Pakasir
   createPayment: (bookingId: string, data: { paymentMethod: string }) =>
     apiFetch<{
       bookingId: string;
       gatewayInvoiceId: string;
       paymentUrl: string;
+      paymentNumber?: string;
       qrisString?: string;
       expiresAt: string;
       paymentMethod: string;
       amount: number;
-      gateway: 'bayar.gg';
+      fee?: number;
+      totalPayment?: number;
+      gateway: 'pakasir';
     }>(
       `/api/bookings/${bookingId}/payment`,
       {
@@ -1016,9 +1036,23 @@ export const api = {
       paymentStatus: string | null;
       paymentId?: string | null;
       gatewayInvoiceId?: string | null;
-      gateway: 'bayar.gg';
+      paymentUrl?: string | null;
+      paymentNumber?: string | null;
+      totalPayment?: number;
+      gateway: 'pakasir';
     }>(
       `/api/bookings/${bookingId}/payment-status`
+    ),
+
+  simulateBookingPayment: (bookingId: string) =>
+    apiFetch<{
+      success: boolean;
+      message: string;
+    }>(
+      `/api/bookings/${bookingId}/simulate-payment`,
+      {
+        method: 'POST',
+      }
     ),
 };
 

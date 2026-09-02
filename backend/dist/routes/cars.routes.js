@@ -29,6 +29,12 @@ exports.carsRouter.get('/', (0, errorHandler_1.asyncHandler)(async (req, res) =>
     const cars = await prisma_1.prisma.car.findMany({
         where: {
             status: 'tersedia',
+            // PENTING: sebelumnya endpoint ini TIDAK mengecek statusApproval sama
+            // sekali — artinya mobil yang baru dibuat Admin (default statusApproval
+            // = 'menunggu_persetujuan') langsung tampil & bisa dibooking publik,
+            // sepenuhnya melewati alur approval SuperAdmin. Baru mobil yang sudah
+            // disetujui yang boleh tampil di katalog publik.
+            statusApproval: 'disetujui',
             ...(kategori && { kategori }),
             ...(transmisi && { transmisi }),
             ...(tipeSewa && { tipeSewa }),
@@ -60,7 +66,11 @@ exports.carsRouter.get('/:id', (0, errorHandler_1.asyncHandler)(async (req, res)
         where: { id },
         include: { images: { orderBy: { urutan: 'asc' } } },
     });
-    if (!car || car.status === 'nonaktif') {
+    if (!car || car.status === 'nonaktif' || car.statusApproval !== 'disetujui') {
+        // Perlakukan mobil yang belum/tidak disetujui sama seperti "tidak
+        // ditemukan" untuk publik — konsisten dengan cara mobil nonaktif
+        // disembunyikan, dan tidak membocorkan info kalau mobil ini "ada tapi
+        // sedang direview".
         throw new errorHandler_1.AppError('Mobil tidak ditemukan', 404);
     }
     res.json({ data: car });
@@ -78,9 +88,10 @@ exports.carsRouter.get('/:id/availability', (0, errorHandler_1.asyncHandler)(asy
     const id = idParse.data;
     const car = await prisma_1.prisma.car.findUnique({
         where: { id },
-        select: { id: true }
+        select: { id: true, status: true, statusApproval: true }
     });
-    if (!car) {
+    if (!car || car.status === 'nonaktif' || car.statusApproval !== 'disetujui') {
+        throw new errorHandler_1.AppError('Mobil tidak ditemukan', 404);
         throw new errorHandler_1.AppError('Mobil tidak ditemukan', 404);
     }
     const bookedRanges = await (0, availability_service_1.getBookedDateRanges)(id);

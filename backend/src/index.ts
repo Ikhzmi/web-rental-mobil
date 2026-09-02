@@ -21,30 +21,48 @@ import { startBookingExpiryJob } from './services/bookingExpiry.service';
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 
+// Trust proxy (diperlukan untuk ngrok dan proxy Vite agar IP tidak dianggap sama)
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 
-// CORS configuration
+// CORS configuration (mendukung localhost dan ngrok)
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN?.split(',') ?? 'http://localhost:5173',
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const allowedOrigins = process.env.FRONTEND_ORIGIN?.split(',') ?? [];
+      if (
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1') ||
+        origin.includes('ngrok') ||
+        allowedOrigins.includes(origin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
   })
 );
 app.use(express.json({ limit: '10mb' }));
 
-// Rate limiting - general
+// Rate limiting - general (dilonggarkan di mode development/testing agar tidak 429)
+const isDev = process.env.NODE_ENV !== 'production';
+
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
+  max: isDev ? 2000 : 300, // 2000 request per 15 menit di dev mode
   message: { error: 'Terlalu banyak permintaan, coba lagi nanti' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Rate limiting - stricter for auth-sensitive endpoints
+// Rate limiting - auth-sensitive endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // 20 requests per window
+  max: isDev ? 1000 : 100, // 1000 request per 15 menit di dev mode
   message: { error: 'Terlalu banyak percobaan, coba lagi dalam 15 menit' },
   standardHeaders: true,
   legacyHeaders: false,

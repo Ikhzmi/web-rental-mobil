@@ -355,11 +355,11 @@ export default function SuperAdminLayout() {
           </div>
 
           <div className="relative flex items-center py-2.5 px-2">
-            {/* Arrow to slide 1 - on right */}
+            {/* Arrow to slide 0 - on LEFT (Previous) */}
             <button
-              onClick={() => setMobileSlide(1)}
+              onClick={() => setMobileSlide(0)}
               className={`p-2.5 rounded-full transition-all duration-300 shrink-0 ${
-                mobileSlide === 0
+                mobileSlide === 1
                   ? isDark
                     ? 'text-white/50 hover:text-white hover:bg-white/10'
                     : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/50'
@@ -371,7 +371,7 @@ export default function SuperAdminLayout() {
                 whileTap={{ scale: 0.9 }}
                 transition={{ duration: 0.1 }}
               >
-                <ChevronRight size={18} />
+                <ChevronLeft size={18} />
               </motion.div>
             </button>
 
@@ -482,11 +482,11 @@ export default function SuperAdminLayout() {
               </AnimatePresence>
             </div>
 
-            {/* Arrow to slide 0 - on left */}
+            {/* Arrow to slide 1 - on RIGHT (Next) */}
             <button
-              onClick={() => setMobileSlide(0)}
+              onClick={() => setMobileSlide(1)}
               className={`p-2.5 rounded-full transition-all duration-300 shrink-0 ${
-                mobileSlide === 1
+                mobileSlide === 0
                   ? isDark
                     ? 'text-white/50 hover:text-white hover:bg-white/10'
                     : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/50'
@@ -498,7 +498,7 @@ export default function SuperAdminLayout() {
                 whileTap={{ scale: 0.9 }}
                 transition={{ duration: 0.1 }}
               >
-                <ChevronLeft size={18} />
+                <ChevronRight size={18} />
               </motion.div>
             </button>
           </div>

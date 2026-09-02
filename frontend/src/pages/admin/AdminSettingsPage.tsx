@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { User, Sun, Moon, LogOut, Save, Check } from 'lucide-react';
+import { User, Sun, Moon, LogOut, Save, Check, Building2, Percent } from 'lucide-react';
 import { api, type Profile } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../../contexts/ToastContext';
@@ -25,6 +25,14 @@ export default function AdminSettingsPage() {
   const { data: profile, isLoading } = useQuery<Profile>({
     queryKey: ['my-profile'],
     queryFn: () => api.getMyProfile(),
+  });
+
+  // Sebelumnya Admin tidak punya cara sama sekali melihat rate komisi
+  // platform yang berlaku untuknya — padahal otomatis dipotong tiap
+  // pencairan dana. Read-only (cuma SuperAdmin yang boleh ubah).
+  const { data: instansiProfile } = useQuery({
+    queryKey: ['my-instansi-profile'],
+    queryFn: () => api.getInstansiProfile(),
   });
 
   const [nama, setNama] = useState('');
@@ -146,6 +154,47 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         )}
+      </motion.div>
+
+      {/* Instansi — read-only, termasuk rate komisi platform yang
+          sebelumnya tidak bisa dilihat Admin sama sekali */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.02 }}
+        className={`p-5 sm:p-6 rounded-2xl ${glassCard}`}
+      >
+        <div className="flex items-center gap-2 mb-5">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDark ? 'bg-white/[0.06]' : 'bg-slate-900/[0.05]'}`}>
+            <Building2 size={16} className={isDark ? 'text-white/70' : 'text-slate-600'} />
+          </div>
+          <h2 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>Instansi</h2>
+        </div>
+
+        {!instansiProfile ? (
+          <div className={`h-16 rounded-xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Nama Instansi</label>
+              <p className={`text-sm px-4 py-2.5 rounded-xl ${isDark ? 'bg-white/[0.03] text-white/80' : 'bg-slate-50 text-slate-700'}`}>
+                {instansiProfile.namaInstansi}
+              </p>
+            </div>
+            <div>
+              <label className={`${labelClass} flex items-center gap-1`}>
+                <Percent size={11} />
+                Rate Komisi Platform
+              </label>
+              <p className={`text-sm px-4 py-2.5 rounded-xl ${isDark ? 'bg-white/[0.03] text-white/80' : 'bg-slate-50 text-slate-700'}`}>
+                {Number(instansiProfile.komisiPlatformPersen)}%
+              </p>
+            </div>
+          </div>
+        )}
+        <p className={`text-xs mt-3 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
+          Rate komisi dipotong otomatis dari tiap pencairan dana. Hanya SuperAdmin yang bisa mengubahnya.
+        </p>
       </motion.div>
 
       {/* Tampilan */}

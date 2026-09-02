@@ -14,11 +14,18 @@ const ADDON_HARGA_DEFAULT: Record<Exclude<JenisAddon, 'sopir'>, number> = {
   antar_jemput: 50_000,
 };
 
+const LOCATION_PRESETS = [
+  'Kantor Rental (Ambil di tempat)',
+  'Bandara / Airport',
+  'Stasiun Kereta Api',
+  'Antar ke Rumah / Hotel',
+];
+
 const STEPS = [
   { id: 1, title: 'Tanggal', icon: CalendarIcon },
   { id: 2, title: 'Lokasi', icon: MapPin },
   { id: 3, title: 'Add-on', icon: Truck },
-  { id: 4, title: 'Data', icon: User },
+  { id: 4, title: 'Data Diri', icon: User },
 ];
 
 export default function BookingPage() {
@@ -44,6 +51,12 @@ export default function BookingPage() {
   const [noKtp, setNoKtp] = useState('');
   const [noSim, setNoSim] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  const isStep1Done = Boolean(range?.from && range?.to);
+  const isStep2Done = Boolean(lokasiAmbil.trim() && (sameLokasi || lokasiKembali.trim()));
+  const isStep3Done = isStep1Done && isStep2Done;
+  const isStep4Done = Boolean(nama.trim() && noHp.trim() && noKtp.trim() && noSim.trim());
 
   const carQuery = useQuery({
     queryKey: ['car', carId],
@@ -87,10 +100,11 @@ export default function BookingPage() {
   const estimasi = car ? estimasiHarga(car, range?.from, range?.to, sopirDipilih, addonLain) : null;
 
   const handleSubmit = () => {
+    setSubmitted(true);
     setFormError(null);
 
     if (!range?.from || !range?.to) {
-      setFormError('Pilih tanggal ambil dan kembali dulu');
+      setFormError('Pilih tanggal ambil dan kembali dulu pada kalender');
       return;
     }
     if (!lokasiAmbil.trim()) {
@@ -178,45 +192,55 @@ export default function BookingPage() {
           <p className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Lengkapi data di bawah untuk melanjutkan pemesanan</p>
         </motion.div>
 
-        {/* Step Indicator */}
+        {/* Step Indicator Dinamis */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="animate-card flex items-center justify-center mb-10 overflow-x-auto pb-2"
+          className="animate-card flex items-center justify-center mb-8 overflow-x-auto pb-2"
         >
           <div className="flex items-center gap-2 sm:gap-4">
             {STEPS.map((step, index) => {
               const Icon = step.icon;
-              const isActive = currentStep === step.id;
-              const isCompleted = currentStep > step.id;
+              const isCompleted =
+                step.id === 1 ? isStep1Done :
+                step.id === 2 ? isStep2Done :
+                step.id === 3 ? isStep3Done :
+                isStep4Done;
+              const isActive = !isCompleted && (
+                step.id === 1 ||
+                (step.id === 2 && isStep1Done) ||
+                (step.id === 3 && isStep2Done) ||
+                (step.id === 4 && isStep3Done)
+              );
+
               return (
                 <div key={step.id} className="flex items-center">
                   <div className="flex flex-col items-center">
                     <div
-                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all duration-300 ${
                         isCompleted
-                          ? isDark
-                            ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/30'
-                            : 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/30'
+                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
                           : isActive
                           ? isDark
-                            ? 'bg-gradient-to-br from-white/20 to-white/10 shadow-lg shadow-black/30'
-                            : 'bg-gradient-to-br from-white/20 to-white/10 shadow-lg shadow-black/30'
+                            ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
+                            : 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
                           : isDark
                           ? 'bg-white/5 border border-white/10'
                           : 'bg-slate-100 border border-slate-200'
                       }`}
                     >
                       {isCompleted ? (
-                        <Check className="w-5 h-5 text-white" />
+                        <Check className="w-5 h-5 text-white stroke-[2.5]" />
                       ) : (
                         <Icon className={`w-5 h-5 ${isActive ? 'text-white' : isDark ? 'text-white/40' : 'text-slate-400'}`} />
                       )}
                     </div>
                     <span className={`mt-2 text-xs font-medium hidden sm:block ${
-                      isActive || isCompleted
-                        ? isDark ? 'text-white' : 'text-slate-900'
+                      isCompleted
+                        ? 'text-emerald-500 font-semibold'
+                        : isActive
+                        ? isDark ? 'text-orange-400 font-semibold' : 'text-orange-600 font-semibold'
                         : isDark ? 'text-white/40' : 'text-slate-400'
                     }`}>
                       {step.title}
@@ -225,8 +249,8 @@ export default function BookingPage() {
                   {index < STEPS.length - 1 && (
                     <div
                       className={`w-8 sm:w-16 h-0.5 mx-2 rounded-full transition-all duration-300 ${
-                        currentStep > step.id
-                          ? 'bg-gradient-to-r from-green-500 to-emerald-600'
+                        isCompleted
+                          ? 'bg-emerald-500'
                           : isDark ? 'bg-white/10' : 'bg-slate-200'
                       }`}
                     />
@@ -309,6 +333,12 @@ export default function BookingPage() {
                   <span>Hari Ini</span>
                 </div>
               </div>
+
+              {submitted && (!range?.from || !range?.to) && (
+                <p className="text-xs text-red-500 font-semibold mt-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
+                  ⚠️ Silakan pilih tanggal ambil dan kembali pada kalender di atas.
+                </p>
+              )}
             </motion.div>
 
             {/* Step 2: Lokasi */}
@@ -316,7 +346,7 @@ export default function BookingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className={cardClass}
+              className={`${cardClass} ${submitted && !lokasiAmbil.trim() ? 'border-red-500/50' : ''}`}
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className={iconBoxClass}>
@@ -330,14 +360,43 @@ export default function BookingPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Lokasi Ambil</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                      Lokasi Ambil <span className="text-red-500">*</span>
+                    </label>
+                    <span className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Pilih Cepat:</span>
+                  </div>
+
+                  {/* Quick Presets */}
+                  <div className="flex flex-wrap gap-1.5 mb-2.5">
+                    {LOCATION_PRESETS.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setLokasiAmbil(preset)}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
+                          lokasiAmbil === preset
+                            ? 'bg-orange-500 text-white border-orange-500 font-semibold shadow-sm'
+                            : isDark
+                              ? 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
+                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+
                   <input
                     type="text"
                     value={lokasiAmbil}
                     onChange={(e) => setLokasiAmbil(e.target.value)}
                     placeholder="Masukkan alamat penjemputan"
-                    className={inputClass}
+                    className={`${inputClass} ${submitted && !lokasiAmbil.trim() ? '!border-red-500' : ''}`}
                   />
+                  {submitted && !lokasiAmbil.trim() && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">Lokasi penjemputan wajib diisi</p>
+                  )}
                 </div>
 
                 <label className={`flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300 ${
@@ -349,7 +408,7 @@ export default function BookingPage() {
                     type="checkbox"
                     checked={sameLokasi}
                     onChange={(e) => setSameLokasi(e.target.checked)}
-                    className="w-5 h-5 accent-blue-500 rounded"
+                    className="w-5 h-5 accent-orange-500 rounded"
                   />
                   <span className={`text-sm ${isDark ? 'text-white/80' : 'text-slate-700'}`}>Lokasi kembali sama dengan lokasi ambil</span>
                 </label>
@@ -360,14 +419,19 @@ export default function BookingPage() {
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                   >
-                    <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Lokasi Kembali</label>
+                    <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                      Lokasi Kembali <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
                       value={lokasiKembali}
                       onChange={(e) => setLokasiKembali(e.target.value)}
                       placeholder="Masukkan alamat pengembalian"
-                      className={inputClass}
+                      className={`${inputClass} ${submitted && !sameLokasi && !lokasiKembali.trim() ? '!border-red-500' : ''}`}
                     />
+                    {submitted && !sameLokasi && !lokasiKembali.trim() && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">Lokasi pengembalian wajib diisi</p>
+                    )}
                   </motion.div>
                 )}
               </div>
@@ -513,46 +577,71 @@ export default function BookingPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Nama Lengkap</label>
+                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                    Nama Lengkap <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={nama}
                     onChange={(e) => setNama(e.target.value)}
-                    placeholder="John Doe"
-                    className={inputClass}
+                    placeholder="Sesuai KTP"
+                    className={`${inputClass} ${submitted && !nama.trim() ? '!border-red-500' : ''}`}
                   />
+                  {submitted && !nama.trim() && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">Nama lengkap wajib diisi</p>
+                  )}
                 </div>
                 <div>
-                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>No. HP</label>
+                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                    No. WhatsApp / HP <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="tel"
                     value={noHp}
                     onChange={(e) => setNoHp(e.target.value)}
                     placeholder="081234567890"
-                    className={inputClass}
+                    className={`${inputClass} ${submitted && !noHp.trim() ? '!border-red-500' : ''}`}
                   />
+                  {submitted && !noHp.trim() && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">No. WhatsApp/HP wajib diisi</p>
+                  )}
                 </div>
                 <div>
-                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>No. KTP</label>
+                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                    No. KTP <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={noKtp}
                     onChange={(e) => setNoKtp(e.target.value)}
-                    placeholder="1234567890123456"
-                    className={inputClass}
+                    placeholder="16 digit NIK KTP"
+                    maxLength={16}
+                    className={`${inputClass} ${submitted && !noKtp.trim() ? '!border-red-500' : ''}`}
                   />
+                  {submitted && !noKtp.trim() && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">Nomor KTP wajib diisi</p>
+                  )}
                 </div>
                 <div>
-                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>No. SIM</label>
+                  <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                    No. SIM A <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={noSim}
                     onChange={(e) => setNoSim(e.target.value)}
-                    placeholder="123456789012"
-                    className={inputClass}
+                    placeholder="Nomor SIM pengemudi"
+                    className={`${inputClass} ${submitted && !noSim.trim() ? '!border-red-500' : ''}`}
                   />
+                  {submitted && !noSim.trim() && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">Nomor SIM wajib diisi</p>
+                  )}
                 </div>
               </div>
+              <p className={`text-[11px] mt-3 flex items-center gap-1.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
+                Data Anda dilindungi enkripsi dan hanya digunakan untuk verifikasi reservasi rental mobil.
+              </p>
             </motion.div>
           </div>
 
@@ -682,6 +771,30 @@ export default function BookingPage() {
             </motion.div>
           </div>
         </div>
+      </div>
+
+      {/* Floating Mobile Summary Bar (Hanya tampil di viewport mobile) */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#121212]/95 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 p-3.5 px-5 shadow-2xl flex items-center justify-between gap-4">
+        <div>
+          <p className="text-[11px] text-slate-500 dark:text-white/40">Total Estimasi</p>
+          <p className="text-lg font-bold text-orange-500">
+            {estimasi ? formatRupiah(estimasi.totalHarga) : 'Pilih Tanggal'}
+          </p>
+        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={createBookingMutation.isPending}
+          className="py-3 px-6 rounded-xl font-semibold text-sm bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25 active:scale-95 flex items-center gap-1.5"
+        >
+          {createBookingMutation.isPending ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span>Memproses...</span>
+            </>
+          ) : (
+            <span>Konfirmasi Pesanan</span>
+          )}
+        </button>
       </div>
 
       <style>{`

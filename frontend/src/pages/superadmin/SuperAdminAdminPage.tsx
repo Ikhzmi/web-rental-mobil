@@ -7,6 +7,7 @@ import type { Role, Instansi } from '../../lib/api';
 import { SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { useToast } from '../../contexts/ToastContext';
 
 const ROLE_CONFIG_DARK: Record<Role, { color: string; label: string }> = {
   super_admin: { color: 'bg-[#f5ebe0]/20 text-[#f5ebe0] border-[#f5ebe0]/30', label: 'Super Admin' },
@@ -39,20 +40,24 @@ function CreateAdminModal({ onClose, onSuccess, isDark }: { onClose: () => void;
     instansiId: '',
   });
   const [error, setError] = useState('');
+  const { showToast } = useToast();
 
   const { data: instansiList } = useQuery<Instansi[]>({
     queryKey: ['superadmin-instansi-all'],
-    queryFn: () => api.listInstansi({ status: 'aktif' }),
+    queryFn: () => api.listInstansi(), // tampilkan semua instansi, bukan hanya 'aktif'
   });
 
   const createMutation = useMutation({
     mutationFn: api.createAdmin,
     onSuccess: () => {
+      showToast('success', 'Berhasil', 'Akun admin baru berhasil dibuat');
       onSuccess();
       onClose();
     },
     onError: (err: unknown) => {
-      setError(err instanceof Error ? err.message : 'Gagal membuat akun');
+      const message = err instanceof Error ? err.message : 'Gagal membuat akun';
+      setError(message);
+      showToast('error', 'Gagal Membuat Admin', message);
     },
   });
 
@@ -61,6 +66,10 @@ function CreateAdminModal({ onClose, onSuccess, isDark }: { onClose: () => void;
     setError('');
     if (form.password.length < 8) {
       setError('Password minimal 8 karakter');
+      return;
+    }
+    if (!form.instansiId) {
+      setError('Pilih instansi terlebih dahulu');
       return;
     }
     createMutation.mutate(form);
@@ -172,12 +181,15 @@ function CreateAdminModal({ onClose, onSuccess, isDark }: { onClose: () => void;
               onChange={(e) => setForm({ ...form, instansiId: e.target.value })}
               className={`w-full px-4 py-3 rounded-xl focus:outline-none transition-all ${inputClass}`}
             >
-              <option value="" className={isDark ? 'bg-[#1a1a1a]' : 'bg-[#F9EFE8]'}>Pilih Instansi</option>
+              <option value="" className={isDark ? 'bg-[#1a1a1a]' : 'bg-[#F9EFE8]'}>-- Pilih Instansi --</option>
               {instansiList?.map((inst) => (
                 <option key={inst.id} value={inst.id} className={isDark ? 'bg-[#1a1a1a]' : 'bg-[#F9EFE8]'}>
-                  {inst.namaInstansi}
+                  {inst.namaInstansi}{inst.status !== 'aktif' ? ` (${inst.status === 'menunggu_verifikasi' ? 'Menunggu' : inst.status})` : ''}
                 </option>
               ))}
+              {(!instansiList || instansiList.length === 0) && (
+                <option disabled value="">Tidak ada instansi tersedia</option>
+              )}
             </select>
           </div>
 
@@ -208,6 +220,7 @@ export default function SuperAdminAdminPage() {
   const limit = 10;
 
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const { data: response, isLoading } = useQuery({
     queryKey: ['superadmin-users', filter, search, page],
@@ -226,8 +239,16 @@ export default function SuperAdminAdminPage() {
   const toggleMutation = useMutation({
     mutationFn: ({ id, aktif }: { id: string; aktif: boolean }) =>
       api.toggleUserStatus(id, aktif),
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['superadmin-users'] });
+      showToast(
+        vars.aktif ? 'success' : 'error',
+        vars.aktif ? 'Akun Diaktifkan' : 'Akun Dinonaktifkan',
+        vars.aktif ? 'Akun berhasil diaktifkan' : 'Akun berhasil dinonaktifkan'
+      );
+    },
+    onError: () => {
+      showToast('error', 'Gagal', 'Gagal mengubah status akun');
     },
   });
 

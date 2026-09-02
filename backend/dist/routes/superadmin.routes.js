@@ -31,7 +31,7 @@ const createAdminSchema = zod_1.z.object({
     password: zod_1.z.string().min(8, 'Password minimal 8 karakter'),
     nama: zod_1.z.string().min(2, 'Nama minimal 2 karakter'),
     noHp: zod_1.z.string().min(10, 'No HP minimal 10 digit'),
-    instansiId: zod_1.z.string().uuid('ID Instansi tidak valid'),
+    instansiId: zod_1.z.string().min(1, 'Pilih instansi terlebih dahulu'),
 });
 // ============================================================================
 // DASHBOARD
@@ -467,44 +467,76 @@ exports.superadminRouter.post('/admin', async (req, res) => {
         return;
     }
     const { email, password, nama, noHp, instansiId } = parsed.data;
-    // Validasi instansi exists
-    const instansi = await prisma_1.prisma.instansi.findUnique({ where: { id: instansiId } });
-    if (!instansi) {
-        res.status(404).json({ error: 'Instansi tidak ditemukan' });
-        return;
-    }
-    // Check email belum terdaftar
-    const existingProfile = await prisma_1.prisma.profile.findUnique({ where: { email } });
-    if (existingProfile) {
-        res.status(409).json({ error: 'Email sudah terdaftar' });
-        return;
-    }
+    const supabaseAdmin = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
     try {
-        // Buat user via Supabase Auth Admin API
-        const supabaseAdmin = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true,
-            user_metadata: { nama, no_hp: noHp },
-        });
-        if (authError || !authUser.user) {
-            console.error('Auth create error:', authError);
-            res.status(400).json({ error: authError?.message ?? 'Gagal membuat user auth' });
+        // Validasi instansi exists
+        const instansi = await prisma_1.prisma.instansi.findUnique({ where: { id: instansiId } });
+        if (!instansi) {
+            res.status(404).json({ error: 'Instansi tidak ditemukan' });
             return;
         }
-        // Buat profile dengan role admin
-        const profile = await prisma_1.prisma.profile.create({
-            data: {
-                id: authUser.user.id,
+        // Check email belum terdaftar di DB lokal
+        const existingProfile = await prisma_1.prisma.profile.findUnique({ where: { email } });
+        if (existingProfile) {
+            res.status(409).json({ error: 'Email sudah terdaftar' });
+            return;
+        }
+        // Cek apakah email sudah ada di Supabase Auth (dari percobaan sebelumnya yang gagal)
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+        const existingAuthUser = listData?.users?.find((u) => u.email === email);
+        let authUserId;
+        if (existingAuthUser) {
+            // User sudah ada di Supabase Auth tapi belum punya profile lokal — gunakan ID yang ada
+            authUserId = existingAuthUser.id;
+            // Update password jika diminta ulang
+            await supabaseAdmin.auth.admin.updateUserById(authUserId, { password });
+        }
+        else {
+            // Buat user baru via Supabase Auth Admin API
+            const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
                 email,
-                nama,
-                noHp,
-                role: 'admin',
-                instansiId,
-                aktif: true,
-            },
-        });
+                password,
+                email_confirm: true,
+                user_metadata: { nama, no_hp: noHp },
+            });
+            if (authError || !authUser.user) {
+                console.error('Auth create error:', authError);
+                res.status(400).json({ error: authError?.message ?? 'Gagal membuat user auth' });
+                return;
+            }
+            authUserId = authUser.user.id;
+        }
+        // Buat atau update profile dengan role admin
+        // Pakai upsert agar idempotent jika profile sudah pernah dibuat sebelumnya
+        let profile;
+        try {
+            profile = await prisma_1.prisma.profile.upsert({
+                where: { id: authUserId },
+                create: {
+                    id: authUserId,
+                    email,
+                    nama,
+                    noHp,
+                    role: 'admin',
+                    instansiId,
+                    aktif: true,
+                },
+                update: {
+                    nama,
+                    noHp,
+                    role: 'admin',
+                    instansiId,
+                    aktif: true,
+                },
+            });
+        }
+        catch (profileError) {
+            // Rollback: hapus auth user yang baru saja dibuat agar tidak jadi orphan
+            if (!existingAuthUser) {
+                await supabaseAdmin.auth.admin.deleteUser(authUserId).catch((e) => console.error('Rollback delete auth user gagal:', e));
+            }
+            throw profileError;
+        }
         res.status(201).json({
             data: {
                 id: profile.id,
@@ -736,6 +768,168 @@ exports.superadminRouter.get('/disbursements', async (req, res) => {
     catch (error) {
         console.error('List Disbursements error:', error);
         res.status(500).json({ error: 'Gagal mengambil data pencairan' });
+    }
+});
+/**
+ * GET /api/superadmin/instansi-saldo
+ * Saldo tertunda per instansi aktif — booking berstatus 'selesai' yang
+ * belum masuk batch disbursement manapun. Dipakai untuk memilih instansi
+ * saat membuat pencairan dana baru secara manual.
+ */
+exports.superadminRouter.get('/instansi-saldo', async (_req, res) => {
+    try {
+        const instansiList = await prisma_1.prisma.instansi.findMany({
+            where: { status: 'aktif' },
+            select: { id: true, namaInstansi: true, rekeningBank: true, komisiPlatformPersen: true },
+            orderBy: { namaInstansi: 'asc' },
+        });
+        const result = await Promise.all(instansiList.map(async (inst) => {
+            const bookings = await prisma_1.prisma.booking.findMany({
+                where: {
+                    car: { instansiId: inst.id },
+                    status: 'selesai',
+                    disbursementItems: { none: {} },
+                },
+                select: { id: true, totalHarga: true },
+            });
+            const saldoTertunda = bookings.reduce((sum, b) => sum + Number(b.totalHarga), 0);
+            return {
+                id: inst.id,
+                namaInstansi: inst.namaInstansi,
+                rekeningBank: inst.rekeningBank,
+                komisiPlatformPersen: Number(inst.komisiPlatformPersen),
+                saldoTertunda,
+                jumlahBookingTertunda: bookings.length,
+            };
+        }));
+        // Instansi dengan saldo tertunda ditampilkan lebih dulu
+        result.sort((a, b) => b.saldoTertunda - a.saldoTertunda);
+        res.json({ data: result });
+    }
+    catch (error) {
+        console.error('GET /api/superadmin/instansi-saldo error:', error);
+        res.status(500).json({ error: 'Gagal mengambil data saldo instansi' });
+    }
+});
+const createDisbursementSchema = zod_1.z.object({
+    instansiId: zod_1.z.string().uuid(),
+    bankTransferId: zod_1.z.string().trim().min(1).optional(),
+});
+/**
+ * POST /api/superadmin/disbursements
+ * Membuat batch pencairan dana MANUAL untuk satu instansi — mengambil
+ * semua booking 'selesai' milik instansi tsb yang belum pernah masuk
+ * disbursement lain, lalu membungkusnya jadi satu Disbursement baru
+ * berstatus 'diproses'. Transfer bank dilakukan manual di luar sistem;
+ * SuperAdmin menandai hasilnya lewat PATCH /disbursements/:id/status.
+ */
+exports.superadminRouter.post('/disbursements', async (req, res) => {
+    const parsed = createDisbursementSchema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
+        return;
+    }
+    const { instansiId, bankTransferId } = parsed.data;
+    try {
+        const instansi = await prisma_1.prisma.instansi.findUnique({ where: { id: instansiId } });
+        if (!instansi) {
+            res.status(404).json({ error: 'Instansi tidak ditemukan' });
+            return;
+        }
+        const pendingBookings = await prisma_1.prisma.booking.findMany({
+            where: {
+                car: { instansiId },
+                status: 'selesai',
+                disbursementItems: { none: {} },
+            },
+            select: { id: true, totalHarga: true },
+        });
+        if (pendingBookings.length === 0) {
+            res.status(400).json({ error: 'Tidak ada saldo tertunda untuk instansi ini' });
+            return;
+        }
+        const jumlahKotor = pendingBookings.reduce((sum, b) => sum + Number(b.totalHarga), 0);
+        const komisiPersen = Number(instansi.komisiPlatformPersen);
+        const komisiPlatform = Math.round(jumlahKotor * (komisiPersen / 100));
+        const jumlahBersih = jumlahKotor - komisiPlatform;
+        const disbursement = await prisma_1.prisma.$transaction(async (tx) => {
+            const created = await tx.disbursement.create({
+                data: {
+                    instansiId,
+                    jumlahKotor,
+                    komisiPlatform,
+                    jumlahBersih,
+                    status: 'diproses',
+                    bankTransferId: bankTransferId ?? null,
+                },
+            });
+            await tx.disbursementItem.createMany({
+                data: pendingBookings.map((b) => ({
+                    disbursementId: created.id,
+                    bookingId: b.id,
+                    jumlahKotor: b.totalHarga,
+                })),
+            });
+            return tx.disbursement.findUnique({
+                where: { id: created.id },
+                include: {
+                    instansi: { select: { id: true, namaInstansi: true } },
+                    items: { select: { id: true, bookingId: true, jumlahKotor: true } },
+                },
+            });
+        });
+        res.status(201).json({ data: disbursement });
+    }
+    catch (error) {
+        console.error('POST /api/superadmin/disbursements error:', error);
+        res.status(500).json({ error: 'Gagal membuat pencairan dana' });
+    }
+});
+const updateDisbursementStatusSchema = zod_1.z.object({
+    status: zod_1.z.enum(['berhasil', 'gagal']),
+    bankTransferId: zod_1.z.string().trim().min(1).optional(),
+});
+/**
+ * PATCH /api/superadmin/disbursements/:id/status
+ * Menandai hasil transfer manual. Hanya bisa dilakukan dari status
+ * 'diproses' — sekali ditandai berhasil/gagal, batch dianggap final
+ * (kalau gagal dan mau diulang, buat batch baru; booking yang sama tetap
+ * bisa dipilih lagi karena disbursementItems dari batch gagal tidak
+ * dihapus, jadi butuh keputusan eksplisit alih-alih auto-retry diam-diam).
+ */
+exports.superadminRouter.patch('/disbursements/:id/status', async (req, res) => {
+    const parsed = updateDisbursementStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
+        return;
+    }
+    try {
+        const existing = await prisma_1.prisma.disbursement.findUnique({ where: { id: req.params.id } });
+        if (!existing) {
+            res.status(404).json({ error: 'Pencairan tidak ditemukan' });
+            return;
+        }
+        if (existing.status !== 'diproses') {
+            res.status(409).json({ error: `Pencairan ini sudah berstatus '${existing.status}', tidak bisa diubah lagi` });
+            return;
+        }
+        const updated = await prisma_1.prisma.disbursement.update({
+            where: { id: req.params.id },
+            data: {
+                status: parsed.data.status,
+                ...(parsed.data.bankTransferId && { bankTransferId: parsed.data.bankTransferId }),
+                ...(parsed.data.status === 'berhasil' && { dicairkanPada: new Date() }),
+            },
+            include: {
+                instansi: { select: { id: true, namaInstansi: true } },
+                items: { select: { id: true, bookingId: true, jumlahKotor: true } },
+            },
+        });
+        res.json({ data: updated });
+    }
+    catch (error) {
+        console.error('PATCH /api/superadmin/disbursements/:id/status error:', error);
+        res.status(500).json({ error: 'Gagal memperbarui status pencairan' });
     }
 });
 // ============================================================================
@@ -1472,6 +1666,43 @@ exports.superadminRouter.get('/bookings', async (req, res) => {
         res.status(500).json({ error: 'Gagal mengambil data bookings' });
     }
 });
+/**
+ * GET /api/superadmin/bookings/:id
+ * Detail lengkap satu booking lintas-instansi (read-only) — sebelumnya
+ * SuperAdmin sama sekali tidak bisa drill-down dari daftar booking ke
+ * satu booking pun. Beda dari GET /api/admin/bookings/:id yang scoped ke
+ * instansi Admin sendiri, endpoint ini sengaja TANPA batasan instansi
+ * karena SuperAdmin memang perlu bisa lihat lintas-instansi untuk
+ * pengawasan/penyelesaian sengketa.
+ */
+exports.superadminRouter.get('/bookings/:id', async (req, res) => {
+    try {
+        const booking = await prisma_1.prisma.booking.findUnique({
+            where: { id: req.params.id },
+            include: {
+                car: {
+                    include: {
+                        images: { orderBy: { urutan: 'asc' } },
+                        instansi: { select: { id: true, namaInstansi: true } },
+                    },
+                },
+                profile: { select: { id: true, nama: true, email: true, noHp: true } },
+                addons: true,
+                statusLogs: { orderBy: { createdAt: 'asc' } },
+                payment: { select: { status: true, metodeBayar: true, jumlah: true, paidAt: true } },
+            },
+        });
+        if (!booking) {
+            res.status(404).json({ error: 'Booking tidak ditemukan' });
+            return;
+        }
+        res.json({ data: booking });
+    }
+    catch (error) {
+        console.error('GET /api/superadmin/bookings/:id error:', error);
+        res.status(500).json({ error: 'Gagal mengambil detail booking' });
+    }
+});
 // ============================================================================
 // TRANSACTIONS
 // ============================================================================
@@ -1675,8 +1906,28 @@ exports.superadminRouter.get('/reports', async (req, res) => {
                 dari = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
                 days = 30;
         }
+        // Periode sebelumnya (durasi sama, persis sebelum `dari`) — dipakai
+        // untuk menghitung tren asli (naik/turun vs periode sebelumnya).
+        // Sebelumnya SEMUA badge tren di halaman ini hardcode `change: 0` di
+        // frontend, tidak pernah dihitung dari data asli sama sekali.
+        const periodMs = now.getTime() - dari.getTime();
+        const dariSebelumnya = new Date(dari.getTime() - periodMs);
+        // Awal bulan kalender berjalan — sebelumnya `revenue.thisMonth` cuma
+        // alias dari `revenue.total` (ikut filter periode yang dipilih), jadi
+        // kalau user pilih "90 Hari" atau "1 Tahun", kartu "Pendapatan Bulan
+        // Ini" salah menampilkan total periode itu, bukan bulan kalender ini.
+        const awalBulanIni = new Date(now.getFullYear(), now.getMonth(), 1);
         // Fetch aggregated data
-        const [totalBookings, completedBookings, activeBookings, totalUsers, newUsers, totalCars, availableCars, totalInstansi, activeInstansi, payments, disbursements,] = await Promise.all([
+        const [totalBookings, completedBookings, activeBookings, totalUsers, newUsers, totalCars, availableCars, totalInstansi, activeInstansi, payments, disbursements, revenueThisMonthPayments, 
+        // Untuk hitung retention rate asli: pelanggan yang booking di
+        // periode sebelumnya, dan pelanggan yang booking di periode ini
+        customersPeriodeSebelumnya, customersPeriodeIni, 
+        // Untuk hitung tren asli periode-vs-periode
+        totalBookingsSebelumnya, paymentsSebelumnya, 
+        // Untuk hitung komisi pending asli: booking 'selesai' yang belum
+        // pernah masuk batch disbursement manapun, plus rate komisi
+        // instansi masing-masing (rate beda-beda per instansi, tidak flat)
+        pendingBookings, instansiRates,] = await Promise.all([
             // Bookings stats
             prisma_1.prisma.booking.count({ where: { createdAt: { gte: dari } } }),
             prisma_1.prisma.booking.count({ where: { status: 'selesai', createdAt: { gte: dari } } }),
@@ -1699,16 +1950,79 @@ exports.superadminRouter.get('/reports', async (req, res) => {
                 where: { status: 'berhasil', createdAt: { gte: dari } },
                 select: { jumlahKotor: true, komisiPlatform: true },
             }),
+            prisma_1.prisma.payment.findMany({
+                where: { status: 'paid', paidAt: { gte: awalBulanIni } },
+                select: { jumlah: true },
+            }),
+            prisma_1.prisma.booking.findMany({
+                where: { createdAt: { gte: dariSebelumnya, lt: dari } },
+                select: { userId: true },
+                distinct: ['userId'],
+            }),
+            prisma_1.prisma.booking.findMany({
+                where: { createdAt: { gte: dari } },
+                select: { userId: true },
+                distinct: ['userId'],
+            }),
+            prisma_1.prisma.booking.count({ where: { createdAt: { gte: dariSebelumnya, lt: dari } } }),
+            prisma_1.prisma.payment.findMany({
+                where: { status: 'paid', paidAt: { gte: dariSebelumnya, lt: dari } },
+                select: { jumlah: true },
+            }),
+            prisma_1.prisma.booking.findMany({
+                where: { status: 'selesai', disbursementItems: { none: {} } },
+                select: { totalHarga: true, car: { select: { instansiId: true } } },
+            }),
+            prisma_1.prisma.instansi.findMany({
+                where: { status: 'aktif' },
+                select: { id: true, komisiPlatformPersen: true },
+            }),
         ]);
         const totalRevenue = payments.reduce((sum, p) => sum + Number(p.jumlah), 0);
         const totalCommission = disbursements.reduce((sum, d) => sum + Number(d.komisiPlatform), 0);
         const completionRate = totalBookings > 0 ? (completedBookings / totalBookings) * 100 : 0;
         const utilizationRate = totalCars > 0 ? ((totalCars - availableCars) / totalCars) * 100 : 0;
         const dailyAvg = days > 0 ? Math.round(totalRevenue / days) : 0;
+        const revenueThisMonth = revenueThisMonthPayments.reduce((sum, p) => sum + Number(p.jumlah), 0);
+        // Retention rate asli: dari pelanggan yang booking di periode
+        // sebelumnya, berapa persen yang booking LAGI di periode ini.
+        const userIdsSebelumnya = new Set(customersPeriodeSebelumnya.map((b) => b.userId));
+        const userIdsIni = new Set(customersPeriodeIni.map((b) => b.userId));
+        let retainedCount = 0;
+        for (const uid of userIdsSebelumnya) {
+            if (userIdsIni.has(uid))
+                retainedCount++;
+        }
+        const retentionRate = userIdsSebelumnya.size > 0
+            ? Math.round((retainedCount / userIdsSebelumnya.size) * 1000) / 10
+            : 0;
+        // Komisi pending asli: sum(totalHarga booking selesai yang belum
+        // dicairkan) x rate komisi instansi masing-masing. Snapshot saat ini
+        // (tidak difilter periode — "pending" itu konsep kondisi terkini,
+        // bukan sesuatu yang terjadi "dalam 30 hari terakhir").
+        const rateByInstansi = new Map(instansiRates.map((i) => [i.id, Number(i.komisiPlatformPersen)]));
+        const commissionPending = pendingBookings.reduce((sum, b) => {
+            const rate = rateByInstansi.get(b.car.instansiId) ?? 0;
+            return sum + Number(b.totalHarga) * (rate / 100);
+        }, 0);
+        // Effective commission rate periode ini — dihitung dari data asli
+        // (komisi aktual / revenue aktual), bukan angka flat. Ini jujur
+        // menunjukkan blended rate sesungguhnya, karena tiap instansi bisa
+        // punya rate komisi berbeda.
+        const commissionRate = totalRevenue > 0
+            ? Math.round((totalCommission / totalRevenue) * 1000) / 10
+            : 0;
+        // Tren periode-vs-periode (naik/turun %) — dihitung dari data asli.
+        const calcTrend = (current, previous) => {
+            if (previous === 0)
+                return current > 0 ? 100 : 0;
+            return Math.round(((current - previous) / previous) * 1000) / 10;
+        };
+        const revenueSebelumnya = paymentsSebelumnya.reduce((sum, p) => sum + Number(p.jumlah), 0);
         res.json({
             revenue: {
                 total: totalRevenue,
-                thisMonth: totalRevenue,
+                thisMonth: revenueThisMonth,
                 daily: dailyAvg,
             },
             booking: {
@@ -1719,7 +2033,7 @@ exports.superadminRouter.get('/reports', async (req, res) => {
             customer: {
                 total: totalUsers,
                 newThisPeriod: newUsers,
-                retentionRate: 78, // Placeholder - needs proper historical calculation
+                retentionRate,
             },
             fleet: {
                 total: totalCars,
@@ -1733,8 +2047,12 @@ exports.superadminRouter.get('/reports', async (req, res) => {
             },
             commission: {
                 total: totalCommission,
-                pending: 0,
-                rate: 10,
+                pending: Math.round(commissionPending),
+                rate: commissionRate,
+            },
+            trends: {
+                revenue: calcTrend(totalRevenue, revenueSebelumnya),
+                booking: calcTrend(totalBookings, totalBookingsSebelumnya),
             },
             period,
             dari: dari.toISOString(),

@@ -36,7 +36,7 @@ const createAdminSchema = z.object({
   password: z.string().min(8, 'Password minimal 8 karakter'),
   nama: z.string().min(2, 'Nama minimal 2 karakter'),
   noHp: z.string().min(10, 'No HP minimal 10 digit'),
-  instansiId: z.string().uuid('ID Instansi tidak valid'),
+  instansiId: z.string().min(1, 'Pilih instansi terlebih dahulu'),
 });
 
 // ============================================================================
@@ -533,52 +533,87 @@ superadminRouter.post('/admin', async (req, res) => {
 
   const { email, password, nama, noHp, instansiId } = parsed.data;
 
-  // Validasi instansi exists
-  const instansi = await prisma.instansi.findUnique({ where: { id: instansiId } });
-  if (!instansi) {
-    res.status(404).json({ error: 'Instansi tidak ditemukan' });
-    return;
-  }
-
-  // Check email belum terdaftar
-  const existingProfile = await prisma.profile.findUnique({ where: { email } });
-  if (existingProfile) {
-    res.status(409).json({ error: 'Email sudah terdaftar' });
-    return;
-  }
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   try {
-    // Buat user via Supabase Auth Admin API
-    const supabaseAdmin = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { nama, no_hp: noHp },
-    });
-
-    if (authError || !authUser.user) {
-      console.error('Auth create error:', authError);
-      res.status(400).json({ error: authError?.message ?? 'Gagal membuat user auth' });
+    // Validasi instansi exists
+    const instansi = await prisma.instansi.findUnique({ where: { id: instansiId } });
+    if (!instansi) {
+      res.status(404).json({ error: 'Instansi tidak ditemukan' });
       return;
     }
 
-    // Buat profile dengan role admin
-    const profile = await prisma.profile.create({
-      data: {
-        id: authUser.user.id,
+    // Check email belum terdaftar di DB lokal
+    const existingProfile = await prisma.profile.findUnique({ where: { email } });
+    if (existingProfile) {
+      res.status(409).json({ error: 'Email sudah terdaftar' });
+      return;
+    }
+
+    // Cek apakah email sudah ada di Supabase Auth (dari percobaan sebelumnya yang gagal)
+    const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+    const existingAuthUser = listData?.users?.find((u) => u.email === email);
+
+    let authUserId: string;
+
+    if (existingAuthUser) {
+      // User sudah ada di Supabase Auth tapi belum punya profile lokal — gunakan ID yang ada
+      authUserId = existingAuthUser.id;
+      // Update password jika diminta ulang
+      await supabaseAdmin.auth.admin.updateUserById(authUserId, { password });
+    } else {
+      // Buat user baru via Supabase Auth Admin API
+      const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email,
-        nama,
-        noHp,
-        role: 'admin',
-        instansiId,
-        aktif: true,
-      },
-    });
+        password,
+        email_confirm: true,
+        user_metadata: { nama, no_hp: noHp },
+      });
+
+      if (authError || !authUser.user) {
+        console.error('Auth create error:', authError);
+        res.status(400).json({ error: authError?.message ?? 'Gagal membuat user auth' });
+        return;
+      }
+
+      authUserId = authUser.user.id;
+    }
+
+    // Buat atau update profile dengan role admin
+    // Pakai upsert agar idempotent jika profile sudah pernah dibuat sebelumnya
+    let profile;
+    try {
+      profile = await prisma.profile.upsert({
+        where: { id: authUserId },
+        create: {
+          id: authUserId,
+          email,
+          nama,
+          noHp,
+          role: 'admin',
+          instansiId,
+          aktif: true,
+        },
+        update: {
+          nama,
+          noHp,
+          role: 'admin',
+          instansiId,
+          aktif: true,
+        },
+      });
+    } catch (profileError) {
+      // Rollback: hapus auth user yang baru saja dibuat agar tidak jadi orphan
+      if (!existingAuthUser) {
+        await supabaseAdmin.auth.admin.deleteUser(authUserId).catch((e) =>
+          console.error('Rollback delete auth user gagal:', e)
+        );
+      }
+      throw profileError;
+    }
 
     res.status(201).json({
       data: {
@@ -1837,6 +1872,45 @@ superadminRouter.get('/bookings', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/superadmin/bookings/:id
+ * Detail lengkap satu booking lintas-instansi (read-only) — sebelumnya
+ * SuperAdmin sama sekali tidak bisa drill-down dari daftar booking ke
+ * satu booking pun. Beda dari GET /api/admin/bookings/:id yang scoped ke
+ * instansi Admin sendiri, endpoint ini sengaja TANPA batasan instansi
+ * karena SuperAdmin memang perlu bisa lihat lintas-instansi untuk
+ * pengawasan/penyelesaian sengketa.
+ */
+superadminRouter.get('/bookings/:id', async (req, res) => {
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: {
+        car: {
+          include: {
+            images: { orderBy: { urutan: 'asc' } },
+            instansi: { select: { id: true, namaInstansi: true } },
+          },
+        },
+        profile: { select: { id: true, nama: true, email: true, noHp: true } },
+        addons: true,
+        statusLogs: { orderBy: { createdAt: 'asc' } },
+        payment: { select: { status: true, metodeBayar: true, jumlah: true, paidAt: true } },
+      },
+    });
+
+    if (!booking) {
+      res.status(404).json({ error: 'Booking tidak ditemukan' });
+      return;
+    }
+
+    res.json({ data: booking });
+  } catch (error) {
+    console.error('GET /api/superadmin/bookings/:id error:', error);
+    res.status(500).json({ error: 'Gagal mengambil detail booking' });
+  }
+});
+
 // ============================================================================
 // TRANSACTIONS
 // ============================================================================
@@ -2052,6 +2126,19 @@ superadminRouter.get('/reports', async (req, res) => {
         days = 30;
     }
 
+    // Periode sebelumnya (durasi sama, persis sebelum `dari`) — dipakai
+    // untuk menghitung tren asli (naik/turun vs periode sebelumnya).
+    // Sebelumnya SEMUA badge tren di halaman ini hardcode `change: 0` di
+    // frontend, tidak pernah dihitung dari data asli sama sekali.
+    const periodMs = now.getTime() - dari.getTime();
+    const dariSebelumnya = new Date(dari.getTime() - periodMs);
+
+    // Awal bulan kalender berjalan — sebelumnya `revenue.thisMonth` cuma
+    // alias dari `revenue.total` (ikut filter periode yang dipilih), jadi
+    // kalau user pilih "90 Hari" atau "1 Tahun", kartu "Pendapatan Bulan
+    // Ini" salah menampilkan total periode itu, bukan bulan kalender ini.
+    const awalBulanIni = new Date(now.getFullYear(), now.getMonth(), 1);
+
     // Fetch aggregated data
     const [
       totalBookings,
@@ -2065,6 +2152,19 @@ superadminRouter.get('/reports', async (req, res) => {
       activeInstansi,
       payments,
       disbursements,
+      revenueThisMonthPayments,
+      // Untuk hitung retention rate asli: pelanggan yang booking di
+      // periode sebelumnya, dan pelanggan yang booking di periode ini
+      customersPeriodeSebelumnya,
+      customersPeriodeIni,
+      // Untuk hitung tren asli periode-vs-periode
+      totalBookingsSebelumnya,
+      paymentsSebelumnya,
+      // Untuk hitung komisi pending asli: booking 'selesai' yang belum
+      // pernah masuk batch disbursement manapun, plus rate komisi
+      // instansi masing-masing (rate beda-beda per instansi, tidak flat)
+      pendingBookings,
+      instansiRates,
     ] = await Promise.all([
       // Bookings stats
       prisma.booking.count({ where: { createdAt: { gte: dari } } }),
@@ -2092,6 +2192,33 @@ superadminRouter.get('/reports', async (req, res) => {
         where: { status: 'berhasil', createdAt: { gte: dari } },
         select: { jumlahKotor: true, komisiPlatform: true },
       }),
+      prisma.payment.findMany({
+        where: { status: 'paid', paidAt: { gte: awalBulanIni } },
+        select: { jumlah: true },
+      }),
+      prisma.booking.findMany({
+        where: { createdAt: { gte: dariSebelumnya, lt: dari } },
+        select: { userId: true },
+        distinct: ['userId'],
+      }),
+      prisma.booking.findMany({
+        where: { createdAt: { gte: dari } },
+        select: { userId: true },
+        distinct: ['userId'],
+      }),
+      prisma.booking.count({ where: { createdAt: { gte: dariSebelumnya, lt: dari } } }),
+      prisma.payment.findMany({
+        where: { status: 'paid', paidAt: { gte: dariSebelumnya, lt: dari } },
+        select: { jumlah: true },
+      }),
+      prisma.booking.findMany({
+        where: { status: 'selesai', disbursementItems: { none: {} } },
+        select: { totalHarga: true, car: { select: { instansiId: true } } },
+      }),
+      prisma.instansi.findMany({
+        where: { status: 'aktif' },
+        select: { id: true, komisiPlatformPersen: true },
+      }),
     ]);
 
     const totalRevenue = payments.reduce((sum, p) => sum + Number(p.jumlah), 0);
@@ -2099,11 +2226,49 @@ superadminRouter.get('/reports', async (req, res) => {
     const completionRate = totalBookings > 0 ? (completedBookings / totalBookings) * 100 : 0;
     const utilizationRate = totalCars > 0 ? ((totalCars - availableCars) / totalCars) * 100 : 0;
     const dailyAvg = days > 0 ? Math.round(totalRevenue / days) : 0;
+    const revenueThisMonth = revenueThisMonthPayments.reduce((sum, p) => sum + Number(p.jumlah), 0);
+
+    // Retention rate asli: dari pelanggan yang booking di periode
+    // sebelumnya, berapa persen yang booking LAGI di periode ini.
+    const userIdsSebelumnya = new Set(customersPeriodeSebelumnya.map((b) => b.userId));
+    const userIdsIni = new Set(customersPeriodeIni.map((b) => b.userId));
+    let retainedCount = 0;
+    for (const uid of userIdsSebelumnya) {
+      if (userIdsIni.has(uid)) retainedCount++;
+    }
+    const retentionRate = userIdsSebelumnya.size > 0
+      ? Math.round((retainedCount / userIdsSebelumnya.size) * 1000) / 10
+      : 0;
+
+    // Komisi pending asli: sum(totalHarga booking selesai yang belum
+    // dicairkan) x rate komisi instansi masing-masing. Snapshot saat ini
+    // (tidak difilter periode — "pending" itu konsep kondisi terkini,
+    // bukan sesuatu yang terjadi "dalam 30 hari terakhir").
+    const rateByInstansi = new Map(instansiRates.map((i) => [i.id, Number(i.komisiPlatformPersen)]));
+    const commissionPending = pendingBookings.reduce((sum, b) => {
+      const rate = rateByInstansi.get(b.car.instansiId) ?? 0;
+      return sum + Number(b.totalHarga) * (rate / 100);
+    }, 0);
+
+    // Effective commission rate periode ini — dihitung dari data asli
+    // (komisi aktual / revenue aktual), bukan angka flat. Ini jujur
+    // menunjukkan blended rate sesungguhnya, karena tiap instansi bisa
+    // punya rate komisi berbeda.
+    const commissionRate = totalRevenue > 0
+      ? Math.round((totalCommission / totalRevenue) * 1000) / 10
+      : 0;
+
+    // Tren periode-vs-periode (naik/turun %) — dihitung dari data asli.
+    const calcTrend = (current: number, previous: number): number => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 1000) / 10;
+    };
+    const revenueSebelumnya = paymentsSebelumnya.reduce((sum, p) => sum + Number(p.jumlah), 0);
 
     res.json({
       revenue: {
         total: totalRevenue,
-        thisMonth: totalRevenue,
+        thisMonth: revenueThisMonth,
         daily: dailyAvg,
       },
       booking: {
@@ -2114,7 +2279,7 @@ superadminRouter.get('/reports', async (req, res) => {
       customer: {
         total: totalUsers,
         newThisPeriod: newUsers,
-        retentionRate: 78, // Placeholder - needs proper historical calculation
+        retentionRate,
       },
       fleet: {
         total: totalCars,
@@ -2128,8 +2293,12 @@ superadminRouter.get('/reports', async (req, res) => {
       },
       commission: {
         total: totalCommission,
-        pending: 0,
-        rate: 10,
+        pending: Math.round(commissionPending),
+        rate: commissionRate,
+      },
+      trends: {
+        revenue: calcTrend(totalRevenue, revenueSebelumnya),
+        booking: calcTrend(totalBookings, totalBookingsSebelumnya),
       },
       period,
       dari: dari.toISOString(),

@@ -21,16 +21,13 @@
       (function() {
         var stored = localStorage.getItem('kerental-theme');
         var root = document.documentElement;
-        var body = document.body;
 
         if (stored === 'light') {
           root.classList.remove('dark');
           root.classList.add('light');
-          body.style.backgroundColor = '#F9EFE8';
         } else {
           root.classList.add('dark');
           root.classList.remove('light');
-          body.style.backgroundColor = '#0a0a0a';
         }
       })();
     </script>

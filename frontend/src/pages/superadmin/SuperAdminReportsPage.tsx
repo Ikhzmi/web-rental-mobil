@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, TrendingUp, TrendingDown, Users, Car, Building2, CreditCard, Calendar, Download, Eye, Loader2 } from 'lucide-react';
@@ -16,6 +17,19 @@ interface ReportCard {
   stats: { label: string; value: string; change?: number }[];
 }
 
+// Tujuan tombol "Detail" tiap kategori laporan — diarahkan ke halaman
+// SuperAdmin yang sudah ada, bukan halaman baru. 'customer' & 'fleet'
+// sengaja tidak dipetakan: tidak ada halaman SuperAdmin khusus daftar
+// customer atau daftar armada umum (yang ada cuma approval), jadi lebih
+// jujur menonaktifkan tombolnya daripada mengarahkan ke tempat yang
+// tidak benar-benar menampilkan detail yang dijanjikan.
+const REPORT_DETAIL_LINK: Record<string, string> = {
+  revenue: '/superadmin/transactions',
+  booking: '/superadmin/bookings',
+  rental: '/superadmin/instansi',
+  commission: '/superadmin/pencairan',
+};
+
 // Default empty data for initial render
 const DEFAULT_REPORTS: ReportCard[] = [
   {
@@ -25,9 +39,9 @@ const DEFAULT_REPORTS: ReportCard[] = [
     icon: TrendingUp,
     color: 'emerald',
     stats: [
-      { label: 'Total Pendapatan', value: '-', change: 0 },
-      { label: 'Pendapatan Bulan Ini', value: '-', change: 0 },
-      { label: 'Rata-rata Harian', value: '-', change: 0 },
+      { label: 'Total Pendapatan', value: '-' },
+      { label: 'Pendapatan Bulan Ini', value: '-' },
+      { label: 'Rata-rata Harian', value: '-' },
     ],
   },
   {
@@ -37,9 +51,9 @@ const DEFAULT_REPORTS: ReportCard[] = [
     icon: Calendar,
     color: 'blue',
     stats: [
-      { label: 'Total Pemesanan', value: '-', change: 0 },
-      { label: 'Pemesanan Aktif', value: '-', change: 0 },
-      { label: 'Completion Rate', value: '-', change: 0 },
+      { label: 'Total Pemesanan', value: '-' },
+      { label: 'Pemesanan Aktif', value: '-' },
+      { label: 'Completion Rate', value: '-' },
     ],
   },
   {
@@ -49,9 +63,9 @@ const DEFAULT_REPORTS: ReportCard[] = [
     icon: Users,
     color: 'purple',
     stats: [
-      { label: 'Total Pelanggan', value: '-', change: 0 },
-      { label: 'Pelanggan Baru', value: '-', change: 0 },
-      { label: 'Retention Rate', value: '-', change: 0 },
+      { label: 'Total Pelanggan', value: '-' },
+      { label: 'Pelanggan Baru', value: '-' },
+      { label: 'Retention Rate', value: '-' },
     ],
   },
   {
@@ -61,9 +75,9 @@ const DEFAULT_REPORTS: ReportCard[] = [
     icon: Car,
     color: 'amber',
     stats: [
-      { label: 'Total Kendaraan', value: '-', change: 0 },
-      { label: 'Tersedia', value: '-', change: 0 },
-      { label: 'Utilisasi', value: '-', change: 0 },
+      { label: 'Total Kendaraan', value: '-' },
+      { label: 'Tersedia', value: '-' },
+      { label: 'Utilisasi', value: '-' },
     ],
   },
   {
@@ -73,9 +87,9 @@ const DEFAULT_REPORTS: ReportCard[] = [
     icon: Building2,
     color: 'teal',
     stats: [
-      { label: 'Total Rental', value: '-', change: 0 },
-      { label: 'Rental Aktif', value: '-', change: 0 },
-      { label: 'Avg Revenue/Rental', value: '-', change: 0 },
+      { label: 'Total Rental', value: '-' },
+      { label: 'Rental Aktif', value: '-' },
+      { label: 'Avg Revenue/Rental', value: '-' },
     ],
   },
   {
@@ -85,9 +99,9 @@ const DEFAULT_REPORTS: ReportCard[] = [
     icon: CreditCard,
     color: 'rose',
     stats: [
-      { label: 'Total Komisi', value: '-', change: 0 },
-      { label: 'Komisi Pending', value: '-', change: 0 },
-      { label: 'Commission Rate', value: '-', change: 0 },
+      { label: 'Total Komisi', value: '-' },
+      { label: 'Komisi Pending', value: '-' },
+      { label: 'Commission Rate', value: '-' },
     ],
   },
 ];
@@ -102,9 +116,9 @@ function buildReportsFromData(data: SuperAdminReportsData): ReportCard[] {
       icon: TrendingUp,
       color: 'emerald',
       stats: [
-        { label: 'Total Pendapatan', value: formatRupiah(data.revenue.total), change: 0 },
-        { label: 'Pendapatan Bulan Ini', value: formatRupiah(data.revenue.thisMonth), change: 0 },
-        { label: 'Rata-rata Harian', value: formatRupiah(data.revenue.daily), change: 0 },
+        { label: 'Total Pendapatan', value: formatRupiah(data.revenue.total), change: data.trends.revenue },
+        { label: 'Pendapatan Bulan Ini', value: formatRupiah(data.revenue.thisMonth) },
+        { label: 'Rata-rata Harian', value: formatRupiah(data.revenue.daily) },
       ],
     },
     {
@@ -114,9 +128,9 @@ function buildReportsFromData(data: SuperAdminReportsData): ReportCard[] {
       icon: Calendar,
       color: 'blue',
       stats: [
-        { label: 'Total Pemesanan', value: String(data.booking.total), change: 0 },
-        { label: 'Pemesanan Aktif', value: String(data.booking.active), change: 0 },
-        { label: 'Completion Rate', value: `${data.booking.completionRate}%`, change: 0 },
+        { label: 'Total Pemesanan', value: String(data.booking.total), change: data.trends.booking },
+        { label: 'Pemesanan Aktif', value: String(data.booking.active) },
+        { label: 'Completion Rate', value: `${data.booking.completionRate}%` },
       ],
     },
     {
@@ -126,9 +140,9 @@ function buildReportsFromData(data: SuperAdminReportsData): ReportCard[] {
       icon: Users,
       color: 'purple',
       stats: [
-        { label: 'Total Pelanggan', value: String(data.customer.total), change: 0 },
-        { label: 'Pelanggan Baru', value: String(data.customer.newThisPeriod), change: 0 },
-        { label: 'Retention Rate', value: `${data.customer.retentionRate}%`, change: 0 },
+        { label: 'Total Pelanggan', value: String(data.customer.total) },
+        { label: 'Pelanggan Baru', value: String(data.customer.newThisPeriod) },
+        { label: 'Retention Rate', value: `${data.customer.retentionRate}%` },
       ],
     },
     {
@@ -138,9 +152,9 @@ function buildReportsFromData(data: SuperAdminReportsData): ReportCard[] {
       icon: Car,
       color: 'amber',
       stats: [
-        { label: 'Total Kendaraan', value: String(data.fleet.total), change: 0 },
-        { label: 'Tersedia', value: String(data.fleet.available), change: 0 },
-        { label: 'Utilisasi', value: `${data.fleet.utilization}%`, change: 0 },
+        { label: 'Total Kendaraan', value: String(data.fleet.total) },
+        { label: 'Tersedia', value: String(data.fleet.available) },
+        { label: 'Utilisasi', value: `${data.fleet.utilization}%` },
       ],
     },
     {
@@ -150,9 +164,9 @@ function buildReportsFromData(data: SuperAdminReportsData): ReportCard[] {
       icon: Building2,
       color: 'teal',
       stats: [
-        { label: 'Total Rental', value: String(data.rental.total), change: 0 },
-        { label: 'Rental Aktif', value: String(data.rental.active), change: 0 },
-        { label: 'Avg Revenue/Rental', value: formatRupiah(data.rental.avgRevenue), change: 0 },
+        { label: 'Total Rental', value: String(data.rental.total) },
+        { label: 'Rental Aktif', value: String(data.rental.active) },
+        { label: 'Avg Revenue/Rental', value: formatRupiah(data.rental.avgRevenue) },
       ],
     },
     {
@@ -162,9 +176,9 @@ function buildReportsFromData(data: SuperAdminReportsData): ReportCard[] {
       icon: CreditCard,
       color: 'rose',
       stats: [
-        { label: 'Total Komisi', value: formatRupiah(data.commission.total), change: 0 },
-        { label: 'Komisi Pending', value: formatRupiah(data.commission.pending), change: 0 },
-        { label: 'Commission Rate', value: `${data.commission.rate}%`, change: 0 },
+        { label: 'Total Komisi', value: formatRupiah(data.commission.total), change: data.trends.revenue },
+        { label: 'Komisi Pending', value: formatRupiah(data.commission.pending) },
+        { label: 'Commission Rate', value: `${data.commission.rate}%` },
       ],
     },
   ];
@@ -245,21 +259,43 @@ function ReportCard({ report, isDark }: { report: ReportCard; isDark: boolean })
         </div>
       </div>
 
-      {/* Actions */}
+      {/* Actions — sebelumnya kedua tombol ini TIDAK punya onClick sama
+          sekali (dead button). "Detail" sekarang diarahkan ke halaman
+          SuperAdmin paling relevan yang sudah ada (bukan halaman baru,
+          demi menghindari duplikasi tampilan data). "Export" jujur
+          dinonaktifkan dengan penjelasan, bukan dibiarkan aktif-tapi-diam
+          — section "Coming Soon" di bawah sudah lebih dulu mengaku fitur
+          ini belum ada. */}
       <div className={`flex border-t ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-        <button className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
-          isDark
-            ? 'text-white/70 hover:text-white hover:bg-white/5'
-            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-        }`}>
-          <Eye size={16} />
-          Detail
-        </button>
-        <button className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-l transition-colors ${
-          isDark
-            ? 'text-white/70 hover:text-white hover:bg-white/5 border-white/10'
-            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border-slate-200'
-        }`}>
+        {REPORT_DETAIL_LINK[report.id] ? (
+          <Link
+            to={REPORT_DETAIL_LINK[report.id]}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors ${
+              isDark
+                ? 'text-white/70 hover:text-white hover:bg-white/5'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            <Eye size={16} />
+            Detail
+          </Link>
+        ) : (
+          <span className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium cursor-not-allowed ${
+            isDark ? 'text-white/25' : 'text-slate-300'
+          }`}>
+            <Eye size={16} />
+            Detail
+          </span>
+        )}
+        <button
+          disabled
+          title="Fitur export belum tersedia"
+          className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium border-l cursor-not-allowed ${
+            isDark
+              ? 'text-white/25 border-white/10'
+              : 'text-slate-300 border-slate-200'
+          }`}
+        >
           <Download size={16} />
           Export
         </button>
@@ -357,10 +393,10 @@ export default function SuperAdminReportsPage() {
       {/* Quick Stats */}
       <div className={`grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
         {[
-          { label: 'Total Pendapatan', value: formatRupiah(statsData.revenue), change: 0, icon: TrendingUp, color: 'emerald' },
-          { label: 'Total Pemesanan', value: String(statsData.bookings), change: 0, icon: Calendar, color: 'blue' },
-          { label: 'Total Pengguna', value: String(statsData.customers), change: 0, icon: Users, color: 'purple' },
-          { label: 'Total Komisi', value: formatRupiah(statsData.commission), change: 0, icon: CreditCard, color: 'rose' },
+          { label: 'Total Pendapatan', value: formatRupiah(statsData.revenue), change: data?.trends.revenue, icon: TrendingUp, color: 'emerald' },
+          { label: 'Total Pemesanan', value: String(statsData.bookings), change: data?.trends.booking, icon: Calendar, color: 'blue' },
+          { label: 'Total Pengguna', value: String(statsData.customers), icon: Users, color: 'purple' },
+          { label: 'Total Komisi', value: formatRupiah(statsData.commission), icon: CreditCard, color: 'rose' },
         ].map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -384,12 +420,21 @@ export default function SuperAdminReportsPage() {
               </div>
               <div className="flex items-end justify-between">
                 <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{stat.value}</p>
-                <span className={`flex items-center gap-1 text-xs font-medium ${
-                  stat.change > 0 ? 'text-emerald-400' : 'text-red-400'
-                }`}>
-                  {stat.change > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                  {Math.abs(stat.change)}%
-                </span>
+                {/* Sebelumnya badge ini render TANPA guard sama sekali
+                    (stat.change > 0 langsung dipanggil di `undefined` kalau
+                    query belum resolve -> selalu jatuh ke cabang merah
+                    "turun 0%", bukan cuma sekadar hardcode 0). Sekarang
+                    disembunyikan total kalau memang tidak ada data tren
+                    asli untuk metrik itu (Total Pengguna & Total Komisi
+                    di quick stats ini belum ada perbandingan periode). */}
+                {stat.change !== undefined && (
+                  <span className={`flex items-center gap-1 text-xs font-medium ${
+                    stat.change > 0 ? 'text-emerald-400' : stat.change < 0 ? 'text-red-400' : isDark ? 'text-white/40' : 'text-slate-400'
+                  }`}>
+                    {stat.change > 0 ? <TrendingUp size={12} /> : stat.change < 0 ? <TrendingDown size={12} /> : null}
+                    {stat.change === 0 ? '0%' : `${Math.abs(stat.change)}%`}
+                  </span>
+                )}
               </div>
             </motion.div>
           );
