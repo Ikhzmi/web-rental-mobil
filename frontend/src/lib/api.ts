@@ -625,6 +625,22 @@ export function onSessionExpired(callback: () => void) {
   return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handler);
 }
 
+// Proactive refresh: cek expiry sebelum request agar user aktif tidak kena 401 dadakan
+async function ensureFreshToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const s = data.session;
+    if (!s) return null;
+    const expMs = s.expires_at ? s.expires_at * 1000 : 0;
+    if (expMs && expMs - Date.now() < 10 * 60 * 1000) {
+      return refreshSessionToken();
+    }
+    return s.access_token;
+  } catch {
+    return null;
+  }
+}
+
 // Mutex / promise share untuk token refresh agar tidak terjadi duplicate refresh request secara bersamaan
 let refreshPromise: Promise<string | null> | null = null;
 
