@@ -1781,6 +1781,7 @@ exports.superadminRouter.get('/bookings', async (req, res) => {
         if (cari) {
             where.OR = [
                 { car: { nama: { contains: cari, mode: 'insensitive' } } },
+                { car: { nomorPlat: { contains: cari, mode: 'insensitive' } } },
                 { profile: { nama: { contains: cari, mode: 'insensitive' } } },
                 { car: { instansi: { namaInstansi: { contains: cari, mode: 'insensitive' } } } },
                 { id: { contains: cari, mode: 'insensitive' } },
@@ -1818,6 +1819,7 @@ exports.superadminRouter.get('/bookings', async (req, res) => {
             car: {
                 id: b.car.id,
                 nama: b.car.nama,
+                nomorPlat: b.car.nomorPlat,
                 images: b.car.images.map((img) => ({ url: img.url })),
             },
             profile: { id: b.profile.id, nama: b.profile.nama },

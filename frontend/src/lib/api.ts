@@ -626,7 +626,7 @@ export function onSessionExpired(callback: () => void) {
 }
 
 // Proactive refresh: cek expiry sebelum request agar user aktif tidak kena 401 dadakan
-async function ensureFreshToken(): Promise<string | null> {
+export async function ensureFreshToken(): Promise<string | null> {
   try {
     const { data } = await supabase.auth.getSession();
     const s = data.session;

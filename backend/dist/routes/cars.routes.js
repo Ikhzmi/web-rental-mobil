@@ -61,7 +61,10 @@ exports.carsRouter.get('/:id', (0, errorHandler_1.asyncHandler)(async (req, res)
     const id = idParse.data;
     const car = await prisma_1.prisma.car.findUnique({
         where: { id },
-        include: { images: { orderBy: { urutan: 'asc' } } },
+        include: {
+            images: { orderBy: { urutan: 'asc' } },
+            instansi: { select: { id: true, namaInstansi: true, alamat: true, noHpPic: true, status: true } },
+        },
     });
     if (!car || car.status === 'nonaktif' || car.statusApproval !== 'disetujui') {
         throw new errorHandler_1.AppError('Mobil tidak ditemukan', 404);

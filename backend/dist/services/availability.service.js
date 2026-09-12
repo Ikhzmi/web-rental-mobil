@@ -18,35 +18,61 @@ const BLOCKING_STATUSES = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'];
  * mencegah race condition dua booking dapat slot yang sama.
  */
 async function isCarAvailable(tx, { carId, tanggalMulai, tanggalSelesai, excludeBookingId }) {
-    const conflicting = await tx.booking.findFirst({
+    const conflictingBooking = await tx.booking.findFirst({
         where: {
             carId,
             status: { in: [...BLOCKING_STATUSES] },
-            tanggalMulai: { lt: tanggalSelesai },
-            tanggalSelesai: { gt: tanggalMulai },
+            tanggalMulai: { lte: tanggalSelesai },
+            tanggalSelesai: { gte: tanggalMulai },
             ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
         },
         select: { id: true },
     });
-    return conflicting === null;
-}
-/**
- * Mengembalikan seluruh rentang tanggal yang sudah terbooking untuk satu
- * mobil — dipakai endpoint publik `GET /api/cars/:id/availability` untuk
- * menandai tanggal yang tidak bisa dipilih di kalender (F3 PRD).
- */
-async function getBookedDateRanges(carId) {
-    const bookings = await prisma_1.prisma.booking.findMany({
+    if (conflictingBooking !== null) {
+        return false;
+    }
+    const conflictingBlocked = await tx.carBlockedDate.findFirst({
         where: {
             carId,
-            status: { in: [...BLOCKING_STATUSES] },
+            tanggalMulai: { lt: tanggalSelesai },
+            tanggalSelesai: { gte: tanggalMulai },
         },
-        select: { tanggalMulai: true, tanggalSelesai: true },
-        orderBy: { tanggalMulai: 'asc' },
+        select: { id: true },
     });
-    return bookings.map((b) => ({
-        tanggalMulai: b.tanggalMulai,
-        tanggalSelesai: b.tanggalSelesai,
-    }));
+    return conflictingBlocked === null;
+}
+/**
+ * Mengembalikan seluruh rentang tanggal yang tidak tersedia (booking & blokir manual)
+ * untuk satu mobil — dipakai endpoint publik GET /api/cars/:id/availability.
+ */
+async function getBookedDateRanges(carId) {
+    const [bookings, blockedDates] = await Promise.all([
+        prisma_1.prisma.booking.findMany({
+            where: {
+                carId,
+                status: { in: [...BLOCKING_STATUSES] },
+            },
+            select: { tanggalMulai: true, tanggalSelesai: true },
+            orderBy: { tanggalMulai: 'asc' },
+        }),
+        prisma_1.prisma.carBlockedDate.findMany({
+            where: { carId },
+            select: { tanggalMulai: true, tanggalSelesai: true, alasan: true },
+            orderBy: { tanggalMulai: 'asc' },
+        }),
+    ]);
+    const ranges = [
+        ...bookings.map((b) => ({
+            tanggalMulai: b.tanggalMulai,
+            tanggalSelesai: b.tanggalSelesai,
+            alasan: 'Pemesanan',
+        })),
+        ...blockedDates.map((bd) => ({
+            tanggalMulai: bd.tanggalMulai,
+            tanggalSelesai: bd.tanggalSelesai,
+            alasan: bd.alasan || 'Manual Blokir',
+        })),
+    ];
+    return ranges;
 }
 //# sourceMappingURL=availability.service.js.map

@@ -77,9 +77,10 @@ exports.bookingsRouter.post('/', async (req, res) => {
         res.status(400).json({ error: 'Data booking tidak valid', detail: parsed.error.flatten() });
         return;
     }
-    const { carId, tanggalMulai, tanggalSelesai, lokasiAmbil, lokasiKembali, addons } = parsed.data;
-    if (tanggalSelesai <= tanggalMulai) {
-        res.status(400).json({ error: 'tanggal_selesai harus setelah tanggal_mulai' });
+    let { carId, tanggalMulai, tanggalSelesai, lokasiAmbil, lokasiKembali, addons } = parsed.data;
+    // Validasi: Tanggal selesai tidak boleh sebelum tanggal mulai (sewa 1 hari pada tanggal yang sama 08:00 - 20:00 WIB diperbolehkan)
+    if (tanggalSelesai < tanggalMulai) {
+        res.status(400).json({ error: 'tanggal_selesai tidak boleh sebelum tanggal_mulai' });
         return;
     }
     try {

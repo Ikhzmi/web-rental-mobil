@@ -52,8 +52,10 @@ const superadmin_routes_1 = require("./routes/superadmin.routes");
 const instansi_routes_1 = require("./routes/instansi.routes");
 const webhooks_routes_1 = require("./routes/webhooks.routes");
 const reviews_routes_1 = require("./routes/reviews.routes");
+const publicStats_routes_1 = require("./routes/publicStats.routes");
+const messages_routes_1 = require("./routes/messages.routes");
 const errorHandler_1 = require("./lib/errorHandler");
-const bookingExpiry_service_1 = require("./services/bookingExpiry.service");
+const cron_routes_1 = require("./routes/cron.routes");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 // Trust proxy (diperlukan untuk ngrok dan proxy Vite agar IP tidak dianggap sama)
@@ -121,33 +123,40 @@ app.get('/health', (_req, res) => {
 });
 // Publik
 app.use('/api/cars', cars_routes_1.carsRouter);
+app.use('/api/public/stats', publicStats_routes_1.publicStatsRouter);
 // Customer (verifySupabaseToken dipasang di dalam masing-masing router)
 // Stricter rate limit for checkout (payment endpoint)
 app.use('/api/bookings', authLimiter, bookings_routes_1.bookingsRouter);
 app.use('/api/profiles', authLimiter, profiles_routes_1.profilesRouter);
 app.use('/api/reviews', reviews_routes_1.reviewsRouter);
+app.use('/api/messages', authLimiter, messages_routes_1.customerMessagesRouter);
 // Admin (verifySupabaseToken + requireAdmin dipasang di dalam masing-masing router)
 app.use('/api/admin/cars', adminCars_routes_1.adminCarsRouter);
 app.use('/api/admin/bookings', adminBookings_routes_1.adminBookingsRouter);
 app.use('/api/admin/users', adminUsers_routes_1.adminUsersRouter);
 app.use('/api/admin/dokumen', adminUsers_routes_1.adminDokumenRouter);
 app.use('/api/admin/dashboard', adminDashboard_routes_1.adminDashboardRouter);
+app.use('/api/admin/messages', messages_routes_1.adminMessagesRouter);
 // Super Admin (verifySupabaseToken + requireSuperAdmin dipasang di dalam router)
 app.use('/api/superadmin', superadmin_routes_1.superadminRouter);
 // Instansi routes (public + admin scoped)
 app.use('/api/instansi', authLimiter, instansi_routes_1.instansiRouter);
 // Webhooks (payment gateway) - with rate limiting to prevent webhook spam
 app.use('/api/webhooks', webhookLimiter, webhooks_routes_1.webhooksRouter);
+// Cron jobs (dipanggil oleh Vercel Cron, diproteksi CRON_SECRET)
+// Endpoint: GET /api/cron/expire-bookings
+app.use('/api/cron', cron_routes_1.cronRouter);
 // 404 handler
 app.use(errorHandler_1.notFoundHandler);
 // Global error handler - harus di akhir
 app.use(errorHandler_1.globalErrorHandler);
-app.listen(PORT, () => {
-    console.log(`KerenTal Kita API berjalan di http://localhost:${PORT}`);
-    // Jaring pengaman: batalkan otomatis booking yang mengendap di status
-    // menunggu_pembayaran (lihat bookingExpiry.service.ts untuk penjelasan
-    // kenapa ini perlu — tanpa ini, booking yang tidak pernah checkout bisa
-    // memblokir tanggal mobil untuk penyewa lain selamanya).
-    (0, bookingExpiry_service_1.startBookingExpiryJob)();
-});
+// Di lingkungan lokal (non-Vercel), jalankan server seperti biasa.
+// Di Vercel, file ini di-import sebagai module dan app di-export sebagai
+// Serverless Function — app.listen() tidak dipanggil di sana.
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`KerenTal Kita API berjalan di http://localhost:${PORT}`);
+    });
+}
+exports.default = app;
 //# sourceMappingURL=index.js.map

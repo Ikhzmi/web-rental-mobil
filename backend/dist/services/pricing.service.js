@@ -3,11 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.hitungRincianHarga = hitungRincianHarga;
 function hitungDurasiHari(tanggalMulai, tanggalSelesai) {
     const msPerDay = 1000 * 60 * 60 * 24;
-    const durasi = Math.round((tanggalSelesai.getTime() - tanggalMulai.getTime()) / msPerDay);
-    if (durasi <= 0) {
-        throw new Error('tanggal_selesai harus setelah tanggal_mulai');
-    }
-    return durasi;
+    const diffDays = Math.ceil((tanggalSelesai.getTime() - tanggalMulai.getTime()) / msPerDay);
+    return Math.max(1, diffDays);
 }
 /**
  * Satu-satunya sumber kebenaran untuk kalkulasi harga (§11.3 PRD).

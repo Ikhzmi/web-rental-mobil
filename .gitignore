@@ -10,3 +10,4 @@ TESTING-CHECKLIST.md
 HERO-SETTINGS.md
 .env.*
 !.env.example
+.envDeploy

@@ -43,6 +43,7 @@ exports.adminBookingsRouter.get('/', async (req, res) => {
         ...(cari && {
             OR: [
                 { car: { nama: { contains: cari, mode: 'insensitive' } } },
+                { car: { nomorPlat: { contains: cari, mode: 'insensitive' } } },
                 { profile: { nama: { contains: cari, mode: 'insensitive' } } },
             ],
         }),
@@ -50,7 +51,14 @@ exports.adminBookingsRouter.get('/', async (req, res) => {
     const [bookings, total] = await Promise.all([
         prisma_1.prisma.booking.findMany({
             where,
-            include: { car: true, profile: { select: { nama: true, email: true, noHp: true } } },
+            include: {
+                car: {
+                    include: {
+                        images: { orderBy: { urutan: 'asc' } },
+                    },
+                },
+                profile: { select: { nama: true, email: true, noHp: true } },
+            },
             orderBy: { createdAt: 'desc' },
             skip,
             take: limit,
