@@ -11,11 +11,5 @@
       "src": "/(.*)",
       "dest": "src/index.ts"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/expire-bookings",
-      "schedule": "*/10 * * * *"
-    }
   ]
 }
