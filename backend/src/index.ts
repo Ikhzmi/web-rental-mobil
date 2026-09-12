@@ -18,7 +18,7 @@ import { reviewsRouter } from './routes/reviews.routes';
 import { publicStatsRouter } from './routes/publicStats.routes';
 import { customerMessagesRouter, adminMessagesRouter } from './routes/messages.routes';
 import { globalErrorHandler, notFoundHandler } from './lib/errorHandler';
-import { startBookingExpiryJob } from './services/bookingExpiry.service';
+import { cronRouter } from './routes/cron.routes';
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
@@ -127,17 +127,23 @@ app.use('/api/instansi', authLimiter, instansiRouter);
 // Webhooks (payment gateway) - with rate limiting to prevent webhook spam
 app.use('/api/webhooks', webhookLimiter, webhooksRouter);
 
+// Cron jobs (dipanggil oleh Vercel Cron, diproteksi CRON_SECRET)
+// Endpoint: GET /api/cron/expire-bookings
+app.use('/api/cron', cronRouter);
+
 // 404 handler
 app.use(notFoundHandler);
 
 // Global error handler - harus di akhir
 app.use(globalErrorHandler);
 
-app.listen(PORT, () => {
-  console.log(`KerenTal Kita API berjalan di http://localhost:${PORT}`);
-  // Jaring pengaman: batalkan otomatis booking yang mengendap di status
-  // menunggu_pembayaran (lihat bookingExpiry.service.ts untuk penjelasan
-  // kenapa ini perlu — tanpa ini, booking yang tidak pernah checkout bisa
-  // memblokir tanggal mobil untuk penyewa lain selamanya).
-  startBookingExpiryJob();
-});
+// Di lingkungan lokal (non-Vercel), jalankan server seperti biasa.
+// Di Vercel, file ini di-import sebagai module dan app di-export sebagai
+// Serverless Function — app.listen() tidak dipanggil di sana.
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`KerenTal Kita API berjalan di http://localhost:${PORT}`);
+  });
+}
+
+export default app;

@@ -1,0 +1,10 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENVIRONMENT VARIABLES UNTUK VERCEL (Frontend)
+# Copy paste ini ke Vercel Dashboard → Settings → Environment Variables
+# ═══════════════════════════════════════════════════════════════════════════════
+
+VITE_SUPABASE_URL=https://zzbqekebpmdhvhcdmvrs.supabase.co
+
+VITE_SUPABASE_ANON_KEY=eyJhbG...oxiQ
+
+VITE_API_URL=https://kerental-backend.onrender.com
