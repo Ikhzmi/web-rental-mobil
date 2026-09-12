@@ -164,6 +164,17 @@ export default function AdminPesananDetailPage() {
           >
             <h2 className={`mb-3 text-xs tracking-wider uppercase ${textMutedClass}`}>Ringkasan</h2>
             <div className="grid grid-cols-2 gap-y-2.5 text-sm">
+              <span className={textMutedClass}>Armada</span>
+              <span className={`text-right ${textClass}`}>
+                {booking.car?.nama ?? '-'}
+                {booking.car?.nomorPlat && (
+                  <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-bold ${
+                    isDark ? 'bg-white/10 text-white border border-white/20' : 'bg-slate-100 text-slate-800 border border-slate-300'
+                  }`}>
+                    {booking.car.nomorPlat}
+                  </span>
+                )}
+              </span>
               <span className={textMutedClass}>Penyewa</span>
               <span className={`text-right ${textClass}`}>{booking.profile?.nama ?? '-'}</span>
               <span className={textMutedClass}>Email</span>

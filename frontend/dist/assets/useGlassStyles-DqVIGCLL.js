@@ -1,1 +1,0 @@
-import"./index-BYUqt3ar.js";function e(e){return e?`sa-glass-dark`:`sa-glass-light`}export{e as t};

@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Check, X } from 'lucide-react';
+import { Loader2, Check, X, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../hooks/useTheme';
@@ -52,6 +52,7 @@ export default function DaftarPage() {
   const [email, setEmail] = useState('');
   const [noHp, setNoHp] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,27 +103,54 @@ export default function DaftarPage() {
     navigate('/login?registered=true');
   };
 
+  // Reset status loading ketika kembali ke halaman (misal via tombol Back browser / bfcache)
+  useEffect(() => {
+    const handleResetLoading = () => {
+      setGoogleLoading(false);
+      setLoading(false);
+    };
+
+    window.addEventListener('pageshow', handleResetLoading);
+    window.addEventListener('focus', handleResetLoading);
+
+    return () => {
+      window.removeEventListener('pageshow', handleResetLoading);
+      window.removeEventListener('focus', handleResetLoading);
+    };
+  }, []);
+
   // Handle Google Sign In (for registration via Google)
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     setError(null);
 
-    const { error: googleError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    });
-
-    if (googleError) {
+    // Safety timer jika pengalihan dibatalkan atau pengguna menekan tombol Back di browser
+    const safetyTimer = setTimeout(() => {
       setGoogleLoading(false);
-      setError(googleError.message);
+    }, 6000);
+
+    try {
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (googleError) {
+        clearTimeout(safetyTimer);
+        setGoogleLoading(false);
+        setError(googleError.message);
+      }
+    } catch (err) {
+      clearTimeout(safetyTimer);
+      setGoogleLoading(false);
+      setError(err instanceof Error ? err.message : 'Gagal menghubungi Google');
     }
-    // If success, browser redirects to Google
   };
 
   return (
@@ -234,18 +262,31 @@ export default function DaftarPage() {
             transition={{ delay: 0.3 }}
           >
             <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-stone-600'}`}>Password</label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onBlur={() => setTouched(t => ({ ...t, password: true }))}
-              className={`w-full rounded-xl px-4 py-3 text-sm transition-all duration-200 focus:outline-none ${
-                isDark ? 'login-input-dark' : 'login-input-light'
-              } ${touched.password && passwordError ? 'border-red-500/50' : ''}`}
-              placeholder="Minimal 8 karakter"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => setTouched(t => ({ ...t, password: true }))}
+                className={`w-full rounded-xl pl-4 pr-11 py-3 text-sm transition-all duration-200 focus:outline-none ${
+                  isDark ? 'login-input-dark' : 'login-input-light'
+                } ${touched.password && passwordError ? 'border-red-500/50' : ''}`}
+                placeholder="Minimal 8 karakter"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className={`absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                  isDark ? 'text-white/40 hover:text-white/80' : 'text-stone-400 hover:text-stone-700'
+                }`}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
 
             {/* Password strength indicator */}
             {password && (

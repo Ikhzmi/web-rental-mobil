@@ -39,8 +39,8 @@ export function estimasiHarga(
   if (!tanggalMulai || !tanggalSelesai) return null;
 
   const msPerDay = 1000 * 60 * 60 * 24;
-  const durasiHari = Math.round((tanggalSelesai.getTime() - tanggalMulai.getTime()) / msPerDay);
-  if (durasiHari <= 0) return null;
+  const diffDays = Math.ceil((tanggalSelesai.getTime() - tanggalMulai.getTime()) / msPerDay);
+  const durasiHari = Math.max(1, diffDays);
 
   const hargaPerHari = Number(car.hargaPerHari);
   const hargaDasar = hargaPerHari * durasiHari;

@@ -330,15 +330,32 @@ export default function SuperAdminDashboardPage() {
         {useMockData ? (
           <div className={`p-5 rounded-2xl ${getGlassCardClass(isDark)}`}>
             <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Kendaraan Populer</h3>
-            <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3.5">
               {MOCK_POPULAR_VEHICLES.map((vehicle) => (
-                <div key={vehicle.id} className="flex items-center justify-between">
-                  <div>
-                    <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{vehicle.nama}</p>
-                    <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{vehicle.kategori} • {vehicle.totalBooking}x</p>
+                <div key={vehicle.id} className="group flex flex-col bg-transparent border-0 shadow-none transition-transform duration-300 hover:-translate-y-1">
+                  <div className="h-16 relative overflow-hidden bg-transparent flex items-center justify-center rounded-lg mb-1.5">
+                    <span className="text-2xl">🚗</span>
                   </div>
-                  <div className={`flex items-center gap-1 text-xs font-medium ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
-                    ⭐ {vehicle.rating}
+                  <div
+                    className={`p-2.5 rounded-xl backdrop-blur-xl border transition-all duration-300 ${
+                      isDark
+                        ? 'bg-white/[0.06] hover:bg-white/[0.12] border-white/15 text-white shadow-lg shadow-black/30'
+                        : 'bg-white/75 hover:bg-white/95 border-white/80 text-slate-900 shadow-md shadow-slate-200/50'
+                    }`}
+                    style={{
+                      boxShadow: isDark
+                        ? 'inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.2)'
+                        : 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 12px rgba(0, 0, 0, 0.05)',
+                    }}
+                  >
+                    <p className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{vehicle.nama}</p>
+                    <p className={`text-[10px] font-medium truncate mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                      🏢 Rental {vehicle.kategori}
+                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className={`text-[10px] font-extrabold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{vehicle.totalBooking}x sewa</span>
+                      <span className={`text-[10px] font-medium ${isDark ? 'text-amber-300' : 'text-amber-600'}`}>⭐ {vehicle.rating}</span>
+                    </div>
                   </div>
                 </div>
               ))}

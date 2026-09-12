@@ -606,9 +606,18 @@ export default function BookingConfirmationPage() {
             Ringkasan Pesanan
           </h2>
           <div className="flex flex-col gap-2.5 text-sm">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Mobil</span>
-              <span className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.car?.nama ?? '-'}</span>
+              <span className={`font-medium flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {booking.car?.nama ?? '-'}
+                {booking.car?.nomorPlat && (
+                  <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded border tracking-wider ${
+                    isDark ? 'bg-white/10 text-white border-white/20' : 'bg-slate-100 text-slate-800 border-slate-300'
+                  }`}>
+                    {booking.car.nomorPlat}
+                  </span>
+                )}
+              </span>
             </div>
             {booking.car?.instansi && (
               <div className="flex justify-between">

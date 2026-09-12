@@ -41,7 +41,7 @@ const getToastBg = (type: ToastType) => {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  // Listen for session expired events from API
+  // Listen for session expired events from API - tampilkan notifikasi toast tanpa paksa hard redirect
   useEffect(() => {
     const unsubscribe = onSessionExpired(() => {
       const id = `toast-session-${Date.now()}`;
@@ -49,14 +49,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         id,
         type: 'warning',
         title: 'Sesi Berakhir',
-        message: 'Silakan login kembali untuk melanjutkan.',
+        message: 'Sesi login telah berakhir. Silakan login kembali.',
       };
       setToasts((prev) => [...prev, newToast]);
-
-      // Redirect after showing toast
-      setTimeout(() => {
-        window.location.href = '/login?expired=true';
-      }, 2500);
     });
 
     return unsubscribe;
@@ -87,10 +82,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
 
     setToasts((prev) => [...prev, newToast]);
-
-    setTimeout(() => {
-      window.location.href = '/login?expired=true';
-    }, 2500);
   }, []);
 
   return (

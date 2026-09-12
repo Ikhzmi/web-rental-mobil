@@ -3,17 +3,12 @@ import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ShieldCheck, Clock, MapPin, Sparkles } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '../hooks/useTheme';
 import { AmbientGlow, RouteWaypoint } from './decor/RouteMotifs';
+import { api } from '../lib/api';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
-
-const STATS = [
-  { value: 500, suffix: '+', label: 'Armada' },
-  { value: 24, suffix: '/7', label: 'Dukungan' },
-  { value: 40, suffix: '+', label: 'Lokasi' },
-  { value: 98, suffix: '%', label: 'Kepuasan' },
-];
 
 const FEATURES = [
   {
@@ -32,7 +27,7 @@ const FEATURES = [
     num: '03',
     icon: MapPin,
     title: 'Lokasi Fleksibel',
-    desc: 'Layanan penjemputan dan pengembalian armada tersedia di lebih dari 40 lokasi strategis berbagai kota.',
+    desc: 'Layanan penjemputan dan pengembalian armada tersedia di berbagai lokasi strategis yang tersebar di berbagai kota.',
   },
   {
     num: '04',
@@ -50,9 +45,24 @@ export default function FeaturesSection() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
+  // Fetch real stats dari backend
+  const { data: stats } = useQuery({
+    queryKey: ['public-stats'],
+    queryFn: () => api.getPublicStats(),
+    staleTime: 5 * 60 * 1000, // cache 5 menit
+  });
+
+  // Stats yang ditampilkan: real data dengan fallback angka yang masuk akal
+  const STATS = [
+    { value: stats?.totalArmada ?? 0, suffix: '+', label: 'Armada' },
+    { value: 24, suffix: '/7', label: 'Dukungan' },
+    { value: stats?.totalLokasi ?? 0, suffix: '+', label: 'Lokasi' },
+    { value: stats?.kepuasanPersen ?? 0, suffix: '%', label: 'Kepuasan' },
+  ];
+
   useGSAP(
     () => {
-      // Counter animation
+      // Counter animation — dijalankan setelah data tersedia
       statRefs.current.forEach((el, i) => {
         if (!el) return;
         const target = STATS[i].value;
@@ -93,7 +103,7 @@ export default function FeaturesSection() {
         );
       });
     },
-    { scope: sectionRef }
+    { scope: sectionRef, dependencies: [stats] }
   );
 
   return (
@@ -185,10 +195,7 @@ export default function FeaturesSection() {
                   }
                 `} />
 
-                {/* Angka spec-sheet — data yang sudah ada tapi sebelumnya
-                    tak pernah dirender, dipakai sebagai tekstur editorial
-                    samar, bukan penanda urutan (4 fitur ini independen,
-                    tidak berurutan) */}
+                {/* Angka spec-sheet — tekstur editorial samar */}
                 <span
                   aria-hidden="true"
                   className={`absolute top-4 right-5 font-playfair italic text-5xl select-none ${

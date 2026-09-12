@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { User, Sun, Moon, LogOut, Save, Check, Building2, Percent } from 'lucide-react';
+import { User, Sun, Moon, LogOut, Save, Check, Building2, Percent, Lock, Eye, EyeOff, KeyRound, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { api, type Profile } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../../contexts/ToastContext';
@@ -63,6 +63,48 @@ export default function AdminSettingsPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/');
+  };
+
+  // Ubah Password state & handler
+  const [passwordBaru, setPasswordBaru] = useState('');
+  const [konfirmasiPassword, setKonfirmasiPassword] = useState('');
+  const [showPasswordBaru, setShowPasswordBaru] = useState(false);
+  const [showKonfirmasiPassword, setShowKonfirmasiPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  const handleUbahPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (passwordBaru.length < 6) {
+      setPasswordError('Kata sandi baru minimal 6 karakter');
+      return;
+    }
+
+    if (passwordBaru !== konfirmasiPassword) {
+      setPasswordError('Konfirmasi kata sandi tidak cocok');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: passwordBaru });
+      if (error) throw error;
+
+      setPasswordSuccess(true);
+      setPasswordBaru('');
+      setKonfirmasiPassword('');
+      showToast('success', 'Berhasil', 'Kata sandi akun berhasil diperbarui');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Gagal memperbarui kata sandi';
+      setPasswordError(msg);
+      showToast('error', 'Gagal', msg);
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const glassCard = getGlassCardClass(isDark);
@@ -231,6 +273,111 @@ export default function AdminSettingsPage() {
             />
           </button>
         </div>
+      </motion.div>
+
+      {/* Keamanan & Ubah Password */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+        className={`p-5 sm:p-6 rounded-2xl ${glassCard}`}
+      >
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isDark ? 'bg-white/[0.06]' : 'bg-slate-900/[0.05]'}`}>
+            <KeyRound size={16} className={isDark ? 'text-white/70' : 'text-slate-600'} />
+          </div>
+          <div>
+            <h2 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>Keamanan & Kata Sandi</h2>
+            <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Perbarui kata sandi akun admin instansi Anda</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleUbahPassword} className="space-y-4">
+          <div>
+            <label className={labelClass}>Kata Sandi Baru</label>
+            <div className="relative">
+              <input
+                type={showPasswordBaru ? 'text' : 'password'}
+                value={passwordBaru}
+                onChange={(e) => {
+                  setPasswordBaru(e.target.value);
+                  setPasswordError(null);
+                  setPasswordSuccess(false);
+                }}
+                placeholder="Minimal 6 karakter"
+                className={`${inputClass} pr-10`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPasswordBaru(!showPasswordBaru)}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors ${
+                  isDark ? 'text-white/40 hover:text-white/70' : 'text-slate-400 hover:text-slate-600'
+                }`}
+                tabIndex={-1}
+              >
+                {showPasswordBaru ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Konfirmasi Kata Sandi Baru</label>
+            <div className="relative">
+              <input
+                type={showKonfirmasiPassword ? 'text' : 'password'}
+                value={konfirmasiPassword}
+                onChange={(e) => {
+                  setKonfirmasiPassword(e.target.value);
+                  setPasswordError(null);
+                  setPasswordSuccess(false);
+                }}
+                placeholder="Ulangi kata sandi baru"
+                className={`${inputClass} pr-10`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowKonfirmasiPassword(!showKonfirmasiPassword)}
+                className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors ${
+                  isDark ? 'text-white/40 hover:text-white/70' : 'text-slate-400 hover:text-slate-600'
+                }`}
+                tabIndex={-1}
+              >
+                {showKonfirmasiPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+
+          {passwordError && (
+            <div className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+              isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'
+            }`}>
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span>{passwordError}</span>
+            </div>
+          )}
+
+          {passwordSuccess && (
+            <div className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+              isDark ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+            }`}>
+              <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
+              <span>Kata sandi berhasil diperbarui. Gunakan kata sandi baru untuk login berikutnya.</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end pt-2">
+            <button
+              type="submit"
+              disabled={isChangingPassword || !passwordBaru || !konfirmasiPassword}
+              className={`inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                isDark ? 'bg-white text-slate-900 hover:bg-white/90' : 'bg-slate-900 text-white hover:bg-slate-800'
+              }`}
+            >
+              {isChangingPassword ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+              <span>{isChangingPassword ? 'Menyimpan...' : 'Perbarui Kata Sandi'}</span>
+            </button>
+          </div>
+        </form>
       </motion.div>
 
       {/* Akun */}

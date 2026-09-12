@@ -49,84 +49,117 @@ function BookingCard({ booking, index, onStatusChange, isDark }: {
   isDark: boolean;
 }) {
   const nextOptions = NEXT_STATUS[booking.status] || [];
+  const imageUrl = booking.car?.images?.[0]?.url;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.03 }}
-      whileHover={{ y: -2 }}
-      className={`group rounded-2xl overflow-hidden transition-all duration-300 ${getGlassCardClass(isDark)}`}
+      transition={{ delay: index * 0.03, duration: 0.25 }}
+      whileHover={{ y: -4 }}
+      className={`group relative flex flex-col rounded-3xl overflow-hidden transition-all duration-300 ${
+        isDark
+          ? 'sa-glass-dark border border-white/15 hover:border-white/30 hover:shadow-black/70 shadow-xl'
+          : 'sa-glass-light border border-white/80 hover:border-white hover:shadow-slate-300/60 shadow-lg'
+      }`}
     >
-      <div className="p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
-          {/* Car Image */}
-          <div className={`w-full sm:w-20 h-24 sm:h-20 rounded-xl overflow-hidden shrink-0 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
-            {booking.car?.images?.[0]?.url ? (
-              <img src={booking.car.images[0].url} alt={booking.car.nama} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Car size={24} className={isDark ? 'text-white/20' : 'text-slate-300'} />
-              </div>
-            )}
+      {/* Media Aspect Header */}
+      <div className="relative w-full aspect-[16/10] overflow-hidden bg-slate-950/20 dark:bg-black/30">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={booking.car?.nama ?? 'Mobil'}
+            loading="lazy"
+            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900/60 text-white/30">
+            <Car size={32} className="mb-1 opacity-50" />
+            <span className="text-[11px]">Foto tidak tersedia</span>
           </div>
+        )}
+        
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/60 via-black/10 to-transparent" />
 
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <h3 className={`font-semibold text-sm sm:text-base truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.car?.nama ?? '-'}</h3>
-              <StatusBadge status={booking.status} isDark={isDark} />
-            </div>
+        {/* Floating Status Badge Top Right */}
+        <div className="absolute top-3 right-3 z-10">
+          <StatusBadge status={booking.status} isDark={isDark} />
+        </div>
 
-            <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm mb-3 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-              <span className="flex items-center gap-1">
-                <div className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} />
-                {booking.profile?.nama}
-              </span>
-              <span className="hidden xs:inline">•</span>
-              <span className="flex items-center gap-1">
-                <Clock size={12} className="opacity-60" />
-                {formatTanggal(booking.tanggalMulai)} — {formatTanggal(booking.tanggalSelesai)}
-              </span>
-            </div>
+        {/* Car Name overlay at bottom left of photo */}
+        <div className="absolute bottom-3 inset-x-3 z-10 flex items-center justify-between gap-2">
+          <h3 className="font-bold text-white text-base truncate drop-shadow-md">
+            {booking.car?.nama ?? 'Armada'}
+          </h3>
+          {booking.car?.nomorPlat && (
+            <span className="shrink-0 px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-black/60 text-white backdrop-blur-md border border-white/20">
+              {booking.car.nomorPlat}
+            </span>
+          )}
+        </div>
+      </div>
 
-            {/* Status Actions */}
-            <div className="flex flex-wrap items-center gap-2">
-              {nextOptions.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {nextOptions.map((s: StatusBooking) => (
-                    <button
-                      key={s}
-                      onClick={() => onStatusChange(booking.id, s)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        s === 'dikonfirmasi' || s === 'berjalan' || s === 'selesai'
-                          ? isDark
-                            ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'
-                            : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200'
-                          : isDark
-                          ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30'
-                          : 'bg-red-100 text-red-700 hover:bg-red-200 border border-red-200'
-                      }`}
-                    >
-                      → {STATUS_LABEL[s]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Price & Detail */}
-          <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 shrink-0">
-            <p className={`font-bold text-base sm:text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatRupiah(Number(booking.totalHarga))}</p>
-            <Link
-              to={`/admin/pesanan/${booking.id}`}
-              className={`flex items-center gap-1 text-xs sm:text-sm hover:underline ${isDark ? 'text-white/60' : 'text-slate-600'}`}
-            >
-              Detail <ChevronRight size={14} />
-            </Link>
+      {/* Card Details Body */}
+      <div className="p-4 flex flex-col justify-between flex-1 gap-3">
+        <div className="space-y-2 text-xs">
+          {/* Customer & Date */}
+          <div className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border ${
+            isDark ? 'bg-white/[0.04] border-white/10 text-white/80' : 'bg-slate-50 border-slate-200 text-slate-700'
+          }`}>
+            <span className="font-semibold truncate flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+              {booking.profile?.nama ?? 'Customer'}
+            </span>
+            <span className="text-[11px] opacity-70 flex items-center gap-1 shrink-0">
+              <Clock size={11} />
+              {formatTanggal(booking.tanggalMulai)} — {formatTanggal(booking.tanggalSelesai)}
+            </span>
           </div>
         </div>
+
+        {/* Status Actions & Price Row */}
+        <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+          <div>
+            <span className={`text-[10px] uppercase font-semibold tracking-wider block ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Total Biaya</span>
+            <span className={`font-extrabold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              {formatRupiah(Number(booking.totalHarga))}
+            </span>
+          </div>
+
+          <Link
+            to={`/admin/pesanan/${booking.id}`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+              isDark
+                ? 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
+                : 'bg-slate-900 hover:bg-slate-800 text-white shadow-sm'
+            }`}
+          >
+            Detail <ChevronRight size={13} />
+          </Link>
+        </div>
+
+        {/* Status Transition Action Buttons */}
+        {nextOptions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {nextOptions.map((s: StatusBooking) => (
+              <button
+                key={s}
+                onClick={() => onStatusChange(booking.id, s)}
+                className={`flex-1 py-1.5 px-2 rounded-xl text-[11px] font-semibold transition-all text-center border ${
+                  s === 'dikonfirmasi' || s === 'berjalan' || s === 'selesai'
+                    ? isDark
+                      ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border-emerald-500/30'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300'
+                    : isDark
+                      ? 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border-rose-500/30'
+                      : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-300'
+                }`}
+              >
+                → {STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -158,6 +191,7 @@ export default function AdminPesananPage() {
   const filteredBookings = search
     ? bookings.filter(b =>
         b.car?.nama?.toLowerCase().includes(search.toLowerCase()) ||
+        b.car?.nomorPlat?.toLowerCase().includes(search.toLowerCase()) ||
         b.profile?.nama?.toLowerCase().includes(search.toLowerCase())
       )
     : bookings;
@@ -177,6 +211,9 @@ export default function AdminPesananPage() {
       >
         <div>
           <h1 className={`text-2xl sm:text-3xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>Kelola Pesanan</h1>
+          <p className={`text-xs sm:text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+            Pantau dan perbarui status transaksi sewa armada Anda
+          </p>
         </div>
       </motion.div>
 
@@ -184,7 +221,7 @@ export default function AdminPesananPage() {
       <div className="flex flex-wrap gap-2 mb-6">
         {[
           { key: '', label: 'Semua', count: bookings.length },
-          { key: 'pending', label: 'Pending', count: statusCounts.pending ?? 0 },
+          { key: 'menunggu_pembayaran', label: 'Menunggu Bayar', count: statusCounts.menunggu_pembayaran ?? 0 },
           { key: 'dikonfirmasi', label: 'Konfirmasi', count: statusCounts.dikonfirmasi ?? 0 },
           { key: 'berjalan', label: 'Berjalan', count: statusCounts.berjalan ?? 0 },
           { key: 'selesai', label: 'Selesai', count: statusCounts.selesai ?? 0 },
@@ -195,11 +232,11 @@ export default function AdminPesananPage() {
             className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all border ${
               filterStatus === item.key
                 ? isDark
-                  ? 'bg-white/10 text-white/60 border-white/20'
-                  : 'bg-blue-100 text-slate-700 border-slate-300'
+                  ? 'bg-white/10 text-white border-white/30 shadow-md'
+                  : 'bg-slate-900 text-white border-slate-900 shadow-md'
                 : isDark
                 ? 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
-                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
             }`}
           >
             {item.label} ({item.count})
@@ -223,9 +260,9 @@ export default function AdminPesananPage() {
         />
       </div>
 
-      {/* List */}
+      {/* List Grid */}
       {isLoading ? (
-        <SkeletonList count={4} />
+        <SkeletonList count={6} />
       ) : isError ? (
         <motion.div
           initial={{ opacity: 0 }}
@@ -255,7 +292,7 @@ export default function AdminPesananPage() {
           <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Pesanan akan muncul setelah customer melakukan booking</p>
         </motion.div>
       ) : (
-        <div className="space-y-3 sm:space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredBookings.map((booking, i) => (
             <BookingCard
               key={booking.id}

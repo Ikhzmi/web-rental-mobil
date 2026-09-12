@@ -1,22 +1,15 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { BadgeCheck, Wallet, Headset, ArrowRight } from 'lucide-react';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { useTheme } from '../hooks/useTheme';
-import carSolidImg from '../assets/car-solid.webp';
-import carSolidLightImg from '../assets/car-solid-light.webp';
+import { api } from '../lib/api';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
-
-const STATS = [
-  { value: 500, suffix: '+', label: 'Unit Armada' },
-  { value: 40, suffix: '+', label: 'Kota Layanan' },
-  { value: 12000, suffix: '+', label: 'Pelanggan Puas' },
-  { value: 5, suffix: ' Thn', label: 'Pengalaman' },
-];
 
 const VALUES = [
   {
@@ -45,11 +38,25 @@ export default function TentangPage() {
   const statsRef = useRef<HTMLDivElement>(null);
   const statRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
+  // Fetch real statistics from database
+  const { data: stats } = useQuery({
+    queryKey: ['public-stats'],
+    queryFn: () => api.getPublicStats(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const displayStats = [
+    { value: stats?.totalArmada ?? 0, suffix: '+', label: 'Unit Armada' },
+    { value: stats?.totalLokasi ?? 0, suffix: '+', label: 'Mitra Rental' },
+    { value: stats?.totalBookingSelesai ?? 0, suffix: '+', label: 'Penyewaan Sukses' },
+    { value: stats?.kepuasanPersen ?? 98, suffix: '%', label: 'Kepuasan' },
+  ];
+
   useGSAP(
     () => {
       statRefs.current.forEach((el, i) => {
         if (!el) return;
-        const target = STATS[i].value;
+        const target = displayStats[i].value;
         const counter = { val: 0 };
         gsap.to(counter, {
           val: target,
@@ -62,7 +69,7 @@ export default function TentangPage() {
         });
       });
     },
-    { scope: statsRef }
+    { scope: statsRef, dependencies: [stats] }
   );
 
   const glassCard = isDark
@@ -96,7 +103,7 @@ export default function TentangPage() {
           ref={statsRef}
           className={`grid grid-cols-2 sm:grid-cols-4 gap-4 mt-10 rounded-2xl p-6 backdrop-blur-xl ${glassCard}`}
         >
-          {STATS.map((stat, i) => (
+          {displayStats.map((stat, i) => (
             <div key={stat.label} className="text-center py-2">
               <div
                 className={`text-2xl sm:text-3xl font-bold tracking-tight flex items-baseline justify-center gap-0.5 ${

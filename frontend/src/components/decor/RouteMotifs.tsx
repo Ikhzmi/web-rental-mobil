@@ -64,7 +64,7 @@ export function StepRouteLine({ isDark, steps }: { isDark: boolean; steps: numbe
   return (
     <div
       aria-hidden="true"
-      className="hidden lg:block absolute left-0 right-0 pointer-events-none"
+      className="hidden lg:block absolute left-0 right-0 pointer-events-none z-0"
       style={{ top: '38px' }}
     >
       <div

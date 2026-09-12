@@ -31,6 +31,10 @@ const approveCarSchema = z.object({
   alasan: z.string().optional(),
 });
 
+const takedownCarSchema = z.object({
+  alasan: z.string().min(3, 'Alasan minimal 3 karakter'),
+});
+
 const createAdminSchema = z.object({
   email: z.string().email('Email tidak valid'),
   password: z.string().min(8, 'Password minimal 8 karakter'),
@@ -260,6 +264,12 @@ superadminRouter.get('/instansi', async (req, res) => {
   const { status, cari } = req.query;
 
   try {
+    // Super Admin adalah role tertinggi — tidak ada instansi berstatus pending/menunggu
+    await prisma.instansi.updateMany({
+      where: { status: 'menunggu_verifikasi' },
+      data: { status: 'aktif' },
+    });
+
     const instansi = await prisma.instansi.findMany({
       where: {
         ...(status && { status: status as any }),
@@ -424,7 +434,7 @@ superadminRouter.post('/instansi', async (req, res) => {
         emailPic: parsed.data.emailPic,
         rekeningBank: parsed.data.rekeningBank,
         komisiPlatformPersen: parsed.data.komisiPlatformPersen,
-        status: 'menunggu_verifikasi',
+        status: 'aktif',
       },
     });
 
@@ -759,7 +769,7 @@ superadminRouter.get('/armada/approval', async (req, res) => {
             namaInstansi: true,
           },
         },
-        images: { take: 1 },
+        images: { orderBy: { urutan: 'asc' } },
       },
       orderBy: { createdAt: 'asc' }, // oldest first = FIFO
     });
@@ -815,6 +825,178 @@ superadminRouter.patch('/armada/:id/approval', async (req, res) => {
   } catch (error) {
     console.error('Approve/Reject Car error:', error);
     res.status(500).json({ error: 'Gagal memproses approval mobil' });
+  }
+});
+
+/**
+ * GET /api/superadmin/armada/published
+ * List mobil yang berstatus disetujui / aktif tayang
+ */
+superadminRouter.get('/armada/published', async (req, res) => {
+  const { instansiId, search } = req.query;
+
+  try {
+    const cars = await prisma.car.findMany({
+      where: {
+        statusApproval: 'disetujui',
+        ...(instansiId && { instansiId: String(instansiId) }),
+        ...(search && {
+          OR: [
+            { nama: { contains: String(search), mode: 'insensitive' } },
+            { instansi: { namaInstansi: { contains: String(search), mode: 'insensitive' } } },
+          ],
+        }),
+      },
+      include: {
+        instansi: {
+          select: {
+            id: true,
+            namaInstansi: true,
+          },
+        },
+        images: { orderBy: { urutan: 'asc' } },
+        _count: {
+          select: {
+            bookings: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ data: cars });
+  } catch (error) {
+    console.error('List Published Cars error:', error);
+    res.status(500).json({ error: 'Gagal mengambil data armada tayang' });
+  }
+});
+
+/**
+ * GET /api/superadmin/armada/takedown
+ * List mobil yang berstatus ditolak / ditakedown
+ */
+superadminRouter.get('/armada/takedown', async (req, res) => {
+  const { instansiId, search } = req.query;
+
+  try {
+    const cars = await prisma.car.findMany({
+      where: {
+        statusApproval: 'ditolak',
+        ...(instansiId && { instansiId: String(instansiId) }),
+        ...(search && {
+          OR: [
+            { nama: { contains: String(search), mode: 'insensitive' } },
+            { instansi: { namaInstansi: { contains: String(search), mode: 'insensitive' } } },
+          ],
+        }),
+      },
+      include: {
+        instansi: {
+          select: {
+            id: true,
+            namaInstansi: true,
+          },
+        },
+        images: { orderBy: { urutan: 'asc' } },
+        _count: {
+          select: {
+            bookings: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ data: cars });
+  } catch (error) {
+    console.error('List Takedown Cars error:', error);
+    res.status(500).json({ error: 'Gagal mengambil data armada yang ditolak/takedown' });
+  }
+});
+
+/**
+ * PATCH /api/superadmin/armada/:id/takedown
+ * Takedown mobil yang sedang tayang (ubah ke ditolak & nonaktif)
+ */
+superadminRouter.patch('/armada/:id/takedown', async (req, res) => {
+  const parsed = takedownCarSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
+    return;
+  }
+
+  const { alasan } = parsed.data;
+
+  try {
+    const car = await prisma.car.findUnique({ where: { id: req.params.id } });
+    if (!car) {
+      res.status(404).json({ error: 'Mobil tidak ditemukan' });
+      return;
+    }
+
+    const updated = await prisma.car.update({
+      where: { id: req.params.id },
+      data: {
+        statusApproval: 'ditolak',
+        status: 'nonaktif',
+        alasanPenolakan: alasan,
+      },
+      include: {
+        instansi: {
+          select: {
+            id: true,
+            namaInstansi: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      data: updated,
+      message: `Armada "${updated.nama}" berhasil ditakedown dari katalog`,
+    });
+  } catch (error) {
+    console.error('Takedown Car error:', error);
+    res.status(500).json({ error: 'Gagal mentakedown mobil' });
+  }
+});
+
+/**
+ * PATCH /api/superadmin/armada/:id/restore
+ * Pulihkan mobil yang sebelumnya ditakedown/ditolak agar kembali tayang
+ */
+superadminRouter.patch('/armada/:id/restore', async (req, res) => {
+  try {
+    const car = await prisma.car.findUnique({ where: { id: req.params.id } });
+    if (!car) {
+      res.status(404).json({ error: 'Mobil tidak ditemukan' });
+      return;
+    }
+
+    const updated = await prisma.car.update({
+      where: { id: req.params.id },
+      data: {
+        statusApproval: 'disetujui',
+        status: 'tersedia',
+        alasanPenolakan: null,
+      },
+      include: {
+        instansi: {
+          select: {
+            id: true,
+            namaInstansi: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      data: updated,
+      message: `Armada "${updated.nama}" berhasil dipulihkan ke status aktif`,
+    });
+  } catch (error) {
+    console.error('Restore Car error:', error);
+    res.status(500).json({ error: 'Gagal memulihkan mobil' });
   }
 });
 
@@ -1515,6 +1697,7 @@ superadminRouter.get('/dashboard/popular-vehicles', async (_req, res) => {
       },
       include: {
         images: { take: 1, orderBy: { urutan: 'asc' } },
+        instansi: { select: { namaInstansi: true } },
         _count: {
           select: {
             bookings: {
@@ -1538,6 +1721,7 @@ superadminRouter.get('/dashboard/popular-vehicles', async (_req, res) => {
       thumbnail: v.images[0]?.url || null,
       bookingCount: v._count.bookings,
       available: v.status === 'tersedia',
+      namaInstansi: v.instansi?.namaInstansi ?? null,
     }));
 
     res.json({ data: popularVehicles });
@@ -1811,6 +1995,7 @@ superadminRouter.get('/bookings', async (req, res) => {
     if (cari) {
       where.OR = [
         { car: { nama: { contains: cari as string, mode: 'insensitive' } } },
+        { car: { nomorPlat: { contains: cari as string, mode: 'insensitive' } } },
         { profile: { nama: { contains: cari as string, mode: 'insensitive' } } },
         { car: { instansi: { namaInstansi: { contains: cari as string, mode: 'insensitive' } } } },
         { id: { contains: cari as string, mode: 'insensitive' } },
@@ -1851,6 +2036,7 @@ superadminRouter.get('/bookings', async (req, res) => {
       car: {
         id: b.car.id,
         nama: b.car.nama,
+        nomorPlat: b.car.nomorPlat,
         images: b.car.images.map((img) => ({ url: img.url })),
       },
       profile: { id: b.profile.id, nama: b.profile.nama },

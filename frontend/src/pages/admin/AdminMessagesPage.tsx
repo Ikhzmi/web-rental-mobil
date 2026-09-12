@@ -1,194 +1,502 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { Search, MessageCircle, Mail, Phone, Car, Info } from 'lucide-react';
-import { api } from '../../lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Search,
+  MessageCircle,
+  Mail,
+  Phone,
+  Car as CarIcon,
+  Send,
+  Loader2,
+  Check,
+  CheckCheck,
+  ExternalLink,
+  MessageSquare,
+  Sparkles,
+} from 'lucide-react';
+import { api, type ChatMessage, type Conversation } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
-import { getGlassCardClass } from '../../hooks/useGlassStyles';
-import { getBookingStatusWithIcon } from '../../lib/statusConfig';
-import { SkeletonList } from '../../components/Skeleton';
 
-/**
- * Halaman ini SENGAJA tidak dibuat sebagai kotak chat/inbox pesan, karena
- * backend belum punya model percakapan (lihat prisma/schema.prisma — tidak
- * ada tabel Message). Membuat UI chat dengan bubble percakapan palsu hanya
- * akan mengulang masalah "data rekaan" yang sudah dibersihkan di dashboard.
- *
- * Sebagai gantinya: pusat kontak cepat berbasis data pemesan ASLI, supaya
- * admin bisa langsung menghubungi pelanggan lewat WhatsApp/telepon/email
- * terkait pesanan mereka — fungsional hari ini tanpa berpura-pura ada
- * sistem chat internal yang sebenarnya belum ada.
- */
+function formatTime(dateString: string) {
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDate(dateString: string) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+}
+
+function formatRupiah(value: string | number) {
+  const num = typeof value === 'string' ? Number(value) : value;
+  return `Rp${num.toLocaleString('id-ID')}`;
+}
+
 export default function AdminMessagesPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const [query, setQuery] = useState('');
+  const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin-messages-bookings'],
-    queryFn: () => api.listAdminBookings({ limit: 50 }),
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [inputText, setInputText] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 1. Ambil daftar percakapan instansi (polling 5 detik)
+  const { data: conversationsData, isLoading: isLoadingList } = useQuery({
+    queryKey: ['admin-conversations'],
+    queryFn: () => api.listAdminConversations(),
+    refetchInterval: 5000,
   });
 
-  const bookings = data?.data ?? [];
+  const conversations: Conversation[] = Array.isArray(conversationsData)
+    ? conversationsData
+    : (conversationsData as any)?.data ?? [];
 
-  // Satu pelanggan bisa punya beberapa pesanan — tampilkan sekali per
-  // pelanggan, dengan pesanan terbarunya sebagai konteks.
-  const contacts = useMemo(() => {
-    const map = new Map<string, (typeof bookings)[number]>();
-    for (const b of bookings) {
-      const key = b.profile?.email ?? b.userId;
-      const existing = map.get(key);
-      if (!existing || new Date(b.createdAt) > new Date(existing.createdAt)) {
-        map.set(key, b);
-      }
+  // Filter percakapan berdasarkan nama customer / email / nama mobil
+  const filteredConversations = conversations.filter((c: Conversation) => {
+    const q = searchQuery.toLowerCase();
+    const custName = (c.customer?.nama ?? '').toLowerCase();
+    const custEmail = (c.customer?.email ?? '').toLowerCase();
+    const carName = (c.car?.nama ?? '').toLowerCase();
+    return custName.includes(q) || custEmail.includes(q) || carName.includes(q);
+  });
+
+  // Pilih percakapan pertama secara otomatis jika belum ada yang dipilih dan daftar sudah ada
+  useEffect(() => {
+    if (!selectedConversationId && filteredConversations.length > 0) {
+      setSelectedConversationId(filteredConversations[0].id);
     }
-    return Array.from(map.values()).sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }, [bookings]);
+  }, [filteredConversations, selectedConversationId]);
 
-  const filtered = contacts.filter((c) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      c.profile?.nama?.toLowerCase().includes(q) ||
-      c.profile?.email?.toLowerCase().includes(q) ||
-      c.car?.nama?.toLowerCase().includes(q)
-    );
+  // 2. Ambil detail percakapan terpilih (polling 3.5 detik)
+  const { data: detailData, isLoading: isLoadingDetail } = useQuery({
+    queryKey: ['admin-conversation-detail', selectedConversationId],
+    queryFn: () => api.getAdminConversation(selectedConversationId!),
+    enabled: !!selectedConversationId,
+    refetchInterval: 3500,
   });
 
-  const glassCard = getGlassCardClass(isDark);
+  const activeConversation: Conversation | undefined =
+    detailData && 'messages' in detailData
+      ? (detailData as Conversation)
+      : (detailData as any)?.data;
+  const messages = activeConversation?.messages ?? [];
 
-  const waLink = (noHp: string, carNama: string) => {
+  // Scroll otomatis ke bawah saat pesan bertambah
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length]);
+
+  // 3. Mutation balas pesan dari admin
+  const sendMutation = useMutation({
+    mutationFn: (pesan: string) =>
+      api.sendAdminMessage(selectedConversationId!, { pesan }),
+    onSuccess: () => {
+      setInputText('');
+      queryClient.invalidateQueries({
+        queryKey: ['admin-conversation-detail', selectedConversationId],
+      });
+      queryClient.invalidateQueries({ queryKey: ['admin-conversations'] });
+    },
+  });
+
+  const handleSend = (text?: string) => {
+    const msg = (text ?? inputText).trim();
+    if (!msg || !selectedConversationId || sendMutation.isPending) return;
+    sendMutation.mutate(msg);
+  };
+
+  const quickAdminReplies = [
+    'Halo kak, unit ini masih tersedia untuk tanggal tersebut.',
+    'Bisa sewa lepas kunci, persyaratannya cukup e-KTP asli dan SIM A aktif.',
+    'Silakan lanjutkan pemesanan via aplikasi, kami akan segera konfirmasi unitnya.',
+    'Unit siap diantar ke lokasi Anda.',
+  ];
+
+  const waLink = (noHp: string, custName: string) => {
     const digits = noHp.replace(/\D/g, '').replace(/^0/, '62');
-    const msg = encodeURIComponent(`Halo, saya dari tim admin terkait pesanan ${carNama} Anda.`);
+    const msg = encodeURIComponent(`Halo Kak ${custName}, kami dari pihak rental mobil terkait konsultasi Anda.`);
     return `https://wa.me/${digits}?text=${msg}`;
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      {/* Header Halaman */}
       <div>
-        <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Kontak Pelanggan</h1>
-        <p className={`text-sm mt-1 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-          Hubungi pemesan langsung terkait pesanan mereka
+        <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+          Pusat Obrolan Pelanggan
+        </h1>
+        <p className={`text-sm mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+          Layani pertanyaan dan konsultasi calon penyewa secara langsung
         </p>
       </div>
 
-      <div className={`flex items-start gap-2.5 p-3.5 rounded-xl text-xs ${isDark ? 'bg-blue-500/10 text-blue-300' : 'bg-blue-50 text-blue-700'}`}>
-        <Info size={14} className="shrink-0 mt-0.5" />
-        <p>
-          Belum ada sistem chat internal di aplikasi ini — daftar di bawah menghubungkan Anda
-          langsung ke WhatsApp/email pelanggan berdasarkan data pesanan asli.
-        </p>
-      </div>
+      {/* Main Split-Box Chat Panel */}
+      <div className={`h-[calc(100vh-14rem)] min-h-[550px] rounded-2xl border flex overflow-hidden shadow-xl ${
+        isDark
+          ? 'bg-white/[0.03] border-white/10 backdrop-blur-xl'
+          : 'bg-white border-slate-200 shadow-slate-200/50'
+      }`}>
+        {/* KOLOM KIRI: Daftar Percakapan */}
+        <div className={`w-80 sm:w-96 border-r flex flex-col shrink-0 ${
+          isDark ? 'border-white/10 bg-white/[0.01]' : 'border-slate-200 bg-slate-50/50'
+        }`}>
+          {/* Search Box */}
+          <div className="p-3.5 border-b border-inherit">
+            <div className="relative">
+              <Search
+                size={15}
+                className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+                  isDark ? 'text-white/40' : 'text-slate-400'
+                }`}
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Cari nama, email, armada..."
+                className={`w-full rounded-xl pl-9 pr-3 py-2 text-xs outline-none transition-all ${
+                  isDark
+                    ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:border-orange-500'
+                    : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-orange-500'
+                }`}
+              />
+            </div>
+          </div>
 
-      <div className="relative">
-        <Search size={16} className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cari nama, email, atau mobil..."
-          className={`w-full rounded-full pl-10 pr-4 py-2.5 text-sm outline-none transition-all ${
-            isDark
-              ? 'bg-white/[0.05] border border-white/10 text-white placeholder:text-white/30 focus:border-white/30'
-              : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
-          }`}
-        />
-      </div>
-
-      {isLoading ? (
-        <SkeletonList count={5} isDark={isDark} />
-      ) : filtered.length === 0 ? (
-        <div className={`text-center py-16 rounded-2xl ${glassCard}`}>
-          <MessageCircle size={26} className={`mx-auto mb-3 ${isDark ? 'text-white/20' : 'text-slate-300'}`} />
-          <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
-            {query ? 'Tidak ada pelanggan yang cocok.' : 'Belum ada pesanan masuk.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          {filtered.map((b, i) => {
-            const statusCfg = getBookingStatusWithIcon(b.status, isDark);
-            return (
-              <motion.div
-                key={b.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                className={`p-4 rounded-2xl flex items-center gap-3 ${glassCard}`}
-              >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-semibold text-sm ${
-                  isDark ? 'bg-white/10 text-white/80' : 'bg-slate-100 text-slate-600'
+          {/* List Conversations */}
+          <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-white/5">
+            {isLoadingList ? (
+              <div className="flex items-center justify-center h-48 gap-2 text-xs text-slate-400">
+                <Loader2 size={16} className="animate-spin" />
+                <span>Memuat pesan masuk...</span>
+              </div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-center px-6">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 ${
+                  isDark ? 'bg-white/5 text-white/40' : 'bg-slate-100 text-slate-400'
                 }`}>
-                  {(b.profile?.nama ?? '?').charAt(0).toUpperCase()}
+                  <MessageSquare size={22} />
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      {b.profile?.nama ?? '-'}
-                    </p>
-                    <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${statusCfg.bg}`}>
-                      {statusCfg.label}
-                    </span>
-                  </div>
-                  <p className={`text-xs truncate mt-0.5 flex items-center gap-1 ${isDark ? 'text-white/45' : 'text-slate-500'}`}>
-                    <Car size={11} /> {b.car?.nama ?? '-'}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {b.profile?.noHp && (
-                    <a
-                      href={waLink(b.profile.noHp, b.car?.nama ?? 'mobil')}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Chat WhatsApp"
-                      className={`p-2 rounded-full transition-colors ${
-                        isDark ? 'bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-                      }`}
-                    >
-                      <MessageCircle size={15} />
-                    </a>
-                  )}
-                  {b.profile?.noHp && (
-                    <a
-                      href={`tel:${b.profile.noHp}`}
-                      aria-label="Telepon"
-                      className={`p-2 rounded-full transition-colors ${
-                        isDark ? 'bg-white/10 text-white/70 hover:bg-white/15' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      <Phone size={15} />
-                    </a>
-                  )}
-                  {b.profile?.email && (
-                    <a
-                      href={`mailto:${b.profile.email}`}
-                      aria-label="Email"
-                      className={`p-2 rounded-full transition-colors ${
-                        isDark ? 'bg-white/10 text-white/70 hover:bg-white/15' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      <Mail size={15} />
-                    </a>
-                  )}
-                  <Link
-                    to={`/admin/pesanan/${b.id}`}
-                    className={`text-xs font-medium px-3 py-2 rounded-full transition-colors whitespace-nowrap ${
-                      isDark ? 'bg-white/10 text-white/80 hover:bg-white/15' : 'bg-slate-900/5 text-slate-700 hover:bg-slate-900/10'
+                <p className="text-xs font-semibold mb-1">Belum ada obrolan</p>
+                <p className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                  Pesan yang dikirim calon penyewa dari halaman armada akan muncul di sini.
+                </p>
+              </div>
+            ) : (
+              filteredConversations.map((c) => {
+                const isSelected = c.id === selectedConversationId;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedConversationId(c.id)}
+                    className={`w-full p-3.5 flex items-start gap-3 text-left transition-all relative ${
+                      isSelected
+                        ? isDark
+                          ? 'bg-white/10'
+                          : 'bg-orange-50/80 border-r-2 border-r-orange-600'
+                        : isDark
+                          ? 'hover:bg-white/5'
+                          : 'hover:bg-slate-100/70'
                     }`}
                   >
-                    Detail
-                  </Link>
-                </div>
-              </motion.div>
-            );
-          })}
+                    {/* Customer Avatar */}
+                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 flex items-center justify-center font-bold text-sm shrink-0">
+                      {c.customer?.nama?.charAt(0).toUpperCase() ?? 'U'}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <h4 className="text-xs font-bold truncate">
+                          {c.customer?.nama ?? 'Pelanggan'}
+                        </h4>
+                        <span className={`text-[10px] shrink-0 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                          {formatDate(c.lastMessageAt)} {formatTime(c.lastMessageAt)}
+                        </span>
+                      </div>
+
+                      <p className={`text-[11px] truncate mb-1 ${
+                        c.unreadAdminCount > 0
+                          ? isDark ? 'font-bold text-white' : 'font-bold text-slate-900'
+                          : isDark ? 'text-white/50' : 'text-slate-500'
+                      }`}>
+                        {c.lastMessageText || 'Memulai percakapan'}
+                      </p>
+
+                      {c.car && (
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 dark:text-orange-400 text-[10px] font-medium max-w-full">
+                          <CarIcon size={10} className="shrink-0" />
+                          <span className="truncate">{c.car.nama}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Unread Badge */}
+                    {c.unreadAdminCount > 0 && (
+                      <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-4 text-center mt-1">
+                        {c.unreadAdminCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
-      )}
+
+        {/* KOLOM KANAN: Ruang Obrolan Terpilih */}
+        <div className="flex-1 flex flex-col min-w-0 bg-transparent">
+          {selectedConversationId && activeConversation ? (
+            <>
+              {/* Header Obrolan */}
+              <div className={`p-4 border-b flex items-center justify-between gap-4 ${
+                isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-white'
+              }`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
+                    {activeConversation.customer?.nama?.charAt(0).toUpperCase() ?? 'U'}
+                  </div>
+
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm truncate">
+                      {activeConversation.customer?.nama ?? 'Pelanggan'}
+                    </h3>
+                    <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-white/50">
+                      {activeConversation.customer?.email && (
+                        <span className="flex items-center gap-1 truncate">
+                          <Mail size={12} />
+                          {activeConversation.customer.email}
+                        </span>
+                      )}
+                      {activeConversation.customer?.noHp && (
+                        <span className="flex items-center gap-1 shrink-0">
+                          <Phone size={12} />
+                          {activeConversation.customer.noHp}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* WhatsApp Quick Action Button */}
+                {activeConversation.customer?.noHp && (
+                  <a
+                    href={waLink(
+                      activeConversation.customer.noHp,
+                      activeConversation.customer.nama
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all"
+                  >
+                    <Phone size={13} />
+                    <span>Hubungi WA</span>
+                    <ExternalLink size={11} />
+                  </a>
+                )}
+              </div>
+
+              {/* Inquiry Car Context Banner */}
+              {activeConversation.car && (
+                <div className={`p-3 px-4 border-b flex items-center justify-between gap-4 ${
+                  isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50/80 border-orange-200/80'
+                }`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    {activeConversation.car.images?.[0]?.url ? (
+                      <img
+                        src={activeConversation.car.images[0].url}
+                        alt={activeConversation.car.nama}
+                        className="w-12 h-10 object-cover rounded-lg shrink-0 border border-white/20"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center shrink-0 text-orange-600">
+                        <CarIcon size={18} />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold truncate">
+                        {activeConversation.car.nama}
+                      </p>
+                      <p className="text-[11px] text-orange-600 dark:text-orange-400 font-semibold">
+                        {formatRupiah(activeConversation.car.hargaPerHari)}/hari
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    href={`/armada/${activeConversation.car.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`shrink-0 text-xs font-medium underline flex items-center gap-1 ${
+                      isDark ? 'text-white/70 hover:text-white' : 'text-slate-700 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>Lihat Unit</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              )}
+
+              {/* Messages Feed */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
+                {isLoadingDetail ? (
+                  <div className="flex items-center justify-center h-full gap-2 text-xs text-slate-400">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Memuat obrolan...</span>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 ${
+                      isDark ? 'bg-white/5 text-white/40' : 'bg-slate-100 text-slate-400'
+                    }`}>
+                      <Sparkles size={20} />
+                    </div>
+                    <p className="text-xs font-semibold mb-1">Obrolan Baru</p>
+                    <p className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                      Ketik pesan pertama Anda di bawah untuk merespons pelanggan.
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((msg: ChatMessage) => {
+                    const isAdminMsg = msg.senderRole === 'admin';
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col ${isAdminMsg ? 'items-end' : 'items-start'}`}
+                      >
+                        {/* Car Attachment Card in message */}
+                        {msg.car && (
+                          <div className={`mb-1.5 p-2 rounded-xl border max-w-[70%] flex items-center gap-2 text-xs ${
+                            isAdminMsg
+                              ? 'bg-orange-500/10 border-orange-500/20'
+                              : isDark
+                                ? 'bg-white/5 border-white/10 text-white'
+                                : 'bg-slate-100 border-slate-200 text-slate-900'
+                          }`}>
+                            {msg.car.images?.[0]?.url && (
+                              <img
+                                src={msg.car.images[0].url}
+                                alt={msg.car.nama}
+                                className="w-8 h-8 rounded object-cover shrink-0"
+                              />
+                            )}
+                            <div className="min-w-0">
+                              <p className="font-bold text-[10px] truncate">{msg.car.nama}</p>
+                              <p className="text-[9px] text-orange-600 dark:text-orange-400 font-semibold">
+                                {formatRupiah(msg.car.hargaPerHari)}/hari
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Bubble */}
+                        <div
+                          className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-xs ${
+                            isAdminMsg
+                              ? 'bg-gradient-to-tr from-orange-600 to-amber-600 text-white rounded-br-xs'
+                              : isDark
+                                ? 'bg-white/10 text-white rounded-bl-xs border border-white/10'
+                                : 'bg-slate-100 text-slate-900 rounded-bl-xs border border-slate-200/60'
+                          }`}
+                        >
+                          <p>{msg.pesan}</p>
+                        </div>
+
+                        {/* Metadata */}
+                        <div className={`flex items-center gap-1.5 mt-1 text-[9px] ${
+                          isDark ? 'text-white/40' : 'text-slate-400'
+                        }`}>
+                          <span>{formatTime(msg.createdAt)}</span>
+                          {isAdminMsg && (
+                            msg.isRead ? (
+                              <CheckCheck size={12} className="text-orange-400" />
+                            ) : (
+                              <Check size={12} />
+                            )
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Quick Template Chips for Admin */}
+              <div className={`px-4 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar border-t ${
+                isDark ? 'border-white/10 bg-white/[0.01]' : 'border-slate-200 bg-slate-50/50'
+              }`}>
+                {quickAdminReplies.map((tpl, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSend(tpl)}
+                    disabled={sendMutation.isPending}
+                    className={`shrink-0 text-[11px] px-3 py-1 rounded-full border transition-all truncate max-w-[280px] ${
+                      isDark
+                        ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white/80'
+                        : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {tpl}
+                  </button>
+                ))}
+              </div>
+
+              {/* Input Area */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSend();
+                }}
+                className={`p-3.5 px-4 border-t flex items-center gap-3 ${
+                  isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-white'
+                }`}
+              >
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Ketik balasan untuk pelanggan..."
+                  className={`flex-1 rounded-xl px-4 py-2.5 text-xs outline-none transition-all ${
+                    isDark
+                      ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:border-orange-500'
+                      : 'bg-slate-100 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-orange-500'
+                  }`}
+                />
+
+                <button
+                  type="submit"
+                  disabled={!inputText.trim() || sendMutation.isPending}
+                  className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 shrink-0"
+                >
+                  {sendMutation.isPending ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <>
+                      <span>Kirim</span>
+                      <Send size={14} />
+                    </>
+                  )}
+                </button>
+              </form>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-center px-6">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${
+                isDark ? 'bg-white/5 text-white/40' : 'bg-slate-100 text-slate-400'
+              }`}>
+                <MessageCircle size={28} />
+              </div>
+              <h3 className="text-sm font-bold mb-1">Pilih Percakapan</h3>
+              <p className={`text-xs max-w-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                Pilih salah satu pesan pelanggan dari daftar di sebelah kiri untuk mulai membaca dan membalas pertanyaan mereka.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

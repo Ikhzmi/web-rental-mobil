@@ -86,6 +86,7 @@ enum StatusInstansi {
   menunggu_verifikasi  // Baru daftar, menunggu verifikasi Super Admin
   aktif               // Sudah diverifikasi, aktif
   nonaktif             // Dinonaktifkan
+  ditolak              // Ditolak oleh Super Admin
 
   @@map("instansi_status")
 }
@@ -150,11 +151,14 @@ model Profile {
   email           String   @unique
   noHp            String   @map("no_hp")
   role            Role     @default(customer)
-  /// noKtp dan noSim DIHAPUS di v1.3 - verifikasi cukup via dokumen upload
+  alamat          String?  @map("alamat")
+  noKtp           String?  @map("no_ktp")
+  noSim           String?  @map("no_sim")
   dokumenKtpUrl   String?  @map("dokumen_ktp_url")
   dokumenSimUrl   String?  @map("dokumen_sim_url")
   dokumenVerified Boolean  @default(false) @map("dokumen_verified")
   aktif           Boolean  @default(true)
+  lastSeenAt      DateTime? @map("last_seen_at")
   createdAt       DateTime @default(now()) @map("created_at")
 
   /// BARU v1.3: Relasi ke instansi untuk admin
@@ -165,6 +169,8 @@ model Profile {
   bookings          Booking[]
   statusLogsDiubah  BookingStatusLog[] @relation("StatusLogDiubahOleh")
   reviews           Review[]
+  conversationsAsCustomer Conversation[] @relation("CustomerConversations")
+  chatMessagesSent  ChatMessage[]      @relation("SentChatMessages")
 
   @@map("profiles")
 }
@@ -176,6 +182,7 @@ model Profile {
 model Car {
   id                 String        @id @default(uuid()) @db.Uuid
   nama               String
+  nomorPlat          String?       @map("nomor_plat") // Nomor polisi kendaraan, e.g. "B 1234 XYZ"
   kategori           KategoriMobil
   transmisi          Transmisi
   tipeSewa           TipeSewa      @map("tipe_sewa")
@@ -196,9 +203,12 @@ model Car {
   statusApproval     StatusApproval @default(menunggu_persetujuan) @map("status_approval")
   alasanPenolakan     String?        @map("alasan_penolakan")
 
-  images   CarImage[]
-  bookings Booking[]
-  reviews  Review[]
+  images        CarImage[]
+  bookings      Booking[]
+  reviews       Review[]
+  blockedDates  CarBlockedDate[]
+  conversations Conversation[]
+  chatMessages  ChatMessage[]
 
   @@map("cars")
 }
@@ -212,6 +222,20 @@ model CarImage {
   car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
 
   @@map("car_images")
+  @@index([carId])
+}
+
+model CarBlockedDate {
+  id             String   @id @default(uuid()) @db.Uuid
+  carId          String   @map("car_id") @db.Uuid
+  tanggalMulai   DateTime @map("tanggal_mulai") @db.Date
+  tanggalSelesai DateTime @map("tanggal_selesai") @db.Date
+  alasan         String?  @map("alasan")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  @@map("car_blocked_dates")
   @@index([carId])
 }
 
@@ -334,6 +358,7 @@ model Instansi {
   profiles       Profile[]
   cars          Car[]
   disbursements Disbursement[]
+  conversations Conversation[]
 
   @@map("instansi")
 }
@@ -449,4 +474,54 @@ model DashboardActivity {
   @@map("dashboard_activities")
   @@index([createdAt(sort: Desc)])
   @@index([type])
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// CHAT & MESSAGING MODELS
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Model percakapan antara customer dan instansi rental mobil
+model Conversation {
+  id                  String   @id @default(uuid()) @db.Uuid
+  customerId          String   @map("customer_id") @db.Uuid
+  instansiId          String   @map("instansi_id") @db.Uuid
+  /// Mobil yang sedang ditanyakan saat inisiasi chat (opsional)
+  carId               String?  @map("car_id") @db.Uuid
+  lastMessageAt       DateTime @default(now()) @map("last_message_at")
+  lastMessageText     String?  @map("last_message_text")
+  unreadCustomerCount Int      @default(0) @map("unread_customer_count")
+  unreadAdminCount    Int      @default(0) @map("unread_admin_count")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  customer Profile     @relation("CustomerConversations", fields: [customerId], references: [id], onDelete: Cascade)
+  instansi Instansi    @relation(fields: [instansiId], references: [id], onDelete: Cascade)
+  car      Car?        @relation(fields: [carId], references: [id], onDelete: SetNull)
+  messages ChatMessage[]
+
+  @@unique([customerId, instansiId])
+  @@index([customerId])
+  @@index([instansiId])
+  @@index([lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+/// Model pesan dalam obrolan
+model ChatMessage {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  senderId       String   @map("sender_id") @db.Uuid
+  senderRole     Role     @map("sender_role")
+  pesan          String
+  /// Lampiran kartu armada mobil yang ditanyakan (opsional)
+  carId          String?  @map("car_id") @db.Uuid
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       Profile      @relation("SentChatMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  car          Car?         @relation(fields: [carId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
 }

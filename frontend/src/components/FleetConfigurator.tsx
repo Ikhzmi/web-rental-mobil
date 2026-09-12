@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MoreVertical, ChevronLeft, ChevronRight, Car, Sparkles } from 'lucide-react';
 import { api, type Kategori } from '../lib/api';
 import { formatRupiah } from '../lib/pricing';
 import FleetArcMenu from './FleetArcMenu';
@@ -37,6 +37,8 @@ function SteeringWheelIcon({ className }: { className?: string }) {
 
 export default function FleetConfigurator() {
   const [activeIndex, setActiveIndex] = useState(0);
+  // displayedIndex = what's actually rendered (lags behind activeIndex by one animation phase)
+  const [displayedIndex, setDisplayedIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showGrid, setShowGrid] = useState(false);
   const [rotation, setRotation] = useState(0);
@@ -48,19 +50,25 @@ export default function FleetConfigurator() {
   const carLayerRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const wheelContainerRef = useRef<HTMLDivElement>(null);
+  const carStageRef = useRef<HTMLDivElement>(null);
   const isFirstRender = useRef(true);
+  const isAnimating = useRef(false);
+
+  // Touch/pointer gesture tracking for left-swipe only
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const { data: allCars } = useQuery({
+  const { data: allCars, isLoading } = useQuery({
     queryKey: ['cars', 'all'],
     queryFn: () => api.listCars({}),
   });
 
   // Filter hanya yang tersedia
   const availableCars = allCars?.filter(car => car.status === 'tersedia') || [];
-  const activeCar = availableCars[activeIndex];
+  const activeCar = availableCars[displayedIndex];
 
   useGSAP(
     () => {
@@ -69,6 +77,7 @@ export default function FleetConfigurator() {
 
       if (isFirstRender.current) {
         isFirstRender.current = false;
+        setDisplayedIndex(activeIndex);
         gsap.set(el, { xPercent: 0, opacity: 1 });
         return;
       }
@@ -82,11 +91,19 @@ export default function FleetConfigurator() {
         (context) => {
           const { reduceMotion } = context.conditions as { reduceMotion: boolean };
           if (reduceMotion) {
+            setDisplayedIndex(activeIndex);
             gsap.set(el, { xPercent: 0, opacity: 1 });
+            isAnimating.current = false;
             return;
           }
-          const tl = gsap.timeline();
+          const tl = gsap.timeline({
+            onComplete: () => { isAnimating.current = false; },
+          });
           tl.to(el, { xPercent: -70, opacity: 0, duration: 0.38, ease: 'power1.in' })
+            .call(() => {
+              // Swap content mid-animation — only after slide-out completes
+              setDisplayedIndex(activeIndex);
+            })
             .set(el, { xPercent: 70 })
             .to(el, { xPercent: 0, opacity: 1, duration: 0.55, ease: 'power2.out' });
         }
@@ -96,6 +113,40 @@ export default function FleetConfigurator() {
     },
     { dependencies: [activeIndex], scope: sectionRef }
   );
+
+  // Touch gesture: left-swipe only → go to next car
+  useEffect(() => {
+    const el = carStageRef.current;
+    if (!el) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (touchStartX.current === null || touchStartY.current === null) return;
+      const dx = e.changedTouches[0].clientX - touchStartX.current;
+      const dy = e.changedTouches[0].clientY - touchStartY.current;
+
+      // Only trigger if predominantly horizontal and moving LEFT
+      if (Math.abs(dx) > Math.abs(dy) && dx < -50 && !isAnimating.current) {
+        isAnimating.current = true;
+        setActiveIndex((i) => (i + 1) % availableCars.length);
+      }
+
+      touchStartX.current = null;
+      touchStartY.current = null;
+    };
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [availableCars.length]);
 
   const animate = useCallback(() => {
     const diff = targetRef.current - rotationRef.current;
@@ -182,18 +233,121 @@ export default function FleetConfigurator() {
     setActiveIndex((i) => (i + 1) % availableCars.length);
   };
 
-  if (!activeCar) {
+  // --- Loading skeleton ---
+  if (isLoading) {
     return (
       <section
-        ref={sectionRef}
         className={`relative w-full min-h-[60vh] overflow-hidden py-20 ${
-          isDark
-            ? 'bg-[#0a0a0a]'
-            : 'bg-gradient-to-b from-zinc-100 via-zinc-50 to-white'
+          isDark ? 'bg-[#0a0a0a]' : 'bg-gradient-to-b from-zinc-100 via-zinc-50 to-white'
         }`}
       >
-        <div className="flex items-center justify-center h-full">
-          <p className={isDark ? 'text-white/50' : 'text-zinc-500'}>Memuat armada...</p>
+        <div className="px-5 sm:px-10 md:px-14 max-w-6xl mx-auto">
+          {/* Skeleton top bar */}
+          <div className="flex items-start justify-between mb-10">
+            <div className="space-y-2">
+              <div className={`h-3 w-28 rounded-full animate-pulse ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
+              <div className={`h-10 w-56 rounded-2xl animate-pulse ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
+              <div className={`h-3 w-20 rounded-full animate-pulse ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
+            </div>
+            <div className="space-y-2 text-right">
+              <div className={`h-8 w-36 rounded-2xl animate-pulse ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
+              <div className={`h-3 w-16 rounded-full animate-pulse ml-auto ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
+            </div>
+          </div>
+          {/* Skeleton car stage */}
+          <div className={`h-[38vh] sm:h-[46vh] md:h-[52vh] rounded-3xl animate-pulse ${isDark ? 'bg-white/[0.04]' : 'bg-zinc-200'}`} />
+          {/* Skeleton controls */}
+          <div className="flex justify-center gap-3 mt-6">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className={`h-1.5 rounded-full animate-pulse ${
+                i === 2
+                  ? isDark ? 'w-5 bg-white/20' : 'w-5 bg-zinc-400'
+                  : isDark ? 'w-1.5 bg-white/10' : 'w-1.5 bg-zinc-300'
+              }`} />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // --- Empty state (no approved+available cars) ---
+  if (availableCars.length === 0) {
+    return (
+      <section
+        className={`relative w-full min-h-[60vh] overflow-hidden py-20 flex items-center justify-center ${
+          isDark ? 'bg-[#0a0a0a]' : 'bg-gradient-to-b from-zinc-100 via-zinc-50 to-white'
+        }`}
+      >
+        {/* Soft glow blob */}
+        <div
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+          style={{
+            width: '60%',
+            height: '60%',
+            background: isDark
+              ? 'radial-gradient(ellipse at center, rgba(99,102,241,0.08) 0%, transparent 70%)'
+              : 'radial-gradient(ellipse at center, rgba(37,99,235,0.07) 0%, transparent 70%)',
+          }}
+        />
+
+        <div className="relative z-10 text-center px-6 max-w-md mx-auto">
+          {/* Icon ring */}
+          <div className="relative inline-flex items-center justify-center mb-8">
+            <div
+              className={`w-28 h-28 rounded-full border-2 flex items-center justify-center ${
+                isDark ? 'border-white/10 bg-white/[0.04]' : 'border-zinc-200 bg-white/60'
+              }`}
+            >
+              <Car
+                size={44}
+                className={`${
+                  isDark ? 'text-white/20' : 'text-zinc-300'
+                }`}
+                strokeWidth={1.2}
+              />
+            </div>
+            {/* Orbiting sparkle */}
+            <div
+              className={`absolute -top-1 -right-1 w-8 h-8 rounded-full border flex items-center justify-center ${
+                isDark
+                  ? 'bg-indigo-500/20 border-indigo-400/30 text-indigo-300'
+                  : 'bg-blue-50 border-blue-200 text-blue-400'
+              }`}
+            >
+              <Sparkles size={14} />
+            </div>
+          </div>
+
+          <h2
+            className={`font-playfair italic text-2xl sm:text-3xl mb-3 ${
+              isDark ? 'text-white/80' : 'text-zinc-800'
+            }`}
+          >
+            Armada Segera Hadir
+          </h2>
+          <p
+            className={`text-sm leading-relaxed ${
+              isDark ? 'text-white/40' : 'text-zinc-500'
+            }`}
+          >
+            Saat ini belum ada kendaraan yang tersedia untuk ditampilkan.
+            Silakan cek kembali nanti atau hubungi kami untuk informasi lebih lanjut.
+          </p>
+
+          {/* Decorative dashes */}
+          <div className="flex items-center justify-center gap-2 mt-8">
+            {[...Array(5)].map((_, i) => (
+              <span
+                key={i}
+                className={`rounded-full ${
+                  i === 2
+                    ? isDark ? 'w-5 h-1.5 bg-white/30' : 'w-5 h-1.5 bg-zinc-400'
+                    : isDark ? 'w-1.5 h-1.5 bg-white/15' : 'w-1.5 h-1.5 bg-zinc-300'
+                }`}
+              />
+            ))}
+          </div>
         </div>
       </section>
     );
@@ -418,27 +572,6 @@ export default function FleetConfigurator() {
         </button>
       </div>
 
-      {/* Mobile: Show car selector at bottom */}
-      <div className="md:hidden fixed bottom-24 left-4 right-4 z-[95]">
-        <div className="flex items-center justify-center gap-3 overflow-x-auto pb-2">
-          {availableCars.map((car, i) => (
-            <button
-              key={car.id}
-              onClick={() => selectCar(i)}
-              className={`shrink-0 px-4 py-2 rounded-full text-xs font-medium transition-all ${
-                i === activeIndex
-                  ? isDark ? 'bg-white text-zinc-900' : 'bg-zinc-800 text-white'
-                  : isDark
-                    ? 'bg-white/10 text-white/60 hover:bg-white/20'
-                    : 'bg-white/80 text-zinc-600 hover:bg-white'
-              }`}
-            >
-              {car.nama}
-            </button>
-          ))}
-        </div>
-        <p className={`text-center text-xs mt-2 ${isDark ? 'text-white/40' : 'text-zinc-500'}`}>Tap tombol kemudi untuk pilih armada</p>
-      </div>
     </section>
   );
 }

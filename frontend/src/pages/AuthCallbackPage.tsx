@@ -19,104 +19,144 @@ export default function AuthCallbackPage() {
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   useEffect(() => {
+    let isMounted = true;
+
     const handleCallback = async () => {
+      const code = searchParams.get('code');
       const token = searchParams.get('token');
       const type = searchParams.get('type');
       const redirectTo = searchParams.get('redirect_to');
+      const errorParam = searchParams.get('error_description') || searchParams.get('error');
 
-      console.log('[AuthCallback] Params:', { token: token ? 'present' : 'missing', type, redirectTo });
-
-      // Jika tidak ada token (misalnya user akses langsung /auth/callback)
-      if (!token) {
-        console.log('[AuthCallback] No token found, checking existing session...');
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session) {
-          // User sudah login, redirect ke home
-          setStatus('success');
-          setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 1500);
-        } else {
-          // User belum login, redirect ke login
-          setStatus('error');
-          setErrorMessage('Link verifikasi tidak valid atau sudah kedaluwarsa.');
-          setTimeout(() => {
-            navigate('/login', { replace: true });
-          }, 3000);
-        }
+      if (errorParam) {
+        if (!isMounted) return;
+        setStatus('error');
+        setErrorMessage(errorParam);
+        setTimeout(() => navigate('/login', { replace: true }), 3000);
         return;
       }
 
-      // Ada token - proses verifikasi
-      try {
-        if (type === 'signup') {
-          // Untuk signup confirmation, kita perlu set session dengan token
-          // Supabase auto-handles this via getSession() after the redirect
+      console.log('[AuthCallback] Params:', {
+        code: code ? 'present' : 'missing',
+        token: token ? 'present' : 'missing',
+        type,
+        redirectTo,
+      });
 
-          const { data, error } = await supabase.auth.getSession();
-
+      // Flow 1: OAuth PKCE flow (Google OAuth mengirim ?code=xxx)
+      if (code) {
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            console.error('[AuthCallback] Error:', error);
-            setStatus('error');
-            setErrorMessage(error.message || 'Verifikasi gagal. Silakan coba lagi.');
-            setTimeout(() => {
-              navigate('/login', { replace: true });
-            }, 3000);
+            console.warn('[AuthCallback] exchangeCodeForSession error, falling back to getSession:', error);
+            const { data: fallbackData } = await supabase.auth.getSession();
+            if (fallbackData.session && isMounted) {
+              setStatus('success');
+              setTimeout(() => navigate(redirectTo || '/', { replace: true }), 1200);
+              return;
+            }
+            if (isMounted) {
+              setStatus('error');
+              setErrorMessage(error.message || 'Gagal memproses autentikasi Google.');
+              setTimeout(() => navigate('/login', { replace: true }), 3000);
+            }
             return;
           }
 
-          if (data.session) {
-            console.log('[AuthCallback] Session established successfully');
+          if (data.session && isMounted) {
             setStatus('success');
-
-            // Tentukan redirect URL
-            const targetUrl = redirectTo || '/';
-
-            setTimeout(() => {
-              navigate(targetUrl, { replace: true });
-            }, 1500);
-          } else {
-            // Token valid tapi belum ada session - mungkin email sudah terverifikasi
-            // atau perlu login manual
-            setStatus('success');
-            setTimeout(() => {
-              navigate('/login?verified=true', { replace: true });
-            }, 1500);
+            setTimeout(() => navigate(redirectTo || '/', { replace: true }), 1200);
+            return;
           }
-        } else if (type === 'recovery') {
-          // PENTING: sebelumnya di sini langsung redirect ke /login?reset=true
-          // TANPA PERNAH memberi kesempatan user set password baru — sesi
-          // recovery yang sudah aktif ini cuma dibuang begitu saja, padahal
-          // update password (supabase.auth.updateUser) wajib dipanggil
-          // SELAGI sesi recovery masih aktif. Sekarang diarahkan ke halaman
-          // khusus yang benar-benar menjalankan itu.
-          navigate('/reset-password', { replace: true });
-          return;
-        } else if (type === 'email_change') {
-          // Email change confirmation
-          setStatus('success');
-          setTimeout(() => {
-            navigate('/akun/profil', { replace: true });
-          }, 1500);
-        } else {
-          // Type tidak dikenal
-          setStatus('success');
-          setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 1500);
+        } catch (err) {
+          console.error('[AuthCallback] Error during code exchange:', err);
         }
-      } catch (err) {
-        console.error('[AuthCallback] Unexpected error:', err);
-        setStatus('error');
-        setErrorMessage('Terjadi kesalahan tak terduga.');
-        setTimeout(() => {
-          navigate('/login', { replace: true });
-        }, 3000);
       }
+
+      // Flow 2: Email confirmation / recovery
+      // Supabase PKCE flow mengirim ?token_hash=xxx&type=recovery
+      // Supabase Implicit flow (lama) mengirim ?token=xxx&type=recovery
+      const tokenHash = searchParams.get('token_hash');
+      const effectiveToken = tokenHash || token;
+      const effectiveType = type as 'signup' | 'recovery' | 'email_change' | 'invite' | 'magiclink' | null;
+
+      if (effectiveToken && effectiveType) {
+        try {
+          if (effectiveType === 'recovery') {
+            // JANGAN panggil verifyOtp di sini — itu membuat sesi penuh (auto-login).
+            // Teruskan token_hash ke ResetPasswordPage yang akan handle verifikasi
+            // dan menampilkan form ganti password tanpa login otomatis.
+            const dest = tokenHash
+              ? `/reset-password?token_hash=${encodeURIComponent(tokenHash)}`
+              : '/reset-password';
+            if (isMounted) navigate(dest, { replace: true });
+            return;
+
+          } else if (effectiveType === 'signup') {
+            if (tokenHash) {
+              await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'signup' });
+            }
+            const { data } = await supabase.auth.getSession();
+            if (isMounted) {
+              setStatus('success');
+              setTimeout(() => navigate(data?.session ? (redirectTo || '/') : '/login?verified=true', { replace: true }), 1500);
+            }
+            return;
+
+          } else if (effectiveType === 'email_change') {
+            if (tokenHash) {
+              await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'email_change' });
+            }
+            if (isMounted) {
+              setStatus('success');
+              setTimeout(() => navigate('/akun/profil', { replace: true }), 1500);
+            }
+            return;
+          }
+        } catch (err) {
+          console.error('[AuthCallback] Token verification error:', err);
+        }
+      }
+
+      // Flow 3: Cek sesi yang sudah terbentuk (Implicit OAuth hash atau SDK auto-detect)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && isMounted) {
+        setStatus('success');
+        setTimeout(() => navigate(redirectTo || '/', { replace: true }), 1200);
+        return;
+      }
+
+      // Beri jeda kecil untuk listener onAuthStateChange jika exchange sedang berlangsung
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+        if (newSession && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+          if (isMounted) {
+            setStatus('success');
+            setTimeout(() => navigate(redirectTo || '/', { replace: true }), 1000);
+          }
+        }
+      });
+
+      // Timeout fallback jika tidak ada sesi dalam 3.5 detik
+      const timeoutId = setTimeout(() => {
+        subscription.unsubscribe();
+        if (isMounted && status === 'loading') {
+          setStatus('error');
+          setErrorMessage('Sesi login tidak ditemukan atau telah kedaluwarsa.');
+          setTimeout(() => navigate('/login', { replace: true }), 2500);
+        }
+      }, 3500);
+
+      return () => {
+        clearTimeout(timeoutId);
+        subscription.unsubscribe();
+      };
     };
 
     handleCallback();
+
+    return () => {
+      isMounted = false;
+    };
   }, [searchParams, navigate]);
 
   return (

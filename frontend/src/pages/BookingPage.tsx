@@ -1,86 +1,236 @@
-import { useState, useRef } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { DayPicker, type DateRange } from 'react-day-picker';
-import 'react-day-picker/style.css';
-import { Loader2, ShieldCheck, Car as CarIcon, Truck, Check, MapPin, Calendar as CalendarIcon, User, CreditCard } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { useState, useRef, useEffect, type ChangeEvent } from 'react';
+import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { DateRange } from 'react-day-picker';
+import {
+  Loader2,
+  ShieldCheck,
+  Car as CarIcon,
+  Truck,
+  Check,
+  MapPin,
+  Calendar as CalendarIcon,
+  User,
+  CreditCard,
+  FileCheck,
+  Sparkles,
+  ExternalLink,
+  Home,
+  Building2,
+  AlertTriangle,
+  Clock,
+  X,
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { api, ApiError, type JenisAddon } from '../lib/api';
 import { estimasiHarga, formatRupiah } from '../lib/pricing';
+import { supabase } from '../lib/supabase';
+import { useSession } from '../hooks/useSession';
 import { useTheme } from '../hooks/useTheme';
 
-const ADDON_HARGA_DEFAULT: Record<Exclude<JenisAddon, 'sopir'>, number> = {
-  asuransi: 75_000,
+import { lookupKodepos, type KodeposResult } from '../lib/kodepos';
+
+const ADDON_HARGA_DEFAULT: Record<'antar_jemput', number> = {
   antar_jemput: 50_000,
 };
 
-const LOCATION_PRESETS = [
-  'Kantor Rental (Ambil di tempat)',
-  'Bandara / Airport',
-  'Stasiun Kereta Api',
-  'Antar ke Rumah / Hotel',
-];
+type LokasiPengambilan = 'ambil_ditempat' | 'jemput_kerumah';
 
 const STEPS = [
-  { id: 1, title: 'Tanggal', icon: CalendarIcon },
-  { id: 2, title: 'Lokasi', icon: MapPin },
-  { id: 3, title: 'Add-on', icon: Truck },
-  { id: 4, title: 'Data Diri', icon: User },
+  { id: 1, title: 'Lokasi', icon: MapPin },
+  { id: 2, title: 'Layanan', icon: Truck },
+  { id: 3, title: 'Data Diri', icon: User },
 ];
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf'];
+
+async function uploadDokumen(userId: string, tipe: 'ktp' | 'sim', file: File): Promise<string> {
+  const ext = file.name.split('.').pop();
+  const path = `${userId}/${tipe}.${ext}`;
+  const { error } = await supabase.storage
+    .from('dokumen-penyewa')
+    .upload(path, file, { upsert: true });
+  if (error) throw error;
+  return path;
+}
+
+function formatDate(date: Date) {
+  return date.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
 
 export default function BookingPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
+  const { session } = useSession();
+  const queryClient = useQueryClient();
 
   const { carId } = useParams<{ carId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const sectionRef = useRef<HTMLElement>(null);
 
-  const initialRange = (location.state as { range?: DateRange } | null)?.range;
-  const [range, setRange] = useState<DateRange | undefined>(initialRange);
-  const [currentStep] = useState(1);
-  const [lokasiAmbil, setLokasiAmbil] = useState('');
-  const [lokasiKembali, setLokasiKembali] = useState('');
-  const [sameLokasi, setSameLokasi] = useState(true);
+  // Tanggal diterima dari halaman sebelumnya (FleetConfigurator / SearchForm / ArmadaDetailPage / localStorage)
+  const [range] = useState<DateRange | undefined>(() => {
+    const rawState = (location.state as any)?.range;
+    if (rawState?.from && rawState?.to) {
+      return {
+        from: new Date(rawState.from),
+        to: new Date(rawState.to),
+      };
+    }
+    const saved = carId ? localStorage.getItem(`booking_range_${carId}`) : null;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.from && parsed.to) {
+          return {
+            from: new Date(parsed.from),
+            to: new Date(parsed.to),
+          };
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    // Fallback default 1 hari (hari ini) jika belum ada tanggal
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return { from: today, to: today };
+  });
+
+  // ── Lokasi & Detail Alamat ──────────────────────────
+  const [lokasiPengambilan, setLokasiPengambilan] = useState<LokasiPengambilan>('ambil_ditempat');
+  const [kodePos, setKodePos] = useState('');
+  const [provinsi, setProvinsi] = useState('');
+  const [kota, setKota] = useState('');
+  const [kecamatan, setKecamatan] = useState('');
+  const [kelurahan, setKelurahan] = useState('');
+  const [alamatJalan, setAlamatJalan] = useState('');
+  const [alamatLengkap, setAlamatLengkap] = useState('');
+  const [isSearchingKodepos, setIsSearchingKodepos] = useState(false);
+  const [kodeposSuggestions, setKodeposSuggestions] = useState<KodeposResult[]>([]);
+
+  // ── Layanan Tambahan ────────────────────────────────
   const [sopirDipilih, setSopirDipilih] = useState(false);
-  const [asuransiDipilih, setAsuransiDipilih] = useState(false);
   const [antarJemputDipilih, setAntarJemputDipilih] = useState(false);
+
+  // ── Data Diri ───────────────────────────────────────
   const [nama, setNama] = useState('');
   const [noHp, setNoHp] = useState('');
   const [noKtp, setNoKtp] = useState('');
   const [noSim, setNoSim] = useState('');
+  const [ktpFile, setKtpFile] = useState<File | null>(null);
+  const [simFile, setSimFile] = useState<File | null>(null);
+  const [ktpUploadError, setKtpUploadError] = useState<string | null>(null);
+  const [simUploadError, setSimUploadError] = useState<string | null>(null);
+
+  // ── State UI ─────────────────────────────────────────
+  const [isProcessingBooking, setIsProcessingBooking] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  const isStep1Done = Boolean(range?.from && range?.to);
-  const isStep2Done = Boolean(lokasiAmbil.trim() && (sameLokasi || lokasiKembali.trim()));
-  const isStep3Done = isStep1Done && isStep2Done;
-  const isStep4Done = Boolean(nama.trim() && noHp.trim() && noKtp.trim() && noSim.trim());
-
+  // ── Queries ───────────────────────────────────────────
   const carQuery = useQuery({
     queryKey: ['car', carId],
     queryFn: () => api.getCar(carId!),
     enabled: !!carId,
   });
 
-  const availabilityQuery = useQuery({
-    queryKey: ['car-availability', carId],
-    queryFn: () => api.getCarAvailability(carId!),
-    enabled: !!carId,
+  const profileQuery = useQuery({
+    queryKey: ['my-profile'],
+    queryFn: api.getMyProfile,
   });
+  const profile = profileQuery.data;
 
-  useQuery({
-    queryKey: ['my-profile-for-booking'],
-    queryFn: async () => {
-      const profile = await api.getMyProfile();
-      setNama((prev) => prev || profile.nama);
-      setNoHp((prev) => prev || profile.noHp);
-      setNoKtp((prev) => prev || profile.noKtp || '');
-      setNoSim((prev) => prev || profile.noSim || '');
-      return profile;
-    },
-  });
+  // Isi otomatis dari profil
+  useEffect(() => {
+    if (profile) {
+      setNama((prev) => prev || profile.nama || '');
+      setNoHp((prev) => prev || profile.noHp || '');
+      setNoKtp((prev) => prev || (profile as any).noKtp || '');
+      setNoSim((prev) => prev || (profile as any).noSim || '');
+      if (profile.alamat && !alamatJalan && !alamatLengkap) {
+        setAlamatJalan(profile.alamat);
+      }
+    }
+  }, [profile]);
+
+  // Handler pencarian otomatis Kode Pos
+  const handleKodePosChange = async (value: string) => {
+    const clean = value.replace(/\D/g, '').slice(0, 5);
+    setKodePos(clean);
+
+    if (clean.length === 5) {
+      setIsSearchingKodepos(true);
+      try {
+        const results = await lookupKodepos(clean);
+        setKodeposSuggestions(results);
+        if (results.length > 0) {
+          const first = results[0];
+          setProvinsi(first.provinsi);
+          setKota(first.kabupaten);
+          setKecamatan(first.kecamatan);
+          setKelurahan(first.kelurahan);
+        }
+      } catch (err) {
+        console.error('Kodepos lookup error:', err);
+      } finally {
+        setIsSearchingKodepos(false);
+      }
+    } else {
+      setKodeposSuggestions([]);
+    }
+  };
+
+  const handleSelectKodeposSuggestion = (sug: KodeposResult) => {
+    setProvinsi(sug.provinsi);
+    setKota(sug.kabupaten);
+    setKecamatan(sug.kecamatan);
+    setKelurahan(sug.kelurahan);
+    setKodeposSuggestions([]);
+  };
+
+  // Sync otomatis ke string alamatLengkap
+  useEffect(() => {
+    const parts = [
+      alamatJalan.trim(),
+      kelurahan ? `Kel. ${kelurahan}` : '',
+      kecamatan ? `Kec. ${kecamatan}` : '',
+      kota,
+      provinsi,
+      kodePos ? `Kode Pos ${kodePos}` : '',
+    ].filter(Boolean);
+
+    setAlamatLengkap(parts.join(', '));
+  }, [alamatJalan, kelurahan, kecamatan, kota, provinsi, kodePos]);
+
+  // Antar-Jemput otomatis ON jika Jemput ke Rumah, OFF jika Ambil di Tempat
+  useEffect(() => {
+    if (lokasiPengambilan === 'jemput_kerumah') {
+      setAntarJemputDipilih(true);
+    } else {
+      setAntarJemputDipilih(false);
+    }
+  }, [lokasiPengambilan]);
+
+  // Jika bukan sopir → tidak bisa jemput ke rumah
+  const car = carQuery.data;
+  const isWithDriver = car?.tipeSewa === 'dengan_sopir' || sopirDipilih;
+
+  useEffect(() => {
+    if (!isWithDriver && lokasiPengambilan === 'jemput_kerumah') {
+      setLokasiPengambilan('ambil_ditempat');
+      setAntarJemputDipilih(false);
+    }
+  }, [isWithDriver, lokasiPengambilan]);
 
   const createBookingMutation = useMutation({
     mutationFn: api.createBooking,
@@ -89,86 +239,183 @@ export default function BookingPage() {
     },
   });
 
-  const car = carQuery.data;
-  const bookedRanges = availabilityQuery.data ?? [];
+  const isSimRequired = !isWithDriver; // wajib SIM jika lepas kunci
+
+  const hasKtpDoc = Boolean(profile?.dokumenKtpUrl || ktpFile);
+  const hasSimDoc = Boolean(profile?.dokumenSimUrl || simFile);
+
+  // ── Step completion ──────────────────────────────────
+  const isStep1Done = lokasiPengambilan === 'ambil_ditempat'
+    ? true
+    : Boolean(alamatLengkap.trim()); // jemput ke rumah wajib alamat
+
+  const isStep2Done = isStep1Done; // layanan tidak ada yang required
+
+  const isStep3Done = Boolean(
+    nama.trim() &&
+    noHp.trim() &&
+    noKtp.trim() &&
+    hasKtpDoc &&
+    (!isSimRequired || (noSim.trim() && hasSimDoc))
+  );
+
+  // ── Handlers ──────────────────────────────────────────
+  const handleKtpFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setKtpUploadError('Format file KTP harus JPG, PNG, atau PDF');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setKtpUploadError('Ukuran file KTP maksimal 5MB');
+      return;
+    }
+    setKtpUploadError(null);
+    setKtpFile(file);
+  };
+
+  const handleSimFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setSimUploadError('Format file SIM harus JPG, PNG, atau PDF');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setSimUploadError('Ukuran file SIM maksimal 5MB');
+      return;
+    }
+    setSimUploadError(null);
+    setSimFile(file);
+  };
 
   const addonLain = [
-    ...(asuransiDipilih ? [{ jenis: 'asuransi' as const, harga: ADDON_HARGA_DEFAULT.asuransi }] : []),
     ...(antarJemputDipilih ? [{ jenis: 'antar_jemput' as const, harga: ADDON_HARGA_DEFAULT.antar_jemput }] : []),
   ];
 
   const estimasi = car ? estimasiHarga(car, range?.from, range?.to, sopirDipilih, addonLain) : null;
 
-  const handleSubmit = () => {
+  // Validasi form — kemudian tampilkan modal konfirmasi
+  const handleOpenConfirmModal = () => {
     setSubmitted(true);
     setFormError(null);
 
     if (!range?.from || !range?.to) {
-      setFormError('Pilih tanggal ambil dan kembali dulu pada kalender');
+      setFormError('Tanggal ambil dan kembali belum dipilih. Silakan kembali ke halaman sebelumnya.');
       return;
     }
-    if (!lokasiAmbil.trim()) {
-      setFormError('Lokasi ambil wajib diisi');
+    if (lokasiPengambilan === 'jemput_kerumah' && !alamatLengkap.trim()) {
+      setFormError('Alamat lengkap wajib diisi untuk layanan jemput ke rumah');
       return;
     }
-    if (!sameLokasi && !lokasiKembali.trim()) {
-      setFormError('Lokasi kembali wajib diisi');
+    if (!nama.trim() || !noHp.trim() || !noKtp.trim()) {
+      setFormError('Lengkapi data penyewa (nama, no. HP, no. KTP)');
       return;
     }
-    if (!nama.trim() || !noHp.trim() || !noKtp.trim() || !noSim.trim()) {
-      setFormError('Lengkapi data penyewa (nama, no. HP, no. KTP, no. SIM)');
+    if (!hasKtpDoc) {
+      setFormError('Dokumen fisik KTP wajib diunggah untuk verifikasi identitas');
       return;
+    }
+    if (isSimRequired) {
+      if (!noSim.trim()) {
+        setFormError('Nomor SIM A wajib diisi untuk sewa lepas kunci (self-drive)');
+        return;
+      }
+      if (!hasSimDoc) {
+        setFormError('Dokumen fisik SIM A wajib diunggah untuk sewa lepas kunci (self-drive)');
+        return;
+      }
     }
 
-    const addons: { jenis: JenisAddon; harga?: number }[] = [
-      ...(sopirDipilih ? [{ jenis: 'sopir' as const }] : []),
-      ...addonLain,
-    ];
-
-    createBookingMutation.mutate({
-      carId: carId!,
-      tanggalMulai: range.from.toISOString(),
-      tanggalSelesai: range.to.toISOString(),
-      lokasiAmbil,
-      lokasiKembali: sameLokasi ? lokasiAmbil : lokasiKembali,
-      addons,
-    });
+    setShowConfirmModal(true);
   };
 
-  const inputClass = `w-full rounded-xl text-sm px-4 py-3.5 transition-all focus:outline-none ${
+  const handleSubmit = async () => {
+    setShowConfirmModal(false);
+    setIsProcessingBooking(true);
+    setFormError(null);
+
+    try {
+      // Simpan dokumen & data ke profil
+      if (session?.user?.id) {
+        if (ktpFile) {
+          const ktpPath = await uploadDokumen(session.user.id, 'ktp', ktpFile);
+          await api.saveDokumenReference('ktp', ktpPath);
+        }
+        if (simFile) {
+          const simPath = await uploadDokumen(session.user.id, 'sim', simFile);
+          await api.saveDokumenReference('sim', simPath);
+        }
+
+        // Simpan data profil + alamat + KTP/SIM
+        await api.updateMyProfile({
+          nama: nama.trim(),
+          noHp: noHp.trim(),
+          noKtp: noKtp.trim(),
+          noSim: noSim.trim(),
+          alamat: lokasiPengambilan === 'jemput_kerumah' ? alamatLengkap.trim() : undefined,
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['my-profile'] });
+      }
+
+      const addons: { jenis: JenisAddon; harga?: number }[] = [
+        ...(sopirDipilih ? [{ jenis: 'sopir' as const }] : []),
+        ...addonLain,
+      ];
+
+      const lokasiAmbilStr = lokasiPengambilan === 'ambil_ditempat'
+        ? 'Ambil di Tempat (Kantor Rental)'
+        : `Jemput ke Rumah: ${alamatLengkap.trim()}`;
+
+      await createBookingMutation.mutateAsync({
+        carId: carId!,
+        tanggalMulai: range!.from!.toISOString(),
+        tanggalSelesai: range!.to!.toISOString(),
+        lokasiAmbil: lokasiAmbilStr,
+        lokasiKembali: lokasiAmbilStr,
+        addons,
+      });
+    } catch (err) {
+      setFormError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Gagal memproses pesanan dan dokumen'
+      );
+    } finally {
+      setIsProcessingBooking(false);
+    }
+  };
+
+  const inputClass = `w-full rounded-2xl text-sm px-4 py-3.5 transition-all duration-200 focus:outline-none ${
     isDark
-      ? 'bg-white/[0.03] border border-white/10 text-white placeholder:text-white/30 focus:border-white/30 focus:bg-white/[0.05]'
+      ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:border-white/30 focus:bg-white/10'
       : 'bg-white/80 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20'
   }`;
 
-  const cardClass = isDark
-    ? 'animate-card rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/10 p-6 md:p-8'
-    : 'animate-card rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-lg shadow-slate-900/5 p-6 md:p-8';
+  const cardClass = `animate-card rounded-3xl p-6 md:p-8 border shadow-xl transition-all duration-300 ${
+    isDark ? 'sa-glass-dark text-white' : 'sa-glass-light text-slate-900'
+  }`;
 
-  const iconBoxClass = isDark
-    ? 'w-10 h-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center'
-    : 'w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center';
+  const iconBoxClass = `w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+    isDark ? 'bg-orange-500/20 border border-orange-500/30 text-orange-400' : 'bg-orange-100 border border-orange-200 text-orange-600'
+  }`;
 
   if (carQuery.isLoading) {
     return (
-      <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
-        isDark
-          ? 'bg-[#0a0a0a]'
-          : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
-      }`}>
-        <Loader2 size={18} className="animate-spin" />
-        <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Memuat...</span>
+      <main className="min-h-screen flex items-center justify-center gap-3 transition-colors duration-500 bg-[var(--bg-primary)] pt-28 pb-20">
+        <Loader2 size={20} className={`animate-spin ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
+        <span className={`text-sm font-medium ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Memuat form pemesanan...</span>
       </main>
     );
   }
 
   if (carQuery.isError || !car) {
     return (
-      <main className={`min-h-screen flex items-center justify-center text-sm transition-colors duration-300 ${
-        isDark
-          ? 'bg-gradient-to-b from-[#0a0a0a] to-[#0a0a0a] text-white/60'
-          : 'bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-600'
-      }`}>
+      <main className="min-h-screen flex items-center justify-center text-sm transition-colors duration-500 bg-[var(--bg-primary)] pt-28 pb-20">
         Mobil tidak ditemukan.
       </main>
     );
@@ -176,9 +423,7 @@ export default function BookingPage() {
 
   return (
     <main ref={sectionRef} className={`min-h-screen pt-20 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300 ${
-      isDark
-        ? 'bg-[#0a0a0a]'
-        : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
+      isDark ? 'bg-[#0a0a0a]' : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
     }`}>
       <div className="relative max-w-6xl mx-auto">
         {/* Header */}
@@ -192,7 +437,41 @@ export default function BookingPage() {
           <p className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Lengkapi data di bawah untuk melanjutkan pemesanan</p>
         </motion.div>
 
-        {/* Step Indicator Dinamis */}
+        {/* Tanggal Banner (read-only, dari flow sebelumnya) */}
+        {range?.from && range?.to && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className={`mb-6 rounded-2xl px-5 py-4 flex items-center gap-4 border ${
+              isDark
+                ? 'bg-emerald-500/10 border-emerald-500/20'
+                : 'bg-emerald-50 border-emerald-200'
+            }`}
+          >
+            <CalendarIcon size={20} className="text-emerald-500 shrink-0" />
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-wider mb-0.5 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>Tanggal Sewa</p>
+              <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                {range.from.toDateString() === range.to.toDateString() ? (
+                  <>{formatDate(range.from)} <span className="text-xs opacity-75 font-normal">(08:00 – 20:00 WIB)</span></>
+                ) : (
+                  <>{formatDate(range.from)} — {formatDate(range.to)}</>
+                )}
+              </p>
+            </div>
+            <div className={`ml-auto text-right ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+              <p className="text-xs font-semibold">Durasi</p>
+              <p className="text-sm font-bold">
+                {range.from.toDateString() === range.to.toDateString()
+                  ? '1 hari (08:00–20:00)'
+                  : `${Math.max(1, Math.ceil((range.to.getTime() - range.from.getTime()) / (1000 * 60 * 60 * 24)) + 1)} hari`}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Step Indicator */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -205,13 +484,11 @@ export default function BookingPage() {
               const isCompleted =
                 step.id === 1 ? isStep1Done :
                 step.id === 2 ? isStep2Done :
-                step.id === 3 ? isStep3Done :
-                isStep4Done;
+                isStep3Done;
               const isActive = !isCompleted && (
                 step.id === 1 ||
                 (step.id === 2 && isStep1Done) ||
-                (step.id === 3 && isStep2Done) ||
-                (step.id === 4 && isStep3Done)
+                (step.id === 3 && isStep2Done)
               );
 
               return (
@@ -222,9 +499,7 @@ export default function BookingPage() {
                         isCompleted
                           ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
                           : isActive
-                          ? isDark
-                            ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
-                            : 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
+                          ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
                           : isDark
                           ? 'bg-white/5 border border-white/10'
                           : 'bg-slate-100 border border-slate-200'
@@ -264,7 +539,8 @@ export default function BookingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
           {/* Form Content */}
           <div className="lg:col-span-3 flex flex-col gap-6">
-            {/* Step 1: Tanggal */}
+
+            {/* Step 1: Lokasi Pengambilan */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -273,175 +549,292 @@ export default function BookingPage() {
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className={iconBoxClass}>
-                  <CalendarIcon className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
-                </div>
-                <div>
-                  <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Pilih Tanggal</h2>
-                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tanggal ambil dan kembali</p>
-                </div>
-              </div>
-
-              <div className={isDark ? 'kerental-daypicker-dark' : 'kerental-daypicker-light'}>
-                <DayPicker
-                  mode="range"
-                  selected={range}
-                  onSelect={setRange}
-                  disabled={[
-                    { before: new Date() },
-                    ...bookedRanges.map((r) => ({
-                      from: new Date(r.tanggalMulai),
-                      to: new Date(r.tanggalSelesai),
-                    })),
-                  ]}
-                  classNames={{
-                    months: 'flex flex-col',
-                    month_caption: `font-medium mb-3 text-base ${isDark ? 'text-white/80' : 'text-slate-800'}`,
-                    weekday: `${isDark ? 'text-white/30' : 'text-slate-400'} text-xs uppercase tracking-wider`,
-                    day: `${isDark ? 'text-white/70' : 'text-slate-700'} text-sm transition-all duration-200`,
-                    day_button: 'hover:bg-white/10 rounded-full transition-all duration-200',
-                    selected: isDark
-                      ? 'bg-white text-zinc-900 rounded-full shadow-lg shadow-white/20'
-                      : 'bg-zinc-800 text-white rounded-full shadow-lg shadow-black/20',
-                    range_middle: isDark
-                      ? 'bg-white/10 text-white rounded-none hover:bg-white/15'
-                      : 'bg-slate-100 text-zinc-800 rounded-none hover:bg-slate-200',
-                    range_start: 'rounded-r-none',
-                    range_end: 'rounded-l-none',
-                    today: isDark
-                      ? 'text-white font-bold ring-2 ring-white/50 ring-offset-2 ring-offset-[#0a0a0a]'
-                      : 'text-zinc-800 font-bold ring-2 ring-zinc-300',
-                    disabled: isDark
-                      ? 'text-red-400/50 line-through bg-red-500/10 rounded-full'
-                      : 'text-red-400/50 line-through bg-red-50 rounded-full',
-                    outside: isDark ? 'text-white/10' : 'text-slate-200',
-                  }}
-                />
-              </div>
-
-              {/* Legend */}
-              <div className={`mt-4 flex flex-wrap gap-4 text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-full ${isDark ? 'bg-gradient-to-br from-white/20 to-white/10' : 'bg-gradient-to-br from-zinc-600 to-zinc-700'}`} />
-                  <span>Terpilih</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-full ${isDark ? 'bg-red-500/30 line-through' : 'bg-red-100 line-through'}`} />
-                  <span>Tidak Tersedia</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`w-4 h-4 rounded-full border-2 ${isDark ? 'border-white/30' : 'border-slate-400'}`} />
-                  <span>Hari Ini</span>
-                </div>
-              </div>
-
-              {submitted && (!range?.from || !range?.to) && (
-                <p className="text-xs text-red-500 font-semibold mt-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
-                  ⚠️ Silakan pilih tanggal ambil dan kembali pada kalender di atas.
-                </p>
-              )}
-            </motion.div>
-
-            {/* Step 2: Lokasi */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className={`${cardClass} ${submitted && !lokasiAmbil.trim() ? 'border-red-500/50' : ''}`}
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <div className={iconBoxClass}>
                   <MapPin className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
                 </div>
                 <div>
-                  <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Lokasi</h2>
-                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Titik penjemputan & pengembalian</p>
+                  <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Lokasi Pengambilan</h2>
+                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Pilih cara pengambilan kendaraan</p>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                      Lokasi Ambil <span className="text-red-500">*</span>
-                    </label>
-                    <span className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Pilih Cepat:</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                {/* Ambil di Tempat */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLokasiPengambilan('ambil_ditempat');
+                    setAntarJemputDipilih(false);
+                  }}
+                  className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200 ${
+                    lokasiPengambilan === 'ambil_ditempat'
+                      ? isDark
+                        ? 'border-orange-500 bg-orange-500/10 text-white'
+                        : 'border-orange-500 bg-orange-50 text-slate-900'
+                      : isDark
+                        ? 'border-white/10 bg-white/[0.02] text-white/70 hover:border-white/20 hover:bg-white/[0.04]'
+                        : 'border-slate-200 bg-white/50 text-slate-700 hover:border-slate-300 hover:bg-white/80'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    lokasiPengambilan === 'ambil_ditempat'
+                      ? 'bg-orange-500 text-white'
+                      : isDark ? 'bg-white/10' : 'bg-slate-100'
+                  }`}>
+                    <Building2 size={18} />
                   </div>
-
-                  {/* Quick Presets */}
-                  <div className="flex flex-wrap gap-1.5 mb-2.5">
-                    {LOCATION_PRESETS.map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => setLokasiAmbil(preset)}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all ${
-                          lokasiAmbil === preset
-                            ? 'bg-orange-500 text-white border-orange-500 font-semibold shadow-sm'
-                            : isDark
-                              ? 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
-                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                        {preset}
-                      </button>
-                    ))}
+                  <div>
+                    <p className="font-semibold text-sm">Ambil di Tempat</p>
+                    <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Datang langsung ke kantor rental</p>
                   </div>
-
-                  <input
-                    type="text"
-                    value={lokasiAmbil}
-                    onChange={(e) => setLokasiAmbil(e.target.value)}
-                    placeholder="Masukkan alamat penjemputan"
-                    className={`${inputClass} ${submitted && !lokasiAmbil.trim() ? '!border-red-500' : ''}`}
-                  />
-                  {submitted && !lokasiAmbil.trim() && (
-                    <p className="text-xs text-red-500 mt-1 font-medium">Lokasi penjemputan wajib diisi</p>
+                  {lokasiPengambilan === 'ambil_ditempat' && (
+                    <div className="ml-auto w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
+                      <Check size={12} className="text-white stroke-[3]" />
+                    </div>
                   )}
-                </div>
+                </button>
 
-                <label className={`flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all duration-300 ${
-                  isDark
-                    ? 'bg-white/[0.03] border border-white/10 hover:bg-white/[0.05]'
-                    : 'bg-white/50 border border-slate-200 hover:bg-white/80'
-                }`}>
-                  <input
-                    type="checkbox"
-                    checked={sameLokasi}
-                    onChange={(e) => setSameLokasi(e.target.checked)}
-                    className="w-5 h-5 accent-orange-500 rounded"
-                  />
-                  <span className={`text-sm ${isDark ? 'text-white/80' : 'text-slate-700'}`}>Lokasi kembali sama dengan lokasi ambil</span>
-                </label>
+                {/* Jemput ke Rumah */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isWithDriver && car.tipeSewa !== 'dengan_sopir') {
+                      // Jika belum pilih sopir, tampilkan info
+                      return;
+                    }
+                    setLokasiPengambilan('jemput_kerumah');
+                    setAntarJemputDipilih(true);
+                  }}
+                  disabled={car.tipeSewa === 'lepas_kunci'}
+                  className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200 ${
+                    lokasiPengambilan === 'jemput_kerumah'
+                      ? isDark
+                        ? 'border-orange-500 bg-orange-500/10 text-white'
+                        : 'border-orange-500 bg-orange-50 text-slate-900'
+                      : car.tipeSewa === 'lepas_kunci'
+                      ? isDark
+                        ? 'border-white/5 bg-white/[0.01] text-white/30 cursor-not-allowed opacity-50'
+                        : 'border-slate-100 bg-slate-50/50 text-slate-400 cursor-not-allowed opacity-50'
+                      : isDark
+                        ? 'border-white/10 bg-white/[0.02] text-white/70 hover:border-white/20 hover:bg-white/[0.04]'
+                        : 'border-slate-200 bg-white/50 text-slate-700 hover:border-slate-300 hover:bg-white/80'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    lokasiPengambilan === 'jemput_kerumah'
+                      ? 'bg-orange-500 text-white'
+                      : isDark ? 'bg-white/10' : 'bg-slate-100'
+                  }`}>
+                    <Home size={18} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">Jemput ke Rumah</p>
+                    <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                      {car.tipeSewa === 'lepas_kunci'
+                        ? 'Tidak tersedia — lepas kunci'
+                        : 'Khusus sewa dengan sopir'}
+                    </p>
+                  </div>
+                  {lokasiPengambilan === 'jemput_kerumah' && (
+                    <div className="ml-auto w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center shrink-0">
+                      <Check size={12} className="text-white stroke-[3]" />
+                    </div>
+                  )}
+                </button>
+              </div>
 
-                {!sameLokasi && (
+              {/* Info: Jemput ke Rumah butuh sopir */}
+              {car.tipeSewa === 'keduanya' && !isWithDriver && lokasiPengambilan !== 'jemput_kerumah' && (
+                <p className={`text-xs p-3 rounded-xl ${isDark ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                  💡 Untuk memilih Jemput ke Rumah, aktifkan <strong>Sewa dengan Sopir</strong> di layanan tambahan terlebih dahulu, lalu kembali ke sini.
+                </p>
+              )}
+
+              {/* Form Alamat (hanya muncul jika Jemput ke Rumah) */}
+              <AnimatePresence>
+                {lokasiPengambilan === 'jemput_kerumah' && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
                   >
-                    <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                      Lokasi Kembali <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={lokasiKembali}
-                      onChange={(e) => setLokasiKembali(e.target.value)}
-                      placeholder="Masukkan alamat pengembalian"
-                      className={`${inputClass} ${submitted && !sameLokasi && !lokasiKembali.trim() ? '!border-red-500' : ''}`}
-                    />
-                    {submitted && !sameLokasi && !lokasiKembali.trim() && (
-                      <p className="text-xs text-red-500 mt-1 font-medium">Lokasi pengembalian wajib diisi</p>
-                    )}
+                    <div className="pt-5 border-t border-dashed border-white/10 mt-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <label className={`text-sm font-semibold flex items-center gap-1.5 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                          <MapPin size={16} className="text-orange-500" />
+                          Detail Lokasi Penjemputan <span className="text-red-500">*</span>
+                        </label>
+                        <span className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                          Isi Kode Pos untuk auto-fill otomatis
+                        </span>
+                      </div>
+
+                      {/* 1. KODE POS (Berada di Paling Atas) */}
+                      <div>
+                        <label className={`text-xs mb-1.5 block font-medium ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                          Kode Pos (5 Digit) <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={kodePos}
+                            onChange={(e) => handleKodePosChange(e.target.value)}
+                            placeholder="Contoh: 50123"
+                            maxLength={5}
+                            className={`${inputClass} font-mono font-semibold tracking-wider ${
+                              submitted && lokasiPengambilan === 'jemput_kerumah' && !kodePos.trim() ? '!border-red-500' : ''
+                            }`}
+                          />
+                          {isSearchingKodepos && (
+                            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-orange-500">
+                              <Loader2 size={15} className="animate-spin" />
+                              <span className="text-[11px] font-medium hidden sm:inline">Mencari...</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Dropdown / Suggestions jika ada beberapa kelurahan */}
+                        {kodeposSuggestions.length > 1 && (
+                          <div className={`mt-2 p-2.5 rounded-xl border space-y-1.5 ${
+                            isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
+                          }`}>
+                            <p className={`text-[11px] font-medium ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                              Pilih Kelurahan/Kecamatan yang sesuai:
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {kodeposSuggestions.map((sug, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => handleSelectKodeposSuggestion(sug)}
+                                  className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                                    kelurahan === sug.kelurahan
+                                      ? 'bg-orange-500 text-white border-orange-500 font-semibold'
+                                      : isDark
+                                      ? 'bg-white/10 hover:bg-white/15 border-white/15 text-white/80'
+                                      : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                                  }`}
+                                >
+                                  Kel. {sug.kelurahan}, {sug.kecamatan}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 2. PROVINSI & KOTA/KABUPATEN */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className={`text-xs mb-1.5 block font-medium ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                            Provinsi <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={provinsi}
+                            onChange={(e) => setProvinsi(e.target.value)}
+                            placeholder="Otomatis dari kode pos / ketik manual"
+                            className={inputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className={`text-xs mb-1.5 block font-medium ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                            Kabupaten / Kota <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={kota}
+                            onChange={(e) => setKota(e.target.value)}
+                            placeholder="Otomatis dari kode pos / ketik manual"
+                            className={inputClass}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 3. KECAMATAN & KELURAHAN */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className={`text-xs mb-1.5 block font-medium ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                            Kecamatan
+                          </label>
+                          <input
+                            type="text"
+                            value={kecamatan}
+                            onChange={(e) => setKecamatan(e.target.value)}
+                            placeholder="Kecamatan"
+                            className={inputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className={`text-xs mb-1.5 block font-medium ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                            Kelurahan / Desa
+                          </label>
+                          <input
+                            type="text"
+                            value={kelurahan}
+                            onChange={(e) => setKelurahan(e.target.value)}
+                            placeholder="Kelurahan/Desa"
+                            className={inputClass}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 4. DETAIL ALAMAT JALAN */}
+                      <div>
+                        <label className={`text-xs mb-1.5 block font-medium ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                          Alamat Jalan & No. Rumah / RT RW / Patokan <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={alamatJalan}
+                          onChange={(e) => setAlamatJalan(e.target.value)}
+                          rows={2}
+                          placeholder="Jl. Merdeka No. 123, RT 02/RW 05, patokan samping masjid..."
+                          className={`${inputClass} resize-none ${submitted && lokasiPengambilan === 'jemput_kerumah' && !alamatJalan.trim() ? '!border-red-500' : ''}`}
+                        />
+                      </div>
+
+                      {/* Preview Ringkasan Alamat */}
+                      {alamatLengkap && (
+                        <div className={`p-3 rounded-xl border text-xs ${
+                          isDark ? 'bg-white/5 border-white/10 text-white/80' : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}>
+                          <p className="font-semibold mb-0.5 text-[11px] text-orange-500">Ringkasan Alamat Penjemputan:</p>
+                          <p className="leading-relaxed">{alamatLengkap}</p>
+                        </div>
+                      )}
+
+                      {submitted && lokasiPengambilan === 'jemput_kerumah' && !alamatLengkap.trim() && (
+                        <p className="text-xs text-red-500 mt-1 font-medium">Alamat penjemputan belum lengkap</p>
+                      )}
+
+                      {profile?.alamat && !alamatJalan && (
+                        <button
+                          type="button"
+                          onClick={() => setAlamatJalan(profile.alamat || '')}
+                          className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                            isDark
+                              ? 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          Gunakan alamat dari profil: {profile.alamat.slice(0, 40)}...
+                        </button>
+                      )}
+                      <p className={`text-xs mt-2 flex items-center gap-1 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                        <ShieldCheck size={12} className="text-emerald-500" />
+                        Alamat lengkap ini akan disimpan otomatis ke profil Anda
+                      </p>
+                    </div>
                   </motion.div>
                 )}
-              </div>
+              </AnimatePresence>
             </motion.div>
 
-            {/* Step 3: Add-on */}
+            {/* Step 2: Layanan Tambahan */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.25 }}
+              transition={{ delay: 0.2 }}
               className={cardClass}
             >
               <div className="flex items-center gap-3 mb-6">
@@ -450,17 +843,15 @@ export default function BookingPage() {
                 </div>
                 <div>
                   <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Layanan Tambahan</h2>
-                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Pilih layanan yang diinginkan</p>
+                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Pilih layanan sesuai kebutuhan</p>
                 </div>
               </div>
 
               <div className="space-y-3">
-                {/* Sopir */}
+                {/* Sopir — fixed jika dengan_sopir */}
                 {car.tipeSewa === 'dengan_sopir' && (
                   <div className={`flex items-center gap-4 p-4 rounded-xl border ${
-                    isDark
-                      ? 'bg-white/5 border-white/10'
-                      : 'bg-slate-50 border-slate-200'
+                    isDark ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'
                   }`}>
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-white/10' : 'bg-slate-100'}`}>
                       <CarIcon size={18} className={isDark ? 'text-white/70' : 'text-slate-600'} />
@@ -469,24 +860,33 @@ export default function BookingPage() {
                       <p className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>Sopir</p>
                       <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Wajib — sudah termasuk di harga</p>
                     </div>
-                    {car.hargaSopirPerHari && (
-                      <span className={`text-sm font-medium ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                        {formatRupiah(Number(car.hargaSopirPerHari))}/hari
-                      </span>
-                    )}
+                    <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                      <Check size={12} className="text-white stroke-[3]" />
+                    </div>
                   </div>
                 )}
 
+                {/* Sopir — opsional jika keduanya */}
                 {car.tipeSewa === 'keduanya' && (
                   <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-300 border ${
-                    isDark
-                      ? 'bg-white/[0.03] border-white/10 hover:bg-white/[0.05] hover:border-white/20'
-                      : 'bg-white/50 border-slate-200 hover:bg-white/80'
+                    sopirDipilih
+                      ? isDark
+                        ? 'bg-blue-500/10 border-blue-500/30'
+                        : 'bg-blue-50 border-blue-300'
+                      : isDark
+                        ? 'bg-white/[0.03] border-white/10 hover:bg-white/[0.05] hover:border-white/20'
+                        : 'bg-white/50 border-slate-200 hover:bg-white/80'
                   }`}>
                     <input
                       type="checkbox"
                       checked={sopirDipilih}
-                      onChange={(e) => setSopirDipilih(e.target.checked)}
+                      onChange={(e) => {
+                        setSopirDipilih(e.target.checked);
+                        if (!e.target.checked && lokasiPengambilan === 'jemput_kerumah') {
+                          setLokasiPengambilan('ambil_ditempat');
+                          setAntarJemputDipilih(false);
+                        }
+                      }}
                       className="w-5 h-5 accent-blue-500 rounded"
                     />
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
@@ -494,54 +894,40 @@ export default function BookingPage() {
                     </div>
                     <div className="flex-1">
                       <p className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>Sewa dengan Sopir</p>
-                      <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Kunci tetap di sopir</p>
+                      <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                        Kunci tetap di sopir • SIM opsional • Bisa jemput ke rumah
+                      </p>
                     </div>
                     {car.hargaSopirPerHari && (
-                      <span className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
+                      <span className={`text-sm font-medium shrink-0 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
                         {formatRupiah(Number(car.hargaSopirPerHari))}/hari
                       </span>
                     )}
                   </label>
                 )}
 
+                {/* Lepas kunci info */}
                 {car.tipeSewa === 'lepas_kunci' && (
                   <p className={`text-sm p-4 rounded-xl ${isDark ? 'bg-white/5 text-white/40' : 'bg-slate-100 text-slate-500'}`}>
                     Mobil ini hanya tersedia lepas kunci (self-drive)
                   </p>
                 )}
 
-                <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-300 border ${
-                  isDark
-                    ? 'bg-white/[0.03] border-white/10 hover:bg-white/[0.05] hover:border-white/20'
-                    : 'bg-white/50 border-slate-200 hover:bg-white/80'
-                }`}>
-                  <input
-                    type="checkbox"
-                    checked={asuransiDipilih}
-                    onChange={(e) => setAsuransiDipilih(e.target.checked)}
-                    className="w-5 h-5 accent-blue-500 rounded"
-                  />
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
-                    <ShieldCheck size={18} className={isDark ? 'text-white/60' : 'text-slate-500'} />
-                  </div>
-                  <div className="flex-1">
-                    <p className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>Asuransi Tambahan</p>
-                    <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Perlindungan ekstra selama masa sewa</p>
-                  </div>
-                  <span className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
-                    {formatRupiah(ADDON_HARGA_DEFAULT.asuransi)}
-                  </span>
-                </label>
-
-                <label className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all duration-300 border ${
-                  isDark
-                    ? 'bg-white/[0.03] border-white/10 hover:bg-white/[0.05] hover:border-white/20'
-                    : 'bg-white/50 border-slate-200 hover:bg-white/80'
+                {/* Antar-Jemput: Otomatis ON & locked jika Jemput ke Rumah, Nonaktif/OFF jika Ambil di Tempat */}
+                <label className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 border ${
+                  lokasiPengambilan === 'jemput_kerumah'
+                    ? isDark
+                      ? 'bg-orange-500/10 border-orange-500/20 cursor-not-allowed'
+                      : 'bg-orange-50 border-orange-200 cursor-not-allowed'
+                    : isDark
+                      ? 'bg-white/[0.02] border-white/5 opacity-50 cursor-not-allowed'
+                      : 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
                 }`}>
                   <input
                     type="checkbox"
                     checked={antarJemputDipilih}
-                    onChange={(e) => setAntarJemputDipilih(e.target.checked)}
+                    onChange={() => {}}
+                    disabled={true}
                     className="w-5 h-5 accent-blue-500 rounded"
                   />
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
@@ -549,33 +935,85 @@ export default function BookingPage() {
                   </div>
                   <div className="flex-1">
                     <p className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>Antar-Jemput</p>
-                    <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Mobil diantar ke lokasi kamu</p>
+                    <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                      {lokasiPengambilan === 'jemput_kerumah'
+                        ? 'Otomatis aktif karena Jemput ke Rumah dipilih'
+                        : 'Nonaktif — hanya tersedia untuk opsi Jemput ke Rumah'}
+                    </p>
                   </div>
-                  <span className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
+                  <span className={`text-sm shrink-0 ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
                     {formatRupiah(ADDON_HARGA_DEFAULT.antar_jemput)}
                   </span>
                 </label>
               </div>
             </motion.div>
 
-            {/* Step 4: Data Penyewa */}
+            {/* Step 3: Data Penyewa & Dokumen */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
+              transition={{ delay: 0.25 }}
               className={cardClass}
             >
-              <div className="flex items-center gap-3 mb-6">
-                <div className={iconBoxClass}>
-                  <User className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
-                </div>
-                <div>
-                  <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Data Penyewa</h2>
-                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Identitas pemesan</p>
+              <div className="flex items-center justify-between gap-3 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className={iconBoxClass}>
+                    <User className={`w-5 h-5 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
+                  </div>
+                  <div>
+                    <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Data Penyewa & Dokumen</h2>
+                    <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Verifikasi identitas dan dokumen persyaratan</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Status Banner */}
+              {!profile?.dokumenKtpUrl || (isSimRequired && !profile?.dokumenSimUrl) ? (
+                <div className={`p-4 rounded-xl border mb-5 flex items-start gap-3 ${
+                  isDark
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                    : 'bg-amber-50 border-amber-200 text-amber-800'
+                }`}>
+                  <Sparkles size={18} className="shrink-0 mt-0.5 text-amber-400" />
+                  <div className="text-xs leading-relaxed">
+                    <p className="font-semibold mb-0.5">Rekomendasi Hemat Waktu</p>
+                    <p>
+                      Unggah KTP & SIM Anda di{' '}
+                      <Link to="/akun/profil" target="_blank" className="underline font-semibold hover:opacity-80 inline-flex items-center gap-0.5">
+                        Halaman Profil <ExternalLink size={11} />
+                      </Link>{' '}
+                      agar tidak perlu mengunggah ulang di pemesanan berikutnya.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className={`p-4 rounded-xl border mb-5 flex items-center justify-between gap-3 ${
+                  isDark
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck size={18} className="shrink-0 text-emerald-400" />
+                    <div className="text-xs">
+                      <p className="font-semibold">Data Diri & Dokumen Terhubung dari Profil</p>
+                      <p className="opacity-80">Identitas KTP & SIM Anda telah terisi secara otomatis.</p>
+                    </div>
+                  </div>
+                  <Link
+                    to="/akun/profil"
+                    target="_blank"
+                    className={`text-[11px] font-medium px-3 py-1.5 rounded-full border transition-all shrink-0 flex items-center gap-1 ${
+                      isDark
+                        ? 'bg-white/10 hover:bg-white/15 border-white/20 text-white'
+                        : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    Edit Profil <ExternalLink size={11} />
+                  </Link>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 <div>
                   <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
                     Nama Lengkap <span className="text-red-500">*</span>
@@ -624,23 +1062,154 @@ export default function BookingPage() {
                 </div>
                 <div>
                   <label className={`text-sm mb-2 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                    No. SIM A <span className="text-red-500">*</span>
+                    No. SIM A{' '}
+                    {isSimRequired ? (
+                      <span className="text-red-500">* (Wajib Lepas Kunci)</span>
+                    ) : (
+                      <span className="text-xs opacity-60 font-normal">(Opsional — Sewa dengan Sopir)</span>
+                    )}
                   </label>
                   <input
                     type="text"
                     value={noSim}
                     onChange={(e) => setNoSim(e.target.value)}
-                    placeholder="Nomor SIM pengemudi"
-                    className={`${inputClass} ${submitted && !noSim.trim() ? '!border-red-500' : ''}`}
+                    placeholder={isSimRequired ? 'Nomor SIM A pengemudi' : 'Opsional jika dengan sopir'}
+                    className={`${inputClass} ${submitted && isSimRequired && !noSim.trim() ? '!border-red-500' : ''}`}
                   />
-                  {submitted && !noSim.trim() && (
-                    <p className="text-xs text-red-500 mt-1 font-medium">Nomor SIM wajib diisi</p>
+                  {submitted && isSimRequired && !noSim.trim() && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">Nomor SIM wajib diisi untuk sewa lepas kunci</p>
                   )}
                 </div>
               </div>
-              <p className={`text-[11px] mt-3 flex items-center gap-1.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+
+              {/* Upload Dokumen */}
+              <div className="pt-4 border-t border-dashed border-white/10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className={`text-xs uppercase tracking-wider font-semibold ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                    Unggah Dokumen Identitas
+                  </h3>
+                  <span className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                    Format: JPG, PNG, atau PDF (Maks 5MB)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* KTP */}
+                  <div className={`p-3.5 rounded-xl border transition-all ${
+                    isDark ? 'bg-white/[0.02] border-white/10' : 'bg-slate-50/80 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                        Dokumen KTP <span className="text-red-500">*</span>
+                      </span>
+                      {profile?.dokumenKtpUrl && !ktpFile && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                          <FileCheck size={11} /> Tersimpan di Profil
+                        </span>
+                      )}
+                    </div>
+
+                    {profile?.dokumenKtpUrl && !ktpFile ? (
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        <p className={`text-xs truncate ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                          {profile.dokumenKtpUrl.split('/').pop()}
+                        </p>
+                        <label className={`text-[11px] cursor-pointer px-2.5 py-1 rounded-lg border transition-all shrink-0 ${
+                          isDark
+                            ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
+                            : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                        }`}>
+                          Ganti
+                          <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={handleKtpFileChange} className="hidden" />
+                        </label>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.pdf"
+                          onChange={handleKtpFileChange}
+                          className="text-xs file:mr-2.5 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer"
+                        />
+                        {ktpFile && (
+                          <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                            <Check size={12} /> {ktpFile.name} (akan disimpan ke profil)
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {ktpUploadError && (
+                      <p className="text-[11px] text-red-400 mt-1">{ktpUploadError}</p>
+                    )}
+                    {submitted && !hasKtpDoc && (
+                      <p className="text-[11px] text-red-500 mt-1 font-medium">File KTP wajib diunggah</p>
+                    )}
+                  </div>
+
+                  {/* SIM */}
+                  <div className={`p-3.5 rounded-xl border transition-all ${
+                    isDark ? 'bg-white/[0.02] border-white/10' : 'bg-slate-50/80 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                        Dokumen SIM A{' '}
+                        {isSimRequired ? (
+                          <span className="text-red-500">* (Lepas Kunci)</span>
+                        ) : (
+                          <span className="text-[10px] opacity-60 font-normal">(Opsional)</span>
+                        )}
+                      </span>
+                      {profile?.dokumenSimUrl && !simFile && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                          <FileCheck size={11} /> Tersimpan di Profil
+                        </span>
+                      )}
+                    </div>
+
+                    {profile?.dokumenSimUrl && !simFile ? (
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        <p className={`text-xs truncate ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                          {profile.dokumenSimUrl.split('/').pop()}
+                        </p>
+                        <label className={`text-[11px] cursor-pointer px-2.5 py-1 rounded-lg border transition-all shrink-0 ${
+                          isDark
+                            ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
+                            : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                        }`}>
+                          Ganti
+                          <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={handleSimFileChange} className="hidden" />
+                        </label>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.pdf"
+                          onChange={handleSimFileChange}
+                          className="text-xs file:mr-2.5 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer"
+                        />
+                        {simFile && (
+                          <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                            <Check size={12} /> {simFile.name} (akan disimpan ke profil)
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {simUploadError && (
+                      <p className="text-[11px] text-red-400 mt-1">{simUploadError}</p>
+                    )}
+                    {submitted && isSimRequired && !hasSimDoc && (
+                      <p className="text-[11px] text-red-500 mt-1 font-medium">File SIM A wajib diunggah untuk lepas kunci</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <p className={`text-[11px] mt-4 flex items-center gap-1.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                 <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
-                Data Anda dilindungi enkripsi dan hanya digunakan untuk verifikasi reservasi rental mobil.
+                Data dan dokumen Anda tersimpan aman dan terenkripsi, serta dapat dikelola di menu Profil.
               </p>
             </motion.div>
           </div>
@@ -651,66 +1220,81 @@ export default function BookingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className={`lg:sticky lg:top-24 rounded-2xl p-6 ${
-                isDark
-                  ? 'bg-white/[0.08] backdrop-blur-2xl border border-white/10'
-                  : 'bg-white/80 backdrop-blur-xl border border-white/80 shadow-xl shadow-slate-900/10'
+              className={`lg:sticky lg:top-24 rounded-3xl p-6 md:p-8 border shadow-2xl transition-all duration-300 ${
+                isDark ? 'sa-glass-dark text-white' : 'sa-glass-light text-slate-900'
               }`}
             >
-              {/* Car Info */}
-              <div className={`flex items-center gap-4 pb-4 mb-4 ${
-                isDark ? 'border-b border-white/10' : 'border-b border-slate-200'
-              }`}>
-                {car.images && car.images.length > 0 && (
+              {/* Car Image Banner 16:9 Aspect Ratio */}
+              {car.images && car.images.length > 0 ? (
+                <div className="relative w-full aspect-video rounded-2xl overflow-hidden mb-4 border border-white/10 shadow-lg group">
                   <img
                     src={car.images[0].url}
                     alt={car.nama}
-                    className="w-16 h-16 rounded-xl object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
-                )}
-                <div>
-                  <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{car.nama}</h3>
-                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>{car.kategori}</p>
-                </div>
-              </div>
-
-              {/* Price Summary */}
-              <h2 className={`font-semibold mb-4 flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                <CreditCard className={`w-4 h-4 ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
-                Ringkasan Harga
-              </h2>
-
-              {!estimasi ? (
-                <div className="text-center py-8">
-                  <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
-                    <CalendarIcon className={`w-8 h-8 ${isDark ? 'text-white/30' : 'text-slate-300'}`} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-3.5">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-orange-500 text-white mb-1 inline-block shadow-sm">
+                        {car.kategori}
+                      </span>
+                      <h3 className="font-extrabold text-white text-base leading-snug">{car.nama}</h3>
+                    </div>
                   </div>
-                  <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Pilih tanggal untuk melihat estimasi harga</p>
                 </div>
               ) : (
+                <div className={`flex items-center gap-4 pb-4 mb-4 ${
+                  isDark ? 'border-b border-white/10' : 'border-b border-slate-200'
+                }`}>
+                  <div>
+                    <h3 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>{car.nama}</h3>
+                    <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{car.kategori}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tanggal di sidebar */}
+              {range?.from && range?.to && (
+                <div className={`mb-5 p-3.5 rounded-2xl text-xs border ${
+                  isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                }`}>
+                  <p className="font-bold mb-1 uppercase tracking-wider text-[10px]">Periode Sewa Terpilih</p>
+                  <p className="font-semibold text-sm">
+                    {range.from.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} —{' '}
+                    {range.to.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+              )}
+
+              {/* Price Summary */}
+              <h2 className={`font-bold text-base mb-4 flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                <CreditCard className={`w-4 h-4 ${isDark ? 'text-orange-400' : 'text-orange-500'}`} />
+                Ringkasan Biaya
+              </h2>
+
+              {estimasi && (
                 <div className="space-y-3 text-sm">
-                  <div className={`flex justify-between ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                  <div className={`flex justify-between ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
                     <span>
                       {formatRupiah(Number(car.hargaPerHari))} × {estimasi.durasiHari} hari
                     </span>
-                    <span>{formatRupiah(estimasi.hargaDasar)}</span>
+                    <span className="font-semibold">{formatRupiah(estimasi.hargaDasar)}</span>
                   </div>
                   {estimasi.addons.map((addon) => (
-                    <div key={addon.jenis} className={`flex justify-between ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                    <div key={addon.jenis} className={`flex justify-between ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
                       <span>{addon.label}</span>
-                      <span>{formatRupiah(addon.harga)}</span>
+                      <span className="font-semibold">{formatRupiah(addon.harga)}</span>
                     </div>
                   ))}
                   <div className={`border-t pt-3 mt-3 ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-                    <div className={`flex justify-between font-bold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                      <span>Total</span>
-                      <span className={isDark ? 'bg-gradient-to-r from-white/40 to-white/20 bg-clip-text text-transparent' : 'text-slate-600'}>
+                    <div className={`flex justify-between items-center font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      <span className="text-base">Total Bayar</span>
+                      <span className="text-xl font-extrabold text-orange-500">
                         {formatRupiah(estimasi.totalHarga)}
                       </span>
                     </div>
                   </div>
-                  <p className={`text-xs ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
-                    *Estimasi — harga final dihitung ulang saat submit
+                  <p className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                    *Sudah termasuk biaya sewa kendaraan & layanan terpilih
                   </p>
                 </div>
               )}
@@ -740,29 +1324,32 @@ export default function BookingPage() {
                 </div>
               )}
 
-              {/* Submit Button */}
+              {/* Submit Button — Glassmorphism High-Contrast CTA */}
               <motion.button
-                onClick={handleSubmit}
-                disabled={createBookingMutation.isPending}
-                whileHover={{ scale: createBookingMutation.isPending ? 1 : 1.01 }}
-                whileTap={{ scale: createBookingMutation.isPending ? 1 : 0.99 }}
-                className={`w-full mt-6 relative group overflow-hidden rounded-xl ${
+                id="konfirmasi-pesanan-btn"
+                onClick={handleOpenConfirmModal}
+                disabled={isProcessingBooking || createBookingMutation.isPending}
+                whileHover={{ scale: (isProcessingBooking || createBookingMutation.isPending) ? 1 : 1.01 }}
+                whileTap={{ scale: (isProcessingBooking || createBookingMutation.isPending) ? 1 : 0.99 }}
+                className={`w-full mt-6 relative group overflow-hidden rounded-2xl py-4 font-bold text-sm transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed shadow-xl active:scale-[0.99] flex items-center justify-center gap-2 ${
                   isDark
-                    ? 'bg-gradient-to-r from-zinc-700 to-zinc-800 text-white shadow-lg shadow-black/20'
-                    : 'bg-gradient-to-r from-zinc-600 to-zinc-700 text-white shadow-lg shadow-black/30'
+                    ? 'bg-white text-neutral-950 hover:bg-neutral-100 shadow-white/10'
+                    : 'bg-neutral-900 text-white hover:bg-neutral-800 shadow-black/20'
                 }`}
               >
-                <span className="relative flex items-center justify-center gap-2 py-4 font-semibold">
-                  {createBookingMutation.isPending ? (
+                {/* Glassmorphism shimmer */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700" />
+                <span className="relative flex items-center justify-center gap-2 font-bold">
+                  {isProcessingBooking || createBookingMutation.isPending ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
-                      Memproses...
+                      Memproses & Menyimpan Dokumen...
                     </>
                   ) : (
                     <>
                       Konfirmasi Pesanan
                       <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                       </svg>
                     </>
                   )}
@@ -773,20 +1360,24 @@ export default function BookingPage() {
         </div>
       </div>
 
-      {/* Floating Mobile Summary Bar (Hanya tampil di viewport mobile) */}
+      {/* ── Floating Mobile Bar ── */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#121212]/95 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 p-3.5 px-5 shadow-2xl flex items-center justify-between gap-4">
         <div>
           <p className="text-[11px] text-slate-500 dark:text-white/40">Total Estimasi</p>
           <p className="text-lg font-bold text-orange-500">
-            {estimasi ? formatRupiah(estimasi.totalHarga) : 'Pilih Tanggal'}
+            {estimasi ? formatRupiah(estimasi.totalHarga) : '-'}
           </p>
         </div>
         <button
-          onClick={handleSubmit}
-          disabled={createBookingMutation.isPending}
-          className="py-3 px-6 rounded-xl font-semibold text-sm bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25 active:scale-95 flex items-center gap-1.5"
+          onClick={handleOpenConfirmModal}
+          disabled={isProcessingBooking || createBookingMutation.isPending}
+          className={`py-3.5 px-6 rounded-2xl font-bold text-sm transition-all shadow-xl active:scale-95 flex items-center gap-2 disabled:opacity-60 ${
+            isDark
+              ? 'bg-white text-neutral-950 hover:bg-neutral-100'
+              : 'bg-neutral-900 text-white hover:bg-neutral-800'
+          }`}
         >
-          {createBookingMutation.isPending ? (
+          {isProcessingBooking || createBookingMutation.isPending ? (
             <>
               <Loader2 size={16} className="animate-spin" />
               <span>Memproses...</span>
@@ -797,44 +1388,168 @@ export default function BookingPage() {
         </button>
       </div>
 
-      <style>{`
-        .kerental-daypicker-dark {
-          --rdp-cell-size: 42px;
-          --rdp-accent-color: #ffffff;
-          --rdp-background-color: #1e3a5f;
-        }
-        .kerental-daypicker-light {
-          --rdp-cell-size: 42px;
-          --rdp-accent-color: #888888;
-          --rdp-background-color: #dbeafe;
-        }
-        .kerental-daypicker-dark .rdp-months,
-        .kerental-daypicker-light .rdp-months {
-          justify-content: center;
-        }
-        .kerental-daypicker-dark .rdp-month,
-        .kerental-daypicker-light .rdp-month {
-          background: transparent;
-        }
-        .kerental-daypicker-dark .rdp-caption,
-        .kerental-daypicker-light .rdp-caption {
-          padding: 0 0 16px 0;
-        }
-        .kerental-daypicker-dark .rdp-nav,
-        .kerental-daypicker-light .rdp-nav {
-          gap: 8px;
-        }
-        .kerental-daypicker-dark .rdp-button:hover:not([disabled]),
-        .kerental-daypicker-light .rdp-button:hover:not([disabled]) {
-          background: rgba(59, 130, 246, 0.2);
-        }
-        .kerental-daypicker-dark .rdp-button[disabled],
-        .kerental-daypicker-light .rdp-button[disabled] {
-          background: rgba(239, 68, 68, 0.1);
-          color: rgba(239, 68, 68, 0.5);
-          text-decoration: line-through;
-        }
-      `}</style>
+      {/* ── Confirmation Modal (Glassmorphism) ── */}
+      <AnimatePresence>
+        {showConfirmModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowConfirmModal(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className={`relative w-full max-w-md rounded-3xl overflow-hidden shadow-2xl ${
+                isDark
+                  ? 'bg-neutral-900/80 backdrop-blur-2xl border border-white/10'
+                  : 'bg-white/80 backdrop-blur-2xl border border-white/60'
+              }`}
+            >
+              {/* Modal Header */}
+              <div className={`px-6 pt-6 pb-4 border-b ${isDark ? 'border-white/10' : 'border-slate-200/80'}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className={`font-bold text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>Konfirmasi Pesanan</h2>
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-white/10 text-white/60' : 'hover:bg-slate-100 text-slate-500'}`}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Periksa kembali detail pemesanan Anda</p>
+              </div>
+
+              {/* Booking Detail */}
+              <div className="px-6 py-5 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
+                    <CarIcon size={16} className={isDark ? 'text-white/60' : 'text-slate-500'} />
+                  </div>
+                  <div>
+                    <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Kendaraan</p>
+                    <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{car.nama}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
+                    <CalendarIcon size={16} className={isDark ? 'text-white/60' : 'text-slate-500'} />
+                  </div>
+                  <div>
+                    <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tanggal</p>
+                    <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      {range?.from && range?.to
+                        ? `${range.from.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} — ${range.to.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                        : '-'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
+                    <MapPin size={16} className={isDark ? 'text-white/60' : 'text-slate-500'} />
+                  </div>
+                  <div>
+                    <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Lokasi</p>
+                    <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      {lokasiPengambilan === 'ambil_ditempat'
+                        ? 'Ambil di Tempat (Kantor Rental)'
+                        : `Jemput ke Rumah`}
+                    </p>
+                    {lokasiPengambilan === 'jemput_kerumah' && (
+                      <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{alamatLengkap}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
+                    <User size={16} className={isDark ? 'text-white/60' : 'text-slate-500'} />
+                  </div>
+                  <div>
+                    <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Penyewa</p>
+                    <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{nama}</p>
+                    <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{noHp} • KTP: {noKtp}</p>
+                  </div>
+                </div>
+
+                {estimasi && (
+                  <div className={`flex items-center justify-between py-3 px-4 rounded-xl mt-2 ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
+                    <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Total Estimasi</p>
+                    <p className={`text-base font-bold text-orange-500`}>{formatRupiah(estimasi.totalHarga)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Reminders */}
+              <div className={`mx-6 mb-5 p-4 rounded-2xl border ${
+                isDark
+                  ? 'bg-amber-500/10 border-amber-500/20'
+                  : 'bg-amber-50 border-amber-200'
+              }`}>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <AlertTriangle size={15} className="text-amber-500 shrink-0" />
+                  <p className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+                    Himbauan Penting
+                  </p>
+                </div>
+                <ul className={`text-xs space-y-1.5 ${isDark ? 'text-amber-300/90' : 'text-amber-800'}`}>
+                  <li className="flex items-start gap-1.5">
+                    <Clock size={11} className="shrink-0 mt-0.5" />
+                    <span><strong>Jam operasional:</strong> Pengambilan & pengembalian kendaraan hanya pada pukul <strong>08:00 – 20:00 WIB</strong>.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <ShieldCheck size={11} className="shrink-0 mt-0.5" />
+                    <span><strong>Dokumen fisik:</strong> Siapkan KTP asli{isSimRequired ? ' dan SIM A asli' : ''} untuk diserahkan saat pengambilan unit.</span>
+                  </li>
+                  {isSimRequired && (
+                    <li className="flex items-start gap-1.5">
+                      <AlertTriangle size={11} className="shrink-0 mt-0.5" />
+                      <span><strong>Lepas kunci:</strong> SIM A wajib berlaku. Pastikan SIM tidak kedaluwarsa.</span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              {/* Modal Actions */}
+              <div className={`px-6 pb-6 flex gap-3`}>
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className={`flex-1 py-3.5 rounded-2xl font-semibold text-sm border transition-all ${
+                    isDark
+                      ? 'border-white/15 text-white/70 hover:bg-white/5'
+                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Kembali Edit
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={isProcessingBooking}
+                  className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all shadow-xl disabled:opacity-60 flex items-center justify-center gap-2 ${
+                    isDark
+                      ? 'bg-white text-neutral-950 hover:bg-neutral-100'
+                      : 'bg-neutral-900 text-white hover:bg-neutral-800'
+                  }`}
+                >
+                  {isProcessingBooking ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Memproses...
+                    </>
+                  ) : (
+                    'Ya, Lanjutkan Booking'
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

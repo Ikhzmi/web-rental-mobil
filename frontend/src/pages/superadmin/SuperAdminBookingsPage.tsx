@@ -96,7 +96,16 @@ function BookingDetailModal({ bookingId, onClose, isDark }: { bookingId: string;
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.car?.nama}</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.car?.nama}</p>
+                    {booking.car?.nomorPlat && (
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                        isDark ? 'bg-white/10 text-white border-white/20' : 'bg-slate-100 text-slate-800 border-slate-300'
+                      }`}>
+                        {booking.car.nomorPlat}
+                      </span>
+                    )}
+                  </div>
                   <p className={`text-xs flex items-center gap-1 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
                     <Building2 size={11} /> {booking.car?.instansi?.namaInstansi}
                   </p>
@@ -356,6 +365,13 @@ export default function SuperAdminBookingsPage() {
                       <h3 className={`font-semibold text-sm sm:text-base truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
                         {booking.car?.nama ?? '-'}
                       </h3>
+                      {booking.car?.nomorPlat && (
+                        <span className={`text-xs font-mono font-bold px-1.5 py-0.5 rounded border ${
+                          isDark ? 'bg-white/10 text-white border-white/20' : 'bg-slate-100 text-slate-800 border-slate-300'
+                        }`}>
+                          {booking.car.nomorPlat}
+                        </span>
+                      )}
                       <StatusBadge status={booking.status} isDark={isDark} />
                     </div>
 

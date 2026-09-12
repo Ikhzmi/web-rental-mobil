@@ -261,9 +261,16 @@ export default function AkunPesananDetailPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex items-center gap-3 mb-1"
+          className="flex items-center gap-3 mb-1 flex-wrap"
         >
           <h1 className={`font-playfair italic text-3xl ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.car?.nama ?? '-'}</h1>
+          {booking.car?.nomorPlat && (
+            <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded border tracking-wider ${
+              isDark ? 'bg-white/10 text-white border-white/20' : 'bg-slate-100 text-slate-800 border-slate-300'
+            }`}>
+              {booking.car.nomorPlat}
+            </span>
+          )}
           <span className={`text-xs px-2.5 py-1 rounded-full ${statusBadge[booking.status]}`}>
             {STATUS_LABEL[booking.status]}
           </span>
@@ -285,6 +292,12 @@ export default function AkunPesananDetailPage() {
         >
           <h2 className={`text-xs uppercase tracking-wider mb-3 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Ringkasan</h2>
           <div className="grid grid-cols-2 gap-y-2.5 text-sm">
+            {booking.car?.nomorPlat && (
+              <>
+                <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Nomor Plat Unit</span>
+                <span className={`text-right font-mono font-bold tracking-wider ${isDark ? 'text-white' : 'text-slate-900'}`}>{booking.car.nomorPlat}</span>
+              </>
+            )}
             <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Tanggal Ambil</span>
             <span className={`text-right ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatTanggal(booking.tanggalMulai)}</span>
             <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Tanggal Kembali</span>

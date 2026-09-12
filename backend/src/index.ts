@@ -15,6 +15,8 @@ import { superadminRouter } from './routes/superadmin.routes';
 import { instansiRouter } from './routes/instansi.routes';
 import { webhooksRouter } from './routes/webhooks.routes';
 import { reviewsRouter } from './routes/reviews.routes';
+import { publicStatsRouter } from './routes/publicStats.routes';
+import { customerMessagesRouter, adminMessagesRouter } from './routes/messages.routes';
 import { globalErrorHandler, notFoundHandler } from './lib/errorHandler';
 import { startBookingExpiryJob } from './services/bookingExpiry.service';
 
@@ -99,12 +101,14 @@ app.get('/health', (_req, res) => {
 
 // Publik
 app.use('/api/cars', carsRouter);
+app.use('/api/public/stats', publicStatsRouter);
 
 // Customer (verifySupabaseToken dipasang di dalam masing-masing router)
 // Stricter rate limit for checkout (payment endpoint)
 app.use('/api/bookings', authLimiter, bookingsRouter);
 app.use('/api/profiles', authLimiter, profilesRouter);
 app.use('/api/reviews', reviewsRouter);
+app.use('/api/messages', authLimiter, customerMessagesRouter);
 
 // Admin (verifySupabaseToken + requireAdmin dipasang di dalam masing-masing router)
 app.use('/api/admin/cars', adminCarsRouter);
@@ -112,6 +116,7 @@ app.use('/api/admin/bookings', adminBookingsRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/dokumen', adminDokumenRouter);
 app.use('/api/admin/dashboard', adminDashboardRouter);
+app.use('/api/admin/messages', adminMessagesRouter);
 
 // Super Admin (verifySupabaseToken + requireSuperAdmin dipasang di dalam router)
 app.use('/api/superadmin', superadminRouter);

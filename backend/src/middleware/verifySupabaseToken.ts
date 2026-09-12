@@ -78,6 +78,15 @@ export async function verifySupabaseToken(
     role: profile.role,
     instansiId: profile.instansiId ?? undefined,
   };
+
+  // Update lastSeenAt untuk admin agar status online akurat (fire-and-forget)
+  if (profile.role === 'admin' || profile.role === 'super_admin') {
+    prisma.profile.update({
+      where: { id: profile.id },
+      data: { lastSeenAt: new Date() },
+    }).catch(() => {/* silent – jangan blokir request */});
+  }
+
   next();
 }
 

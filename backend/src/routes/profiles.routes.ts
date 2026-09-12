@@ -22,8 +22,10 @@ profilesRouter.get('/me', asyncHandler(async (req, res) => {
 const updateProfileSchema = z.object({
   nama: z.string().trim().min(1).optional(),
   noHp: z.string().trim().min(1).optional(),
-  noKtp: z.string().trim().min(1).optional(),
-  noSim: z.string().trim().min(1).optional(),
+  // noKtp dan noSim boleh kosong (string kosong) karena opsional
+  noKtp: z.string().trim().optional(),
+  noSim: z.string().trim().optional(),
+  alamat: z.string().trim().optional(),
 });
 
 /** PATCH /api/profiles/me */
@@ -33,9 +35,16 @@ profilesRouter.patch('/me', asyncHandler(async (req, res) => {
     throw new AppError('Data tidak valid', 400);
   }
 
+  const { alamat, noKtp, noSim, ...rest } = parsed.data;
+
   const updated = await prisma.profile.update({
     where: { id: req.user!.id },
-    data: parsed.data,
+    data: {
+      ...rest,
+      ...(alamat !== undefined ? { alamat } : {}),
+      ...(noKtp !== undefined ? { noKtp: noKtp || null } : {}),
+      ...(noSim !== undefined ? { noSim: noSim || null } : {}),
+    },
   });
   res.json({ data: updated });
 }));
@@ -49,20 +58,23 @@ const dokumenSchema = z.object({
 // SECURITY: Allowed file extensions for documents
 const ALLOWED_DOCUMENT_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.pdf'];
 
-// SECURITY: Allowed MIME types for documents
-const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'application/pdf'
-];
+// File size limit info (enforcement is at storage bucket level, this is for display)
+const MAX_DOCUMENT_SIZE_MB = 5;
 
 /**
  * SECURITY: Validate document path format
- * Ensures path follows expected Supabase storage pattern
+ * Path dikirim frontend adalah path RELATIF dalam bucket (bukan termasuk nama bucket).
+ * Format valid: "<uuid>/ktp.jpg", "<uuid>/sim.png", dll.
+ * Tidak boleh ada path traversal (..) atau karakter berbahaya.
  */
 function isValidDocumentPath(path: string): boolean {
-  // Path must be in format: dokumen-penyewa/folder/filename.ext
-  const validPathPattern = /^dokumen-penyewa\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/;
+  // Pastikan tidak ada path traversal
+  if (path.includes('..') || path.includes('~') || path.startsWith('/')) {
+    return false;
+  }
+  // Format: folder/filename.ext (satu level subfolder, atau langsung filename)
+  // Contoh valid: "abc-uuid/ktp.jpg", "abc-uuid/sim.png", "abc-uuid/ktp.pdf"
+  const validPathPattern = /^[a-zA-Z0-9_\-]+\/[a-zA-Z0-9_.\-]+$/;
   return validPathPattern.test(path);
 }
 
@@ -94,18 +106,16 @@ profilesRouter.post('/me/dokumen', asyncHandler(async (req, res) => {
 
   // SECURITY: Validate document path format
   if (!isValidDocumentPath(storagePath)) {
-    throw new AppError('Format path dokumen tidak valid', 400);
+    throw new AppError('Path dokumen tidak valid. Pastikan file diunggah dari halaman profil.', 400);
   }
 
   // SECURITY: Validate file extension
   const extension = getFileExtension(storagePath);
   if (!ALLOWED_DOCUMENT_EXTENSIONS.includes(extension)) {
-    throw new AppError(`Tipe file tidak diizinkan. Gunakan: ${ALLOWED_DOCUMENT_EXTENSIONS.join(', ')}`, 400);
-  }
-
-  // SECURITY: Additional path traversal prevention
-  if (storagePath.includes('..') || storagePath.includes('~')) {
-    throw new AppError('Path dokumen tidak valid', 400);
+    throw new AppError(
+      `Tipe file tidak diizinkan. Gunakan JPG, PNG, atau PDF (maks ${MAX_DOCUMENT_SIZE_MB}MB).`,
+      400
+    );
   }
 
   const updated = await prisma.profile.update({
@@ -118,3 +128,4 @@ profilesRouter.post('/me/dokumen', asyncHandler(async (req, res) => {
 
   res.json({ data: updated });
 }));
+

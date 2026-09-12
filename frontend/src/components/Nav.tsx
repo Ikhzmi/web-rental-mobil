@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, User, Sun, Moon } from 'lucide-react';
+import { Menu, X, LogOut, User, Sun, Moon, MessageSquare, LayoutDashboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import logo from '../assets/logo.webp';
 import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
 import { useProfile } from '../hooks/useProfile';
 import { useTheme } from '../hooks/useTheme';
+import { useChat } from '../context/ChatContext';
 
 const NAV_LINKS: { label: string; to: string }[] = [
   { label: 'Beranda', to: '/' },
@@ -19,10 +20,14 @@ export default function Nav() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [visible, setVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const lastScrollYRef = useRef(0);
+  const openRef = useRef(open);
+  openRef.current = open;
+
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { toggleChat, unreadCount } = useChat();
 
   const isDark = theme === 'dark';
 
@@ -30,28 +35,30 @@ export default function Nav() {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
 
-      if (currentScrollY > 20) {
-        setScrolled(true);
-      } else {
-        setScrolled(false);
-      }
+      // Toggle scrolled state saat melebihi 20px
+      setScrolled(currentScrollY > 20);
 
-      if (currentScrollY > 80) {
-        if (currentScrollY > lastScrollY) {
-          if (!open) setVisible(false);
-        } else {
+      const diff = currentScrollY - lastScrollYRef.current;
+
+      if (currentScrollY > 60) {
+        // Scroll ke bawah (diff > 5) -> animasi navbar NAIK KE ATAS (sembunyi)
+        if (diff > 5) {
+          if (!openRef.current) setVisible(false);
+        }
+        // Scroll ke atas (diff < -5) -> animasi navbar TURUN (tampil)
+        else if (diff < -5) {
           setVisible(true);
         }
       } else {
         setVisible(true);
       }
 
-      setLastScrollY(currentScrollY);
+      lastScrollYRef.current = currentScrollY;
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY, open]);
+  }, []);
 
   const isActive = (to: string) => (to === '/' ? location.pathname === '/' : location.pathname.startsWith(to));
 
@@ -69,184 +76,245 @@ export default function Nav() {
   const isSuperAdmin = (profile?.role as string) === 'super_admin';
 
   return (
-    <motion.nav
-      initial={{ y: -100, opacity: 0 }}
-      animate={{ y: visible ? 0 : -100, opacity: visible ? 1 : 0 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className={`
-        fixed top-0 left-0 right-0 z-[100] flex items-center justify-between p-3 sm:p-4
-        transition-all duration-500 rounded-b-2xl
-        ${scrolled
-          ? isDark
-            ? 'sa-glass-dark'
-            : 'sa-glass-light'
-          : 'bg-transparent'
-        }
-      `}
-    >
-      <Link to="/" className="flex items-center gap-2">
-        <img src={logo} alt="KerenTal Kita" className="w-9 h-9 sm:w-10 sm:h-10 object-contain" />
-        <span className={`text-xl sm:text-2xl font-playfair italic ${isDark ? 'text-white' : 'text-slate-900'}`}>
-          KerenTal Kita
-        </span>
-      </Link>
+    <>
+      <motion.nav
+        initial={{ y: '-100%' }}
+        animate={{ y: visible ? '0%' : '-100%' }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        className={[
+          // Base layout
+          'fixed z-[100] flex items-center justify-between',
+          // Gunakan glass saat scrolled ATAU saat sedang tersembunyi (agar tidak ada flash borderless)
+          (scrolled || !visible)
+            ? `top-0 left-0 right-0 ${open ? 'rounded-b-none' : 'rounded-b-3xl'} p-3 md:p-4 shadow-xl md:shadow-2xl ${isDark ? 'nav-mobile-glass-dark nav-desktop-glass-dark' : 'nav-mobile-glass-light nav-desktop-glass-light'}`
+            : 'top-0 left-0 right-0 p-4 md:p-6 nav-desktop-transparent',
+        ].join(' ')}
+      >
 
-      {/* Desktop Navigation - Glass Pill Container */}
-      <div className={`
-        hidden md:flex items-center
-        glass-nav-links rounded-full px-3 py-2
-      `}>
-        {NAV_LINKS.map((link) => (
-          <Link
-            key={link.to}
-            to={link.to}
-            className={
-              isActive(link.to)
-                ? `${isDark ? 'bg-white/15' : 'bg-slate-900/10'} px-4 py-1.5 rounded-full text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`
-                : `px-4 py-1.5 rounded-full text-sm font-medium ${isDark ? 'text-white/80 hover:bg-white/10 hover:text-white' : 'text-slate-600 hover:bg-slate-900/5 hover:text-slate-900'} transition-colors`
-            }
+        <Link to="/" className="flex items-center gap-2">
+          <img src={logo} alt="KerenTal Kita" className="w-9 h-9 sm:w-10 sm:h-10 object-contain" />
+          <span className={`text-xl sm:text-2xl font-playfair italic ${isDark ? 'text-white' : 'text-neutral-900'}`}>
+            KerenTal Kita
+          </span>
+        </Link>
+
+        {/* Desktop Navigation - Glass Pill Container (Always horizontally centered) */}
+        <div className={`
+          hidden md:flex items-center
+          glass-nav-links rounded-full px-3 py-2
+          absolute left-1/2 -translate-x-1/2
+        `}>
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={
+                isActive(link.to)
+                  ? `${isDark ? 'bg-white/15' : 'bg-neutral-900/10'} px-4 py-1.5 rounded-full text-sm font-medium ${isDark ? 'text-white' : 'text-neutral-900'}`
+                  : `px-4 py-1.5 rounded-full text-sm font-medium ${isDark ? 'text-white/80 hover:bg-white/10 hover:text-white' : 'text-neutral-600 hover:bg-black/5 hover:text-neutral-900'} transition-colors`
+              }
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+
+        {/* Right Side Actions - NOT in glass pill */}
+        <div className="hidden md:flex items-center gap-3 ml-auto">
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className={`p-2.5 rounded-full transition-all duration-300 ${
+              isDark
+                ? 'bg-white/10 hover:bg-white/15 text-white'
+                : 'bg-white/80 hover:bg-white border border-neutral-200/50 shadow-sm text-neutral-900'
+            }`}
+            aria-label="Toggle theme"
           >
-            {link.label}
-          </Link>
-        ))}
-      </div>
+            <AnimatePresence mode="wait">
+              {isDark ? (
+                <motion.div
+                  key="sun"
+                  initial={{ rotate: -90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: 90, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Sun size={18} className="text-yellow-400" />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="moon"
+                  initial={{ rotate: 90, opacity: 0 }}
+                  animate={{ rotate: 0, opacity: 1 }}
+                  exit={{ rotate: -90, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Moon size={18} className="text-neutral-600" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </button>
 
-      {/* Right Side Actions - NOT in glass pill */}
-      <div className="hidden md:flex items-center gap-3">
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          className={`p-2.5 rounded-full transition-all duration-300 ${
-            isDark
-              ? 'bg-white/10 hover:bg-white/15 text-white'
-              : 'bg-white/80 hover:bg-white border border-slate-200/50 shadow-sm text-slate-900'
-          }`}
-          aria-label="Toggle theme"
-        >
-          <AnimatePresence mode="wait">
-            {isDark ? (
-              <motion.div
-                key="sun"
-                initial={{ rotate: -90, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                exit={{ rotate: 90, opacity: 0 }}
-                transition={{ duration: 0.2 }}
+          {!session ? (
+            <>
+              <Link
+                to="/login"
+                className={`text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'}`}
               >
-                <Sun size={18} className="text-yellow-400" />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="moon"
-                initial={{ rotate: 90, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                exit={{ rotate: -90, opacity: 0 }}
-                transition={{ duration: 0.2 }}
+                Masuk
+              </Link>
+              <Link
+                to="/daftar"
+                className={`
+                  text-sm font-semibold px-5 py-2 rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]
+                  ${isDark
+                    ? 'bg-white text-neutral-950 hover:bg-white/90 shadow-lg'
+                    : 'glass-daftar-btn-light'
+                  }
+                `}
               >
-                <Moon size={18} className="text-slate-600" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </button>
+                Daftar
+              </Link>
+            </>
+          ) : isSuperAdmin ? (
+            <>
+              <Link
+                to="/superadmin"
+                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full transition-all ${
+                  isDark
+                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-sm'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 shadow-sm'
+                }`}
+              >
+                <LayoutDashboard size={15} />
+                <span>Panel Super Admin</span>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
+                  isDark
+                    ? 'bg-white/10 hover:bg-white/15 text-white'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                }`}
+              >
+                <LogOut size={14} />
+                Keluar
+              </button>
+            </>
+          ) : isAdmin ? (
+            <>
+              <Link
+                to="/admin"
+                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full transition-all ${
+                  isDark
+                    ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 shadow-sm'
+                    : 'bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 shadow-sm'
+                }`}
+              >
+                <LayoutDashboard size={15} />
+                <span>Panel Admin</span>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
+                  isDark
+                    ? 'bg-white/10 hover:bg-white/15 text-white'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                }`}
+              >
+                <LogOut size={14} />
+                Keluar
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Message Icon Button - Bulat */}
+              <button
+                onClick={toggleChat}
+                className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 ${
+                  isDark
+                    ? 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
+                    : 'bg-white hover:bg-neutral-50 border border-neutral-200 shadow-sm text-neutral-800'
+                }`}
+                aria-label="Pesan / Chat"
+                title="Pesan / Chat Rental"
+              >
+                <MessageSquare size={17} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-neutral-900">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
 
-        {!session ? (
-          <>
-            <Link
-              to="/login"
-              className={`text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              Masuk
-            </Link>
-            <Link
-              to="/daftar"
-              className={`
-                text-sm font-semibold px-5 py-2 rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]
-                ${isDark
-                  ? 'bg-white text-slate-900 hover:bg-white/90 shadow-lg'
-                  : 'glass-daftar-btn-light'
-                }
-              `}
-            >
-              Daftar
-            </Link>
-          </>
-        ) : isSuperAdmin ? (
-          <>
-            <span className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{profile?.nama ?? 'Super Admin'}</span>
+              <Link
+                to="/akun/profil"
+                className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'}`}
+              >
+                <User size={15} />
+                {profile?.nama ?? 'Profil Saya'}
+              </Link>
+              <button
+                onClick={handleLogout}
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
+                  isDark
+                    ? 'bg-white/10 hover:bg-white/15 text-white'
+                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                }`}
+              >
+                <LogOut size={14} />
+                Keluar
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Mobile Menu Button */}
+        <div className="flex items-center gap-2 md:hidden">
+          <button
+            onClick={toggleTheme}
+            className={`p-2 rounded-full transition-all ${
+              isDark
+                ? 'bg-white/10 hover:bg-white/15 text-white'
+                : 'bg-white/80 hover:bg-neutral-100 shadow-sm text-neutral-900'
+            }`}
+            aria-label="Toggle theme"
+          >
+            {isDark ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-neutral-600" />}
+          </button>
+
+          {/* Mobile Message Button - Bulat */}
+          {session && (
             <button
-              onClick={handleLogout}
-              className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
+              onClick={toggleChat}
+              className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${
                 isDark
-                  ? 'bg-white/10 hover:bg-white/15 text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  ? 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
+                  : 'bg-white hover:bg-neutral-50 border border-neutral-200 shadow-sm text-neutral-800'
               }`}
+              aria-label="Pesan / Chat"
             >
-              <LogOut size={14} />
-              Keluar
+              <MessageSquare size={17} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
-          </>
-        ) : isAdmin ? (
-          <>
-            <span className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{profile?.nama ?? 'Admin'}</span>
-            <button
-              onClick={handleLogout}
-              className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
-                isDark
-                  ? 'bg-white/10 hover:bg-white/15 text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
-            >
-              <LogOut size={14} />
-              Keluar
-            </button>
-          </>
-        ) : (
-          <>
-            <Link
-              to="/akun/pesanan"
-              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              <User size={15} />
-              {profile?.nama ?? 'Akun Saya'}
-            </Link>
-            <button
-              onClick={handleLogout}
-              className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
-                isDark
-                  ? 'bg-white/10 hover:bg-white/15 text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
-            >
-              <LogOut size={14} />
-              Keluar
-            </button>
-          </>
-        )}
-      </div>
+          )}
 
-      {/* Mobile Menu Button */}
-      <div className="flex items-center gap-2 md:hidden">
-        <button
-          onClick={toggleTheme}
-          className={`p-2 rounded-full transition-all ${
-            isDark
-              ? 'bg-white/10 hover:bg-white/15 text-white'
-              : 'bg-white/80 hover:bg-slate-100 shadow-sm text-slate-900'
-          }`}
-          aria-label="Toggle theme"
-        >
-          {isDark ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-slate-600" />}
-        </button>
+          <button
+            className={`p-2 rounded-full ${isDark ? 'text-white' : 'text-neutral-900'}`}
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle menu"
+          >
+            {open ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+      </motion.nav>
 
-        <button
-          className={`p-2 rounded-full ${isDark ? 'text-white' : 'text-slate-900'}`}
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Toggle menu"
-        >
-          {open ? <X size={22} /> : <Menu size={22} />}
-        </button>
-      </div>
-
-      {/* Mobile Menu - Glassmorphism with bottom rounded */}
+      {/* Mobile Menu - Sibling element outside motion.nav to prevent nested backdrop-filter clipping bug */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -254,7 +322,9 @@ export default function Nav() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className={`md:hidden absolute top-full left-0 right-0 mt-3 mx-3 rounded-b-2xl p-5 flex flex-col gap-2 ${isDark ? 'sa-glass-dark' : 'sa-glass-light'}`}
+            className={`md:hidden fixed left-0 right-0 z-[99] p-5 flex flex-col gap-2 rounded-b-2xl shadow-2xl ${
+              scrolled ? 'top-[59px]' : 'top-[72px]'
+            } ${isDark ? 'nav-mobile-glass-dark' : 'nav-mobile-glass-light'}`}
           >
             {NAV_LINKS.map((link) => (
               <Link
@@ -265,24 +335,24 @@ export default function Nav() {
                   isActive(link.to)
                     ? isDark
                       ? 'bg-white/10 text-white'
-                      : 'bg-slate-100 text-slate-900'
+                      : 'bg-neutral-100 text-neutral-900'
                     : isDark
                       ? 'text-white/80 hover:bg-white/10'
-                      : 'text-slate-600 hover:bg-slate-50'
+                      : 'text-neutral-600 hover:bg-neutral-50'
                 }`}
               >
                 {link.label}
               </Link>
             ))}
 
-            <div className={`h-px my-2 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+            <div className={`h-px my-2 ${isDark ? 'bg-white/10' : 'bg-neutral-200'}`} />
 
             {!session ? (
               <>
                 <Link
                   to="/login"
                   onClick={() => setOpen(false)}
-                  className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:bg-white/10' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:bg-white/10' : 'text-neutral-600 hover:bg-neutral-50'}`}
                 >
                   Masuk
                 </Link>
@@ -291,7 +361,7 @@ export default function Nav() {
                   onClick={() => setOpen(false)}
                   className={`mt-1 text-center text-sm font-semibold px-6 py-2.5 rounded-full ${
                     isDark
-                      ? 'bg-white text-slate-900 hover:bg-white/90'
+                      ? 'bg-white text-neutral-950 hover:bg-white/90'
                       : 'glass-daftar-btn-light'
                   }`}
                 >
@@ -300,17 +370,36 @@ export default function Nav() {
               </>
             ) : (
               <>
-                {isAdmin ? (
-                  <span className={`text-left px-4 py-2.5 text-sm font-medium ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                    {profile?.nama ?? (isSuperAdmin ? 'Super Admin' : 'Admin')}
-                  </span>
+                {isSuperAdmin ? (
+                  <Link
+                    to="/superadmin"
+                    onClick={() => setOpen(false)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                      isDark ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-100 text-amber-900'
+                    }`}
+                  >
+                    <LayoutDashboard size={16} />
+                    <span>Panel Super Admin</span>
+                  </Link>
+                ) : isAdmin ? (
+                  <Link
+                    to="/admin"
+                    onClick={() => setOpen(false)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                      isDark ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-900'
+                    }`}
+                  >
+                    <LayoutDashboard size={16} />
+                    <span>Panel Admin</span>
+                  </Link>
                 ) : (
                   <Link
-                    to="/akun/pesanan"
+                    to="/akun/profil"
                     onClick={() => setOpen(false)}
-                    className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:bg-white/10' : 'text-slate-600 hover:bg-slate-50'}`}
+                    className={`flex items-center gap-2 text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:bg-white/10' : 'text-neutral-600 hover:bg-neutral-50'}`}
                   >
-                    {profile?.nama ?? 'Akun Saya'}
+                    <User size={16} />
+                    <span>{profile?.nama ?? 'Profil Saya'}</span>
                   </Link>
                 )}
                 <button
@@ -318,7 +407,7 @@ export default function Nav() {
                   className={`mt-1 text-center text-sm font-semibold px-6 py-2.5 rounded-full transition-colors ${
                     isDark
                       ? 'bg-white/10 hover:bg-white/15 text-white'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
                   }`}
                 >
                   Keluar
@@ -328,6 +417,6 @@ export default function Nav() {
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.nav>
+    </>
   );
 }

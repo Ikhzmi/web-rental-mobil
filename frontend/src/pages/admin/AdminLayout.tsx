@@ -20,6 +20,12 @@ import {
   MessageSquare,
   Calendar,
   Settings,
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../hooks/useTheme';
@@ -42,6 +48,183 @@ const ADMIN_BOTTOM_LINKS = [
   { to: '/admin/settings', label: 'Settings', icon: Settings, end: false },
 ];
 
+function AdminChangePasswordModal({
+  isOpen,
+  onClose,
+  isDark: _isDark,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  isDark: boolean;
+}) {
+  const { showToast } = useToast();
+  const [passwordBaru, setPasswordBaru] = useState('');
+  const [konfirmasiPassword, setKonfirmasiPassword] = useState('');
+  const [showPasswordBaru, setShowPasswordBaru] = useState(false);
+  const [showKonfirmasiPassword, setShowKonfirmasiPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (passwordBaru.length < 6) {
+      setError('Kata sandi baru minimal 6 karakter');
+      return;
+    }
+
+    if (passwordBaru !== konfirmasiPassword) {
+      setError('Konfirmasi kata sandi tidak cocok');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password: passwordBaru });
+      if (updateError) throw updateError;
+
+      showToast('success', 'Berhasil', 'Kata sandi akun admin berhasil diperbarui');
+      onClose();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Gagal memperbarui kata sandi';
+      setError(msg);
+      showToast('error', 'Gagal', msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-3xl border border-white/15 bg-zinc-950/90 backdrop-blur-2xl text-white p-6 shadow-2xl shadow-black/90 space-y-5"
+      >
+        <div className="flex items-center justify-between">
+          <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center text-white shadow-lg">
+            <KeyRound size={22} />
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-bold text-white">Ubah Password Admin</h3>
+          <p className="text-xs text-white/50 mt-1">
+            Masukkan kata sandi baru untuk mengamankan akun admin instansi Anda.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-white/70 block mb-1.5 uppercase tracking-wider">
+              Kata Sandi Baru
+            </label>
+            <div className="relative">
+              <input
+                type={showPasswordBaru ? 'text' : 'password'}
+                value={passwordBaru}
+                onChange={(e) => {
+                  setPasswordBaru(e.target.value);
+                  setError(null);
+                }}
+                placeholder="Minimal 6 karakter"
+                className="w-full text-sm rounded-xl px-4 py-3 pr-10 focus:outline-none transition-all bg-white/[0.05] border border-white/15 text-white placeholder:text-white/30 focus:border-white/35 focus:ring-2 focus:ring-white/10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPasswordBaru(!showPasswordBaru)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white/80"
+                tabIndex={-1}
+              >
+                {showPasswordBaru ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-white/70 block mb-1.5 uppercase tracking-wider">
+              Konfirmasi Kata Sandi Baru
+            </label>
+            <div className="relative">
+              <input
+                type={showKonfirmasiPassword ? 'text' : 'password'}
+                value={konfirmasiPassword}
+                onChange={(e) => {
+                  setKonfirmasiPassword(e.target.value);
+                  setError(null);
+                }}
+                placeholder="Ulangi kata sandi baru"
+                className="w-full text-sm rounded-xl px-4 py-3 pr-10 focus:outline-none transition-all bg-white/[0.05] border border-white/15 text-white placeholder:text-white/30 focus:border-white/35 focus:ring-2 focus:ring-white/10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKonfirmasiPassword(!showKonfirmasiPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white/80"
+                tabIndex={-1}
+              >
+                {showKonfirmasiPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-xl text-xs bg-red-500/10 border border-red-500/20 text-red-400 flex items-start gap-2">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2.5 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="flex-1 py-3 px-4 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white font-medium text-sm transition-all"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || !passwordBaru || !konfirmasiPassword}
+              className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-zinc-700 to-zinc-800 hover:from-zinc-600 hover:to-zinc-700 border border-white/15 text-white font-semibold text-sm transition-all shadow-lg shadow-black/40 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-98"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Menyimpan...</span>
+                </>
+              ) : (
+                <>
+                  <Lock size={15} />
+                  <span>Simpan Password</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function AdminLayout() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
@@ -49,6 +232,7 @@ export default function AdminLayout() {
   const { showToast } = useToast();
 
   const navigate = useNavigate();
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [showTopNav, setShowTopNav] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
@@ -479,6 +663,17 @@ export default function AdminLayout() {
                   </AnimatePresence>
                 </button>
 
+                {/* Ubah Password Button */}
+                <button
+                  onClick={() => setShowChangePassword(true)}
+                  className={`p-2 rounded-xl transition-all ${
+                    isDark ? 'glass-daftar-btn-dark text-white/70 hover:text-white' : 'glass-daftar-btn-light text-slate-600'
+                  }`}
+                  title="Ubah Password"
+                >
+                  <KeyRound size={16} />
+                </button>
+
                 {/* Logout Button */}
                 <button
                   onClick={handleLogout}
@@ -637,10 +832,33 @@ export default function AdminLayout() {
                   )}
                 </AnimatePresence>
               </button>
+
+              {/* Ubah Password Button (Desktop) */}
+              <button
+                onClick={() => setShowChangePassword(true)}
+                className={`p-2.5 rounded-xl transition-all duration-300 ${
+                  isDark ? 'glass-daftar-btn-dark text-white/70 hover:text-white' : 'glass-daftar-btn-light text-slate-600'
+                }`}
+                title="Ubah Password Akun"
+                aria-label="Ubah Password"
+              >
+                <KeyRound size={18} />
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Ubah Password Modal */}
+      <AnimatePresence>
+        {showChangePassword && (
+          <AdminChangePasswordModal
+            isOpen={showChangePassword}
+            onClose={() => setShowChangePassword(false)}
+            isDark={isDark}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

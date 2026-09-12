@@ -19,7 +19,7 @@
   --bg-primary: #0a0a0a;
   --bg-surface: #0f0f0f;
   --bg-elevated: #1a1a1a;
-  --bg-glass: rgba(15, 23, 42, 0.7);
+  --bg-glass: rgba(10, 10, 12, 0.85);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
@@ -79,6 +79,23 @@ body {
 /* Theme transition for all elements */
 *, *::before, *::after {
   transition: background-color 0.5s ease, border-color 0.4s ease, color 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease;
+  --tw-ring-color: transparent !important;
+}
+
+/* Hapus aksen biru Tailwind/browser dari semua elemen interaktif */
+*:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.35) !important;
+  outline-offset: 2px !important;
+}
+.light *:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.20) !important;
+}
+/* Hapus ring biru bawaan Tailwind pada input, select, button */
+input:focus, select:focus, textarea:focus, button:focus {
+  outline: none;
+  box-shadow: none;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
 }
 
 /* Smooth image transitions */
@@ -118,17 +135,17 @@ html {
       inset -1px 0 0 rgba(255, 255, 255, 0.05);
   }
 
-  /* Super Admin Layout Glass - Light Mode - Cream Background #F9EFE8 */
+  /* Super Admin Layout Glass - Light Mode - High Transparency Liquid Glass */
   .sa-glass-light {
-    background: rgba(255, 255, 255, 0.4) !important;
-    backdrop-filter: blur(20px) saturate(150%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.25) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.75);
     box-shadow:
-      0 10px 40px rgba(0, 0, 0, 0.06),
-      0 4px 12px rgba(0, 0, 0, 0.04),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.5);
+      0 10px 40px rgba(0, 0, 0, 0.05),
+      0 4px 12px rgba(0, 0, 0, 0.03),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.4);
   }
 
   /* Super Admin Header - flat top, rounded bottom corners */
@@ -244,28 +261,30 @@ html {
       inset -2px -2px 6px rgba(0, 0, 0, 0.02);
   }
 
-  /* Glass Nav Links Pill - Dark Mode - Super Admin Style */
+  /* Glass Nav Links Pill - Dark Mode - Crystal Clear Glassmorphism */
   .dark .glass-nav-links {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 9999px;
     box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      0 4px 16px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.1);
   }
 
-  /* Glass Nav Links Pill - Light Mode - Super Admin Style with Cream */
+  /* Glass Nav Links Pill - Light Mode - Crystal Clear Glassmorphism */
   .light .glass-nav-links {
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.40);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
     border-radius: 9999px;
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.04),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      inset 0 1px 0 rgba(255, 255, 255, 1),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.02);
   }
 
   /* Glass Hero Card - Light Mode - Pure Glass */
@@ -1024,5 +1043,176 @@ main > div {
   .animate-float-slow-8,
   .animate-float-particle {
     animation: none;
+  }
+}
+
+/* ========================================
+   Kerental DayPicker — Full-Width Expand
+   ======================================== */
+.kerental-daypicker {
+  width: 100%;
+}
+
+/* Root element DayPicker */
+.kerental-daypicker > div,
+.kerental-daypicker [data-rdp-root] {
+  width: 100% !important;
+}
+
+/* Months container */
+.kerental-daypicker .rdp-months,
+.kerental-daypicker [class*="months"] {
+  width: 100% !important;
+}
+
+/* Single month wrapper */
+.kerental-daypicker .rdp-month,
+.kerental-daypicker [class*="month"]:not([class*="month_caption"]):not([class*="month_grid"]) {
+  width: 100% !important;
+}
+
+/* Month grid / table */
+.kerental-daypicker .rdp-month_grid,
+.kerental-daypicker table {
+  width: 100% !important;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* Weekday header row */
+.kerental-daypicker .rdp-weekdays,
+.kerental-daypicker thead tr,
+.kerental-daypicker .rdp-week {
+  width: 100% !important;
+  display: table-row;
+}
+
+/* Each weekday header cell */
+.kerental-daypicker .rdp-weekday,
+.kerental-daypicker th {
+  width: calc(100% / 7) !important;
+  text-align: center;
+  padding: 4px 0;
+}
+
+/* Day cells */
+.kerental-daypicker .rdp-day,
+.kerental-daypicker td {
+  width: calc(100% / 7) !important;
+  text-align: center;
+  padding: 2px;
+  vertical-align: middle;
+}
+
+/* Day button — mengisi cell penuh */
+.kerental-daypicker .rdp-day_button,
+.kerental-daypicker button.rdp-button_reset {
+  width: 100% !important;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Navigasi header bulan */
+.kerental-daypicker .rdp-nav {
+  width: 100% !important;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Month caption row */
+.kerental-daypicker .rdp-month_caption {
+  width: 100% !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+/* ========================================
+   Public Page - Mobile Navbar & Menu Glass Card
+   Ultra-clear crystal liquid glass (Bening Translucent)
+   ======================================== */
+.nav-mobile-glass-dark {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(15, 15, 18, 0.42) 100%
+  ) !important;
+  backdrop-filter: blur(24px) saturate(180%) contrast(105%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) contrast(105%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow:
+    0 16px 40px -8px rgba(0, 0, 0, 0.5),
+    0 4px 14px rgba(0, 0, 0, 0.2),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+.nav-mobile-glass-light {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.50) 0%,
+    rgba(255, 255, 255, 0.32) 100%
+  ) !important;
+  backdrop-filter: blur(24px) saturate(180%) contrast(102%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%) contrast(102%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.85) !important;
+  box-shadow:
+    0 16px 40px -8px rgba(0, 0, 0, 0.06),
+    0 4px 14px rgba(0, 0, 0, 0.02),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.02) !important;
+}
+
+/* ========================================
+   Nav Desktop — Ultra-Clear Liquid Glassmorphism (Bening)
+   ======================================== */
+@media (min-width: 768px) {
+  .nav-desktop-glass-dark {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(12, 12, 16, 0.40) 100%
+    ) !important;
+    backdrop-filter: blur(24px) saturate(180%) contrast(105%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) contrast(105%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    box-shadow:
+      0 16px 40px -8px rgba(0, 0, 0, 0.5),
+      0 4px 14px rgba(0, 0, 0, 0.2),
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -1px 0 0 rgba(255, 255, 255, 0.04) !important;
+  }
+
+  .nav-desktop-glass-light {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.52) 0%,
+      rgba(255, 255, 255, 0.34) 100%
+    ) !important;
+    backdrop-filter: blur(24px) saturate(180%) contrast(102%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) contrast(102%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    box-shadow:
+      0 16px 40px -8px rgba(0, 0, 0, 0.06),
+      0 4px 14px rgba(0, 0, 0, 0.02),
+      inset 0 1px 1px 0 rgba(255, 255, 255, 1),
+      inset 0 -1px 0 0 rgba(0, 0, 0, 0.02) !important;
+  }
+
+  .nav-desktop-transparent,
+  .light .nav-desktop-transparent {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
   }
 }

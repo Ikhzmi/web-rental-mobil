@@ -109,6 +109,9 @@ exports.adminCarsRouter.post('/', (0, errorHandler_1.asyncHandler)(async (req, r
         throw new errorHandler_1.AppError('Instansi tidak ditemukan untuk admin ini', 403);
     }
     const car = await prisma_1.prisma.car.create({
+        // statusApproval sengaja TIDAK diset di sini — biar schema default
+        // 'menunggu_persetujuan' yang berlaku. Mobil baru harus melewati
+        // antrian approval Super Admin sebelum bisa tayang di katalog publik.
         data: { ...parsed.data, instansiId },
         include: { images: true },
     });
@@ -135,7 +138,19 @@ exports.adminCarsRouter.patch('/:id', (0, errorHandler_1.asyncHandler)(async (re
     if (bisnisError) {
         throw new errorHandler_1.AppError(bisnisError, 400);
     }
-    const car = await prisma_1.prisma.car.update({ where: { id }, data: parsed.data });
+    const car = await prisma_1.prisma.car.update({
+        where: { id },
+        data: {
+            ...parsed.data,
+            // Jika mobil sudah disetujui sebelumnya, perubahan data wajib
+            // di-review ulang oleh Super Admin — reset ke menunggu_persetujuan.
+            // Jika masih dalam status lain (ditolak / menunggu), biarkan tetap.
+            ...(existing.statusApproval === 'disetujui' && {
+                statusApproval: 'menunggu_persetujuan',
+                alasanPenolakan: null,
+            }),
+        },
+    });
     res.json({ data: car });
 }));
 /** DELETE /api/admin/cars/:id — nonaktifkan (soft-delete), bukan hapus baris. */

@@ -25,6 +25,7 @@ export function useProfile() {
   return {
     profile: query.data,
     isAdmin: query.data?.role === 'admin',
+    isSuperAdmin: query.data?.role === 'super_admin',
     loading: sessionLoading || (!!session && query.isLoading),
   };
 }

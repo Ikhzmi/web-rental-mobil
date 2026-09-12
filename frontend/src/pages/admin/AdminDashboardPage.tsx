@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon,
-  Clock, CheckCircle, Car as CarIcon,
+  Clock, Car as CarIcon,
   CreditCard, AlertTriangle,
   CarFront, CalendarClock,
-  type LucideIcon,
+  Activity, ExternalLink, Search, X, ClipboardList,
 } from 'lucide-react';
 import {
   api,
   type InstansiDashboardData,
   type InstansiDashboardTrends,
   type InstansiRevenueSeries,
+  type InstansiActivity,
 } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { SkeletonStatsGrid, SkeletonList } from '../../components/Skeleton';
@@ -677,88 +678,341 @@ function RentedVehiclesCard({ isDark }: { isDark: boolean }) {
   );
 }
 
-// Section 7: Recent Activities
-function RecentActivitiesCard({ isDark, recentBookings }: { isDark: boolean; recentBookings?: InstansiDashboardData['recentBookings'] }) {
-  const colorMap: Record<string, string> = {
-    emerald: isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600',
-    blue: isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600',
-    amber: isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600',
-    purple: isDark ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-600',
-    pink: isDark ? 'bg-pink-500/20 text-pink-400' : 'bg-pink-100 text-pink-600',
-    cyan: isDark ? 'bg-cyan-500/20 text-cyan-400' : 'bg-cyan-100 text-cyan-600',
-    // 'dibatalkan' pakai warna 'red' di statusIcons di bawah, tapi
-    // sebelumnya tidak ada entry 'red' di sini — badge aktivitas booking
-    // yang dibatalkan tampil tanpa warna latar sama sekali.
-    red: isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-600',
-  };
+// Section 7: Log Aktivitas Modal & Card
+function ActivityLogModal({
+  isOpen,
+  onClose,
+  activities,
+  isDark: _isDark,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  activities: InstansiActivity[];
+  isDark?: boolean;
+}) {
+  const [filterTipe, setFilterTipe] = useState<'semua' | 'pesanan' | 'armada'>('semua');
+  const [search, setSearch] = useState('');
 
-  const statusIcons: Record<string, { icon: LucideIcon; color: string }> = {
-    menunggu_pembayaran: { icon: Clock, color: 'amber' },
-    dikonfirmasi: { icon: CheckCircle, color: 'blue' },
-    berjalan: { icon: CarIcon, color: 'purple' },
-    selesai: { icon: CheckCircle, color: 'emerald' },
-    dibatalkan: { icon: AlertTriangle, color: 'red' },
-  };
+  if (!isOpen) return null;
 
-  const statusLabels: Record<string, string> = {
-    menunggu_pembayaran: 'Booking baru',
-    dikonfirmasi: 'Dikonfirmasi',
-    berjalan: 'Sedang berjalan',
-    selesai: 'Selesai',
-    dibatalkan: 'Dibatalkan',
-  };
-
-  const activities = (recentBookings ?? []).map((booking) => {
-    const config = statusIcons[booking.status] ?? { icon: Clock, color: 'cyan' };
-    return {
-      icon: config.icon,
-      color: config.color,
-      text: `${statusLabels[booking.status] ?? booking.status}: ${booking.car?.nama ?? '-'} - ${booking.profile?.nama ?? '-'}`,
-      time: new Date(booking.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
-    };
+  const filtered = activities.filter((act) => {
+    const matchType = filterTipe === 'semua' || act.tipe === filterTipe;
+    const matchSearch =
+      !search.trim() ||
+      act.judul.toLowerCase().includes(search.toLowerCase()) ||
+      act.deskripsi.toLowerCase().includes(search.toLowerCase()) ||
+      act.status.toLowerCase().includes(search.toLowerCase());
+    return matchType && matchSearch;
   });
-
-  const displayActivities = activities.slice(0, 6);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.6 }}
-      className={`rounded-2xl overflow-hidden ${getGlassCardClass(isDark)}`}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5"
+      onClick={onClose}
     >
-      <div className={`p-5 border-b ${isDark ? 'border-white/10' : 'border-[#D4CFC7]/30'}`}>
-        <h2 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
-          Aktivitas Terbaru
-        </h2>
-      </div>
-      <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
-        {displayActivities.length === 0 ? (
-          <p className={`text-sm text-center py-4 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Belum ada aktivitas</p>
-        ) : (
-          displayActivities.map((activity, i) => {
-            const Icon = activity.icon;
-            return (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 + i * 0.05 }}
-                className="flex items-start gap-3"
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl rounded-3xl border border-white/15 bg-zinc-950/90 backdrop-blur-2xl text-white flex flex-col max-h-[88vh] shadow-2xl shadow-black/90 overflow-hidden"
+      >
+        {/* Header */}
+        <div className="p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-white/[0.02]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white">
+              <Activity size={18} />
+            </div>
+            <div>
+              <h3 className="font-bold text-base sm:text-lg text-white">Log Aktivitas Dashboard</h3>
+              <p className="text-xs text-white/50">Riwayat lengkap aktivitas pemesanan dan armada instansi</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Search & Filters */}
+        <div className="p-4 border-b border-white/10 space-y-3 bg-white/[0.01]">
+          <div className="relative">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+            <input
+              type="text"
+              placeholder="Cari aktivitas atau status..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs bg-white/5 border border-white/10 text-white placeholder:text-white/35 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {[
+              { id: 'semua', label: 'Semua' },
+              { id: 'pesanan', label: 'Pesanan' },
+              { id: 'armada', label: 'Armada' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setFilterTipe(tab.id as 'semua' | 'pesanan' | 'armada')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                  filterTipe === tab.id
+                    ? 'bg-white/15 text-white border border-white/25 shadow-sm'
+                    : 'bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/80 border border-transparent'
+                }`}
               >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${colorMap[activity.color]}`}>
-                  <Icon size={14} />
+                {tab.label}
+              </button>
+            ))}
+            <span className="text-[11px] text-white/40 ml-auto">
+              {filtered.length} riwayat
+            </span>
+          </div>
+        </div>
+
+        {/* Activity List */}
+        <div className="p-4 space-y-2.5 overflow-y-auto flex-1">
+          {filtered.length === 0 ? (
+            <div className="text-center py-12 text-white/40 text-xs">
+              Tidak ada log aktivitas yang cocok
+            </div>
+          ) : (
+            filtered.map((act) => {
+              const isPesanan = act.tipe === 'pesanan';
+              return (
+                <div
+                  key={act.id}
+                  className="p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 transition-all flex items-start gap-3.5"
+                >
+                  <div className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center mt-0.5 ${
+                    isPesanan
+                      ? 'bg-blue-500/15 border border-blue-500/30 text-blue-400'
+                      : 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
+                  }`}>
+                    {isPesanan ? <ClipboardList size={16} /> : <CarIcon size={16} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <h4 className="font-semibold text-xs sm:text-sm text-white truncate">
+                        {act.judul}
+                      </h4>
+                      <span className="text-[10px] text-white/40 shrink-0">
+                        {new Date(act.waktu).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/60 leading-relaxed line-clamp-2">
+                      {act.deskripsi}
+                    </p>
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/5 border border-white/10 text-white/70">
+                        Status: {act.status.replace(/_/g, ' ')}
+                      </span>
+                      {act.detailUrl && (
+                        <Link
+                          to={act.detailUrl}
+                          onClick={onClose}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                        >
+                          <span>Lihat Rincian</span>
+                          <ExternalLink size={11} />
+                        </Link>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm ${isDark ? 'text-white/80' : 'text-slate-700'}`}>{activity.text}</p>
-                  <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>{activity.time}</p>
-                </div>
-              </motion.div>
-            );
-          })
-        )}
-      </div>
+              );
+            })
+          )}
+        </div>
+      </motion.div>
     </motion.div>
+  );
+}
+
+function RecentActivitiesCard({
+  isDark,
+  recentBookings,
+}: {
+  isDark: boolean;
+  recentBookings?: InstansiDashboardData['recentBookings'];
+}) {
+  const [filter, setFilter] = useState<'semua' | 'pesanan' | 'armada'>('semua');
+  const [showAllModal, setShowAllModal] = useState(false);
+
+  // Fetch real activities from backend
+  const { data: apiActivities, isLoading: isActivitiesLoading } = useQuery<InstansiActivity[]>({
+    queryKey: ['instansi-activities'],
+    queryFn: () => api.getInstansiActivities(),
+    refetchInterval: 30000,
+    retry: 1,
+  });
+
+  // Fallback if needed
+  const activities: InstansiActivity[] = (apiActivities && apiActivities.length > 0)
+    ? apiActivities
+    : (recentBookings ?? []).map((b) => ({
+        id: `book-${b.id}`,
+        tipe: 'pesanan' as const,
+        judul: `Booking: ${b.car?.nama ?? 'Armada'}`,
+        deskripsi: `Pesanan oleh ${b.profile?.nama ?? 'Pelanggan'} (${b.status.replace(/_/g, ' ')})`,
+        status: b.status,
+        waktu: b.createdAt,
+        detailUrl: `/admin/pesanan/${b.id}`,
+      }));
+
+  const filtered = activities.filter((a) => {
+    if (filter === 'semua') return true;
+    return a.tipe === filter;
+  });
+
+  const displayActivities = filtered.slice(0, 6);
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
+        className={`rounded-2xl overflow-hidden flex flex-col ${getGlassCardClass(isDark)}`}
+      >
+        {/* Header */}
+        <div className={`p-4 sm:p-5 border-b flex items-center justify-between gap-3 ${
+          isDark ? 'border-white/10' : 'border-[#D4CFC7]/30'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <div className={`p-2 rounded-xl ${isDark ? 'bg-white/10 text-white' : 'bg-slate-900/10 text-slate-800'}`}>
+              <Activity size={16} />
+            </div>
+            <div>
+              <h2 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                Log Aktivitas
+              </h2>
+              <p className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                Pembaruan pesanan & armada terkini
+              </p>
+            </div>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1">
+            {(['semua', 'pesanan', 'armada'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setFilter(tab)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize transition-all ${
+                  filter === tab
+                    ? isDark
+                      ? 'bg-white/15 text-white border border-white/20'
+                      : 'bg-slate-900 text-white shadow-xs'
+                    : isDark
+                      ? 'text-white/40 hover:text-white/70'
+                      : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Activity Items */}
+        <div className="p-4 space-y-3 max-h-72 overflow-y-auto flex-1">
+          {isActivitiesLoading && activities.length === 0 ? (
+            Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-2">
+                <div className={`w-8 h-8 rounded-lg animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                <div className="flex-1 space-y-1">
+                  <div className={`h-3 w-28 rounded animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
+                  <div className={`h-2.5 w-40 rounded animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
+                </div>
+              </div>
+            ))
+          ) : displayActivities.length === 0 ? (
+            <p className={`text-sm text-center py-8 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+              Belum ada log aktivitas
+            </p>
+          ) : (
+            displayActivities.map((act, i) => {
+              const isPesanan = act.tipe === 'pesanan';
+              return (
+                <motion.div
+                  key={act.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.6 + i * 0.04 }}
+                  className={`p-2.5 rounded-xl transition-all border ${
+                    isDark
+                      ? 'bg-white/[0.02] hover:bg-white/[0.05] border-white/5'
+                      : 'bg-white/40 hover:bg-white/70 border-slate-200/50'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5 ${
+                      isPesanan
+                        ? isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                        : isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'
+                    }`}>
+                      {isPesanan ? <ClipboardList size={14} /> : <CarIcon size={14} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className={`text-xs font-semibold truncate ${isDark ? 'text-white/90' : 'text-slate-800'}`}>
+                          {act.judul}
+                        </p>
+                        <span className={`text-[10px] shrink-0 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                          {new Date(act.waktu).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className={`text-xs mt-0.5 line-clamp-1 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                        {act.deskripsi}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer Button to open Full Log Modal */}
+        <div className={`p-3 border-t text-center ${isDark ? 'border-white/10' : 'border-[#D4CFC7]/30'}`}>
+          <button
+            type="button"
+            onClick={() => setShowAllModal(true)}
+            className={`text-xs font-semibold inline-flex items-center gap-1.5 transition-colors ${
+              isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-700 hover:text-emerald-800'
+            }`}
+          >
+            <span>Buka Semua Log Aktivitas ({activities.length})</span>
+            <ExternalLink size={12} />
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Full Modal */}
+      <AnimatePresence>
+        {showAllModal && (
+          <ActivityLogModal
+            isOpen={showAllModal}
+            onClose={() => setShowAllModal(false)}
+            activities={activities}
+            isDark={isDark}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 

@@ -1,5 +1,7 @@
 import { lazy, Suspense } from 'react';
 import Hero from '../components/Hero';
+import SectionDivider from '../components/decor/SectionDivider';
+import { useTheme } from '../hooks/useTheme';
 
 // Lazy load below-the-fold content for faster initial load
 const FleetConfigurator = lazy(() => import('../components/FleetConfigurator'));
@@ -19,12 +21,17 @@ function SectionLoader() {
 }
 
 export default function HomePage() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   return (
     <main className="bg-black min-h-screen">
       <Hero />
+      <SectionDivider type="hero-to-fleet" isDark={isDark} />
       <Suspense fallback={<SectionLoader />}>
         <FleetConfigurator />
       </Suspense>
+      <SectionDivider type="fleet-to-booking" isDark={isDark} />
       <Suspense fallback={<SectionLoader />}>
         <HowItWorks />
       </Suspense>
@@ -40,6 +47,7 @@ export default function HomePage() {
       <Suspense fallback={<SectionLoader />}>
         <CtaBanner />
       </Suspense>
+      <SectionDivider type="cta-to-footer" isDark={isDark} />
       <Suspense fallback={<SectionLoader />}>
         <ModernFooter />
       </Suspense>

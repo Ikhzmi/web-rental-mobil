@@ -1,32 +1,55 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Loader2, Lock, Check } from 'lucide-react';
+import { useState, useEffect, type FormEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Loader2, Lock, Check, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../hooks/useTheme';
-import { useSession } from '../hooks/useSession';
 import LoginBackgroundV4 from '../components/background/LoginBackgroundV4';
 
 /**
- * Halaman ini melengkapi alur "lupa password" yang sebelumnya BOLONG:
- * AuthCallbackPage menerima token recovery dari Supabase (yang otomatis
- * membuat sesi sementara), tapi sebelumnya langsung redirect ke /login
- * TANPA PERNAH memanggil supabase.auth.updateUser({ password }) — jadi
- * password tidak pernah benar-benar diganti walau pesan yang tampil bilang
- * "berhasil direset". Halaman ini yang menutup celah itu: AuthCallbackPage
- * sekarang mengarah ke sini alih-alih langsung ke /login.
+ * Halaman reset password yang menerima token_hash dari URL
+ * (diteruskan oleh AuthCallbackPage dari link email Supabase PKCE).
+ * Halaman ini yang memanggil verifyOtp untuk membentuk recovery session
+ * BARU setelah user mengisi form — bukan otomatis login saat tiba di sini.
  */
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const { session, loading: sessionLoading } = useSession();
+
+  // Status verifikasi token dari URL
+  const [tokenStatus, setTokenStatus] = useState<'pending' | 'valid' | 'invalid'>('pending');
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Verifikasi token_hash saat komponen mount
+  useEffect(() => {
+    const tokenHash = searchParams.get('token_hash');
+    if (!tokenHash) {
+      // Tidak ada token — cek apakah sudah ada recovery session aktif
+      supabase.auth.getSession().then(({ data }) => {
+        setTokenStatus(data.session ? 'valid' : 'invalid');
+      });
+      return;
+    }
+
+    // Panggil verifyOtp dengan token_hash untuk membentuk recovery session
+    supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: otpError }) => {
+      if (otpError) {
+        console.error('[ResetPassword] verifyOtp error:', otpError);
+        setTokenStatus('invalid');
+      } else {
+        setTokenStatus('valid');
+      }
+    });
+  }, [searchParams]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -58,14 +81,23 @@ export default function ResetPasswordPage() {
     setTimeout(() => navigate('/login?reset=true', { replace: true }), 1500);
   };
 
-  const inputClass = `w-full rounded-xl px-4 py-3 text-sm transition-all duration-200 focus:outline-none ${
+  const inputClass = `w-full rounded-xl pl-4 pr-11 py-3 text-sm transition-all duration-200 focus:outline-none ${
     isDark ? 'login-input-dark' : 'login-input-light'
   }`;
 
-  // Tidak ada sesi recovery yang valid (mis. link kedaluwarsa, atau user
-  // buka halaman ini langsung tanpa lewat link email) — jangan tampilkan
-  // form yang pasti gagal, kasih tahu jujur dan arahkan minta link baru.
-  if (!sessionLoading && !session) {
+  // Loading state saat memverifikasi token_hash dari link email
+  if (tokenStatus === 'pending') {
+    return (
+      <LoginBackgroundV4>
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className={`w-8 h-8 animate-spin ${isDark ? 'text-white' : 'text-stone-800'}`} />
+        </div>
+      </LoginBackgroundV4>
+    );
+  }
+
+  // Tidak ada token valid atau link kedaluwarsa
+  if (tokenStatus === 'invalid') {
     return (
       <LoginBackgroundV4>
         <div className={`w-full max-w-sm rounded-2xl overflow-hidden p-8 text-center ${isDark ? 'login-card-dark' : 'login-card-light'}`}>
@@ -131,28 +163,54 @@ export default function ResetPasswordPage() {
 
               <div>
                 <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-stone-600'}`}>Password Baru</label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={inputClass}
-                  placeholder="Minimal 8 karakter"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={inputClass}
+                    placeholder="Minimal 8 karakter"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className={`absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                      isDark ? 'text-white/40 hover:text-white/80' : 'text-stone-400 hover:text-stone-700'
+                    }`}
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-stone-600'}`}>Konfirmasi Password</label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={inputClass}
-                  placeholder="Ulangi password baru"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className={inputClass}
+                    placeholder="Ulangi password baru"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className={`absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                      isDark ? 'text-white/40 hover:text-white/80' : 'text-stone-400 hover:text-stone-700'
+                    }`}
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <button

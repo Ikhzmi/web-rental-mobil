@@ -22,7 +22,7 @@ const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: 'Apakah ada minimal durasi sewa?',
-        a: 'Minimal sewa adalah 1 hari (24 jam). Untuk sewa jangka panjang (mingguan/bulanan), hubungi tim kami langsung untuk penawaran harga khusus.',
+        a: 'Minimal sewa adalah 1 hari (jam 08:00 – 20:00 WIB). Untuk sewa jangka panjang (mingguan/bulanan), hubungi tim kami langsung untuk penawaran harga khusus.',
       },
     ],
   },

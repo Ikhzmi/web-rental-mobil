@@ -42,7 +42,7 @@ const navItems = [
 const navItemsSlide2 = [
   { to: '/superadmin/instansi', label: 'Instansi', icon: Building2, end: false },
   { to: '/superadmin/admin', label: 'Akun', icon: Users, end: false },
-  { to: '/superadmin/armada/approval', label: 'Approval', icon: Car, end: false },
+  { to: '/superadmin/armada', label: 'Armada', icon: Car, end: false },
   { to: '/superadmin/pencairan', label: 'Dana', icon: Wallet, end: false },
 ];
 

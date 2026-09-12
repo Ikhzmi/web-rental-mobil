@@ -88,6 +88,7 @@ adminCarsRouter.get('/:id', asyncHandler(async (req, res) => {
 
 const carBaseSchema = z.object({
   nama: z.string().trim().min(1),
+  nomorPlat: z.string().trim().min(1).transform((v) => v.toUpperCase()).optional(),
   kategori: z.enum(['city_car', 'hatchback', 'suv', 'mpv', 'minibus', 'pickup', 'mewah', 'electric']),
   transmisi: z.enum(['manual', 'matic']),
   tipeSewa: z.enum(['lepas_kunci', 'dengan_sopir', 'keduanya']),
@@ -126,6 +127,9 @@ adminCarsRouter.post('/', asyncHandler(async (req, res) => {
   }
 
   const car = await prisma.car.create({
+    // statusApproval sengaja TIDAK diset di sini — biar schema default
+    // 'menunggu_persetujuan' yang berlaku. Mobil baru harus melewati
+    // antrian approval Super Admin sebelum bisa tayang di katalog publik.
     data: { ...parsed.data, instansiId },
     include: { images: true },
   });
@@ -157,11 +161,23 @@ adminCarsRouter.patch('/:id', asyncHandler(async (req, res) => {
     throw new AppError(bisnisError, 400);
   }
 
-  const car = await prisma.car.update({ where: { id }, data: parsed.data });
+  const car = await prisma.car.update({
+    where: { id },
+    data: {
+      ...parsed.data,
+      // Jika mobil sudah disetujui sebelumnya, perubahan data wajib
+      // di-review ulang oleh Super Admin — reset ke menunggu_persetujuan.
+      // Jika masih dalam status lain (ditolak / menunggu), biarkan tetap.
+      ...(existing.statusApproval === 'disetujui' && {
+        statusApproval: 'menunggu_persetujuan',
+        alasanPenolakan: null,
+      }),
+    },
+  });
   res.json({ data: car });
 }));
 
-/** DELETE /api/admin/cars/:id — nonaktifkan (soft-delete), bukan hapus baris. */
+/** DELETE /api/admin/cars/:id — hapus armada (hard-delete jika belum ada booking, soft-delete jika ada histori selesai/batal, tolak jika ada booking aktif) */
 adminCarsRouter.delete('/:id', asyncHandler(async (req, res) => {
   const id = req.params.id as string;
 
@@ -171,16 +187,50 @@ adminCarsRouter.delete('/:id', asyncHandler(async (req, res) => {
     throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
   }
 
-  const existing = await prisma.car.findUnique({ where: { id, instansiId } });
+  const existing = await prisma.car.findUnique({
+    where: { id, instansiId },
+    include: {
+      bookings: { select: { id: true, status: true } },
+    },
+  });
   if (!existing) {
     throw new AppError('Mobil tidak ditemukan', 404);
   }
 
-  const car = await prisma.car.update({
-    where: { id },
-    data: { status: 'nonaktif' },
-  });
-  res.json({ data: car });
+  // Cek apakah ada booking aktif yang belum selesai/batal
+  const activeBookings = existing.bookings.filter((b) =>
+    ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'].includes(b.status)
+  );
+  if (activeBookings.length > 0) {
+    throw new AppError(
+      `Armada "${existing.nama}" tidak dapat dihapus karena sedang memiliki ${activeBookings.length} pesanan aktif`,
+      400
+    );
+  }
+
+  // Jika tidak pernah memiliki riwayat booking sama sekali -> Hapus permanen
+  if (existing.bookings.length === 0) {
+    await prisma.car.delete({ where: { id } });
+    res.json({
+      message: `Armada "${existing.nama}" berhasil dihapus permanen`,
+      deletedPermanently: true,
+    });
+  } else {
+    // Jika ada riwayat booking lampau -> soft-delete (nonaktifkan & tolak approval)
+    const car = await prisma.car.update({
+      where: { id },
+      data: {
+        status: 'nonaktif',
+        statusApproval: 'ditolak',
+        alasanPenolakan: 'Dihapus oleh admin instansi',
+      },
+    });
+    res.json({
+      data: car,
+      message: `Armada "${existing.nama}" berhasil dinonaktifkan dan ditarik dari katalog`,
+      deletedPermanently: false,
+    });
+  }
 }));
 
 const imageSchema = z.object({
@@ -241,4 +291,104 @@ adminCarsRouter.delete('/:id/images/:imageId', asyncHandler(async (req, res) => 
 
   const image = await prisma.carImage.delete({ where: { id: imageId } });
   res.json({ data: image });
+}));
+
+const createBlockedDateSchema = z.object({
+  tanggalMulai: z.string(),
+  tanggalSelesai: z.string(),
+  alasan: z.string().optional(),
+});
+
+/** GET /api/admin/cars/:id/blocked-dates — list blocked dates for car */
+adminCarsRouter.get('/:id/blocked-dates', asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
+  }
+
+  const car = await prisma.car.findFirst({ where: { id, instansiId } });
+  if (!car) {
+    throw new AppError('Mobil tidak ditemukan', 404);
+  }
+
+  const blockedDates = await prisma.carBlockedDate.findMany({
+    where: { carId: id },
+    orderBy: { tanggalMulai: 'asc' },
+  });
+
+  res.json({ data: blockedDates });
+}));
+
+/** POST /api/admin/cars/:id/blocked-dates — add blocked date for car */
+adminCarsRouter.post('/:id/blocked-dates', asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
+  }
+
+  const parsed = createBlockedDateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new AppError('Data tanggal tidak valid', 400);
+  }
+
+  const car = await prisma.car.findFirst({ where: { id, instansiId } });
+  if (!car) {
+    throw new AppError('Mobil tidak ditemukan', 404);
+  }
+
+  // Parse tanggal sebagai UTC noon (T12:00:00Z) bukan midnight (T00:00:00Z)
+  // agar tanggal tidak bergeser 1 hari di timezone manapun (termasuk WIB UTC+7).
+  // Frontend mengirim "YYYY-MM-DD" → kita normalkan ke noon UTC.
+  const parseUTCDate = (dateStr: string): Date => {
+    const datePart = dateStr.split('T')[0]; // ambil "YYYY-MM-DD" saja
+    return new Date(`${datePart}T12:00:00Z`); // simpan sebagai noon UTC
+  };
+
+  const tanggalMulai = parseUTCDate(parsed.data.tanggalMulai);
+  const tanggalSelesai = parseUTCDate(parsed.data.tanggalSelesai);
+
+  if (isNaN(tanggalMulai.getTime()) || isNaN(tanggalSelesai.getTime())) {
+    throw new AppError('Format tanggal tidak valid', 400);
+  }
+
+  if (tanggalSelesai < tanggalMulai) {
+    throw new AppError('Tanggal selesai tidak boleh sebelum tanggal mulai', 400);
+  }
+
+  const created = await prisma.carBlockedDate.create({
+    data: {
+      carId: id,
+      tanggalMulai,
+      tanggalSelesai,
+      alasan: parsed.data.alasan || 'Manual Blokir Admin',
+    },
+  });
+
+  res.status(201).json({ data: created });
+}));
+
+/** DELETE /api/admin/cars/:id/blocked-dates/:blockedId — delete blocked date */
+adminCarsRouter.delete('/:id/blocked-dates/:blockedId', asyncHandler(async (req, res) => {
+  const { id, blockedId } = req.params as { id: string; blockedId: string };
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    throw new AppError('Instansi tidak ditemukan untuk admin ini', 403);
+  }
+
+  const existing = await prisma.carBlockedDate.findFirst({
+    where: {
+      id: blockedId,
+      carId: id,
+      car: { instansiId },
+    },
+  });
+
+  if (!existing) {
+    throw new AppError('Data blokir tanggal tidak ditemukan', 404);
+  }
+
+  await prisma.carBlockedDate.delete({ where: { id: blockedId } });
+  res.json({ success: true });
 }));

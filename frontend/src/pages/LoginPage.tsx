@@ -1,6 +1,6 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, X, Mail } from 'lucide-react';
+import { Loader2, X, Mail, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
@@ -8,6 +8,42 @@ import { useTheme } from '../hooks/useTheme';
 import { useSession } from '../hooks/useSession';
 import { useProfile } from '../hooks/useProfile';
 import LoginBackgroundV4 from '../components/background/LoginBackgroundV4';
+
+function formatAuthError(err: unknown): string {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return 'Koneksi internet terputus. Pastikan perangkat Anda terhubung ke internet.';
+  }
+
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes('failed to fetch') ||
+    lower.includes('network request failed') ||
+    lower.includes('load failed') ||
+    lower.includes('networkerror') ||
+    lower.includes('err_connection_refused')
+  ) {
+    return 'Gagal terhubung ke server autentikasi. Periksa koneksi internet Anda atau coba beberapa saat lagi.';
+  }
+  if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')) {
+    return 'Email atau password yang Anda masukkan salah. Silakan periksa kembali.';
+  }
+  if (lower.includes('email not confirmed')) {
+    return 'Email Anda belum diverifikasi. Silakan periksa kotak masuk atau folder spam email Anda.';
+  }
+  if (lower.includes('too many requests') || lower.includes('rate limit')) {
+    return 'Terlalu banyak percobaan login. Silakan tunggu beberapa saat lagi sebelum mencoba kembali.';
+  }
+  if (lower.includes('user not found') || lower.includes('user disabled')) {
+    return 'Akun tidak ditemukan atau telah dinonaktifkan.';
+  }
+  if (lower.includes('password should be at least')) {
+    return 'Password harus terdiri dari minimal 8 karakter.';
+  }
+
+  return message || 'Terjadi kesalahan saat masuk. Silakan coba beberapa saat lagi.';
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -33,14 +69,12 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Lupa password — sebelumnya tidak ada entry point sama sekali dari
-  // halaman ini untuk mulai alur reset password (satu-satunya cara
-  // sebelumnya cuma dari halaman Profil, yang perlu login dulu — kontradiktif
-  // untuk skenario "lupa password").
+  // Lupa password
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -51,76 +85,162 @@ export default function LoginPage() {
     e.preventDefault();
     setForgotLoading(true);
     setForgotError(null);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-      redirectTo: `${window.location.origin}/auth/callback`,
-    });
-    setForgotLoading(false);
-    if (resetError) {
-      setForgotError(resetError.message);
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setForgotLoading(false);
+      setForgotError('Tidak ada koneksi internet. Silakan periksa jaringan Anda.');
       return;
     }
-    setForgotSent(true);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      });
+      setForgotLoading(false);
+      if (resetError) {
+        setForgotError(formatAuthError(resetError));
+        return;
+      }
+      setForgotSent(true);
+    } catch (err) {
+      setForgotLoading(false);
+      setForgotError(formatAuthError(err));
+    }
   };
 
-  const handleGoogleSignIn = async () => {
-    setGoogleLoading(true);
-    setError(null);
+  // Reset status loading ketika kembali ke halaman (misal via tombol Back browser / bfcache)
+  // Gunakan ref untuk melacak apakah OAuth redirect sudah dimulai
+  const googleRedirectInitiated = useRef(false);
 
-    const { error: googleError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-      },
-    });
-
-    if (googleError) {
+  useEffect(() => {
+    const handleResetLoading = () => {
+      // Selalu reset loading state saat user kembali ke halaman ini
       setGoogleLoading(false);
-      setError(googleError.message);
+      setLoading(false);
+      googleRedirectInitiated.current = false;
+    };
+
+    // pageshow menangani bfcache restore (event.persisted = true) dan navigasi normal
+    const handlePageShow = (e: PageTransitionEvent) => {
+      handleResetLoading();
+      // Jika halaman dikembalikan dari bfcache (browser back), pastikan state bersih
+      if (e.persisted) {
+        setGoogleLoading(false);
+        setLoading(false);
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('focus', handleResetLoading);
+
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focus', handleResetLoading);
+    };
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    // Cegah double-click atau trigger ulang saat user sudah diarahkan
+    if (googleLoading || googleRedirectInitiated.current) return;
+    setError(null);
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setError('Tidak ada koneksi internet. Silakan periksa jaringan Anda.');
+      return;
     }
-    // Jika success, browser akan redirect ke Google, jadi setGoogleLoading
-    // tidak akan kembali ke false kecuali ada error
+
+    setGoogleLoading(true);
+    googleRedirectInitiated.current = true;
+
+    // Safety timer jika pengalihan dibatalkan atau pengguna menekan tombol Back di browser
+    const safetyTimer = setTimeout(() => {
+      setGoogleLoading(false);
+      googleRedirectInitiated.current = false;
+    }, 8000);
+
+    try {
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (googleError) {
+        clearTimeout(safetyTimer);
+        setGoogleLoading(false);
+        googleRedirectInitiated.current = false;
+        setError(formatAuthError(googleError));
+      }
+      // Jika sukses, browser akan redirect — jangan reset loading
+    } catch (err) {
+      clearTimeout(safetyTimer);
+      setGoogleLoading(false);
+      googleRedirectInitiated.current = false;
+      setError(formatAuthError(err));
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
 
-    const { error: signInError, data: authData } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (signInError) {
-      setLoading(false);
-      setError(signInError.message);
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setError('Tidak ada koneksi internet. Silakan periksa jaringan Anda.');
       return;
     }
 
-    if (authData?.user) {
-      try {
-        const profile = await api.getMyProfile();
+    setLoading(true);
 
+    try {
+      const { error: signInError, data: authData } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (signInError) {
         setLoading(false);
-
-        if (profile.role === 'super_admin') {
-          window.location.href = '/superadmin';
-          return;
-        }
-
-        if (profile.role === 'admin') {
-          window.location.href = '/admin';
-          return;
-        }
-      } catch {
-        setLoading(false);
+        setError(formatAuthError(signInError));
+        return;
       }
-    }
 
-    setLoading(false);
-    // Strip expired param before redirecting
-    navigate(redirect === '/' ? '/' : redirect, { replace: true });
+      if (authData?.user) {
+        try {
+          const profile = await api.getMyProfile();
+
+          if (profile && profile.aktif === false) {
+            await supabase.auth.signOut();
+            setLoading(false);
+            setError('Akun Anda telah dinonaktifkan oleh administrator. Silakan hubungi admin untuk bantuan.');
+            return;
+          }
+
+          setLoading(false);
+
+          if (profile.role === 'super_admin') {
+            window.location.href = '/superadmin';
+            return;
+          }
+
+          if (profile.role === 'admin') {
+            window.location.href = '/admin';
+            return;
+          }
+        } catch (profileError) {
+          console.error('Error fetching profile on login:', profileError);
+          const profileMsg = profileError instanceof Error ? profileError.message : '';
+          if (profileMsg.toLowerCase().includes('failed to fetch') || !navigator.onLine) {
+            setError('Berhasil login, tetapi gagal menghubungi server data. Silakan muat ulang halaman.');
+          }
+        }
+      }
+
+      setLoading(false);
+      navigate(redirect === '/' ? '/' : redirect, { replace: true });
+    } catch (err) {
+      setLoading(false);
+      setError(formatAuthError(err));
+    }
   };
 
   return (
@@ -145,7 +265,7 @@ export default function LoginPage() {
           className="text-center mb-8"
         >
           <h1 className={`font-playfair italic text-3xl mb-1 ${isDark ? 'text-white' : 'text-stone-900'}`}>Masuk</h1>
-          <p className={`text-sm ${isDark ? 'text-white/50' : 'text-stone-500'}`}>Lanjutkan ke akun KerenTal Kita kamu</p>
+          <p className={`text-sm ${isDark ? 'text-white/50' : 'text-stone-500'}`}>Lanjutkan ke akun KerenTal Kita</p>
         </motion.div>
 
         <form
@@ -209,17 +329,18 @@ export default function LoginPage() {
           )}
 
           {error && (
-            <motion.p
+            <motion.div
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              className={`text-xs px-3 py-2 rounded-xl ${
+              className={`text-xs px-3.5 py-2.5 rounded-xl flex items-start gap-2.5 ${
                 isDark
                   ? 'bg-red-500/10 border border-red-500/20 text-red-400'
                   : 'bg-red-50 border border-red-200 text-red-600'
               }`}
             >
-              {error}
-            </motion.p>
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{error}</span>
+            </motion.div>
           )}
 
           <motion.div
@@ -255,17 +376,30 @@ export default function LoginPage() {
                 Lupa password?
               </button>
             </div>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={`w-full rounded-xl px-4 py-3 text-sm transition-all duration-200 focus:outline-none ${
-                isDark ? 'login-input-dark' : 'login-input-light'
-              }`}
-              placeholder="********"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`w-full rounded-xl pl-4 pr-11 py-3 text-sm transition-all duration-200 focus:outline-none ${
+                  isDark ? 'login-input-dark' : 'login-input-light'
+                }`}
+                placeholder="********"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className={`absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                  isDark ? 'text-white/40 hover:text-white/80' : 'text-stone-400 hover:text-stone-700'
+                }`}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </motion.div>
 
           {/* Google Sign In Button */}

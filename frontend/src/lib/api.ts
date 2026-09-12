@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001';
+// Jika VITE_API_URL tidak diset, gunakan string kosong (path relatif) agar request otomatis melewati reverse proxy (Vite / ngrok) tanpa hardcode localhost:3001
+const API_URL = import.meta.env.VITE_API_URL ? String(import.meta.env.VITE_API_URL) : '';
 
 // Kategori diperluas dari 4 ke 8 di v1.3
 export type Kategori = 'city_car' | 'hatchback' | 'suv' | 'mpv' | 'minibus' | 'pickup' | 'mewah' | 'electric';
@@ -14,9 +15,19 @@ export interface CarImage {
   urutan: number;
 }
 
+export interface CarBlockedDate {
+  id: string;
+  carId: string;
+  tanggalMulai: string;
+  tanggalSelesai: string;
+  alasan?: string | null;
+  createdAt: string;
+}
+
 export interface Car {
   id: string;
   nama: string;
+  nomorPlat?: string | null; // Nomor polisi kendaraan, e.g. "B 1234 XYZ"
   kategori: Kategori;
   transmisi: Transmisi;
   tipeSewa: TipeSewa;
@@ -32,6 +43,8 @@ export interface Car {
     id: string;
     namaInstansi: string;
     status: 'aktif' | 'nonaktif';
+    alamat?: string;
+    noHpPic?: string;
   };
 }
 
@@ -62,6 +75,7 @@ export interface Profile {
   role: 'customer' | 'admin' | 'super_admin';
   noKtp: string | null;
   noSim: string | null;
+  alamat: string | null;
   dokumenKtpUrl: string | null;
   dokumenSimUrl: string | null;
   dokumenVerified: boolean;
@@ -258,6 +272,7 @@ export interface PaginatedResponse<T> {
 export interface SuperAdminCar {
   id: string;
   nama: string;
+  nomorPlat?: string | null;
   kategori: KategoriMobil;
   transmisi: Transmisi;
   tipeSewa: TipeSewa;
@@ -266,9 +281,11 @@ export interface SuperAdminCar {
   status: StatusMobil;
   statusApproval: StatusApproval;
   alasanPenolakan: string | null;
+  deskripsi?: string | null;
   createdAt: string;
   images: CarImage[];
   instansi: { id: string; namaInstansi: string };
+  _count?: { bookings: number };
 }
 
 export interface Disbursement {
@@ -365,6 +382,16 @@ export interface DashboardActivity {
   createdAt: string;
 }
 
+export interface InstansiActivity {
+  id: string;
+  tipe: 'pesanan' | 'armada';
+  judul: string;
+  deskripsi: string;
+  status: string;
+  waktu: string;
+  detailUrl?: string;
+}
+
 export interface ApprovalSummary {
   rentalCompanies: number;
   vehicles: number;
@@ -403,6 +430,7 @@ export interface PopularVehicle {
   thumbnail: string | null;
   bookingCount: number;
   available: boolean;
+  namaInstansi?: string | null;
 }
 
 export interface CommissionStats {
@@ -461,6 +489,7 @@ export interface SuperAdminBookingItem {
   car: {
     id: string;
     nama: string;
+    nomorPlat?: string | null;
     images: { url: string }[];
   };
   profile: { id: string; nama: string };
@@ -551,6 +580,7 @@ export interface InstansiDisbursementSummary {
 
 export interface CarInput {
   nama: string;
+  nomorPlat?: string | null;
   kategori: Kategori;
   transmisi: Transmisi;
   tipeSewa: TipeSewa;
@@ -595,6 +625,31 @@ export function onSessionExpired(callback: () => void) {
   return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handler);
 }
 
+// Mutex / promise share untuk token refresh agar tidak terjadi duplicate refresh request secara bersamaan
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshSessionToken(): Promise<string | null> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error || !data.session) {
+        return null;
+      }
+      return data.session.access_token;
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 /**
  * Fetch wrapper ke Express API. Menyisipkan Bearer token dari sesi
  * Supabase yang sedang aktif (kalau ada) — dibutuhkan endpoint
@@ -602,23 +657,44 @@ export function onSessionExpired(callback: () => void) {
  */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  let token = data.session?.access_token;
 
   if (import.meta.env.DEV) {
     console.log(`[API] ${init?.method ?? 'GET'} ${path}`);
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
+  let res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
+      'ngrok-skip-browser-warning': 'true',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
+
+  // Jika dapat 401 dan sebelumnya memiliki token (pengguna login), coba silent refresh token & retry
+  if (res.status === 401 && token) {
+    const newToken = await refreshSessionToken();
+    if (newToken) {
+      token = newToken;
+      res = await fetch(`${API_URL}${path}`, {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'ngrok-skip-browser-warning': 'true',
+          Authorization: `Bearer ${newToken}`,
+          ...init?.headers,
+        },
+      });
+    }
+  }
 
   const body = await res.json().catch(() => null);
 
@@ -627,9 +703,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    // Handle 401 - session expired, show popup via SessionExpiredContext
+    // Handle 401 - jika token gagal di-refresh dan sesi memang kedaluwarsa
     if (res.status === 401) {
-      dispatchSessionExpired();
+      if (token) {
+        dispatchSessionExpired();
+      }
       throw new ApiError('Sesi berakhir. Silakan login kembali.', 401);
     }
     throw new ApiError(body?.error ?? `Request gagal (${res.status})`, res.status);
@@ -641,23 +719,44 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 // Wrapper for endpoints that return additional metadata (pagination, summary, etc.)
 async function apiFetchFull<T>(path: string, init?: RequestInit): Promise<T> {
   const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  let token = data.session?.access_token;
 
-  const res = await fetch(`${API_URL}${path}`, {
+  let res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'ngrok-skip-browser-warning': 'true',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   });
 
+  // Jika dapat 401 dan sebelumnya memiliki token (pengguna login), coba silent refresh token & retry
+  if (res.status === 401 && token) {
+    const newToken = await refreshSessionToken();
+    if (newToken) {
+      token = newToken;
+      res = await fetch(`${API_URL}${path}`, {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'ngrok-skip-browser-warning': 'true',
+          Authorization: `Bearer ${newToken}`,
+          ...init?.headers,
+        },
+      });
+    }
+  }
+
   const body = await res.json().catch(() => null);
 
   if (!res.ok) {
     if (res.status === 401) {
-      dispatchSessionExpired();
+      if (token) {
+        dispatchSessionExpired();
+      }
       throw new ApiError('Sesi berakhir. Silakan login kembali.', 401);
     }
     throw new ApiError(body?.error ?? `Request gagal (${res.status})`, res.status);
@@ -679,6 +778,15 @@ export const api = {
   getCar: (id: string) => apiFetch<Car>(`/api/cars/${id}`),
 
   getCarAvailability: (id: string) => apiFetch<BookedRange[]>(`/api/cars/${id}/availability`),
+
+  getPublicStats: () =>
+    apiFetch<{
+      totalArmada: number;
+      totalLokasi: number;
+      totalBookingSelesai: number;
+      totalReview: number;
+      kepuasanPersen: number;
+    }>('/api/public/stats'),
 
   getMyProfile: () => apiFetch<Profile>('/api/profiles/me'),
 
@@ -703,6 +811,8 @@ export const api = {
     apiFetch<InstansiRevenueSeries>(
       `/api/instansi/dashboard/revenue-series?period=${period}`
     ),
+  getInstansiActivities: () =>
+    apiFetch<InstansiActivity[]>('/api/instansi/activities'),
 
   // ── Admin: Notifications ──
   getAdminNotifications: (unreadOnly?: boolean) =>
@@ -717,14 +827,15 @@ export const api = {
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.cari) qs.set('cari', params.cari);
     const query = qs.toString();
-    return apiFetch<PaginatedResponse<Car>>(`/api/admin/cars${query ? `?${query}` : ''}`);
+    return apiFetchFull<PaginatedResponse<Car>>(`/api/admin/cars${query ? `?${query}` : ''}`);
   },
   getAdminCar: (id: string) => apiFetch<Car>(`/api/admin/cars/${id}`),
   createAdminCar: (input: CarInput) =>
     apiFetch<Car>('/api/admin/cars', { method: 'POST', body: JSON.stringify(input) }),
   updateAdminCar: (id: string, input: Partial<CarInput>) =>
     apiFetch<Car>(`/api/admin/cars/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
-  deleteAdminCar: (id: string) => apiFetch<Car>(`/api/admin/cars/${id}`, { method: 'DELETE' }),
+  deleteAdminCar: (id: string) =>
+    apiFetch<{ message: string; deletedPermanently?: boolean }>(`/api/admin/cars/${id}`, { method: 'DELETE' }),
   addCarImage: (carId: string, input: { url: string; urutan?: number }) =>
     apiFetch<CarImage>(`/api/admin/cars/${carId}/images`, {
       method: 'POST',
@@ -732,6 +843,19 @@ export const api = {
     }),
   deleteCarImage: (carId: string, imageId: string) =>
     apiFetch<CarImage>(`/api/admin/cars/${carId}/images/${imageId}`, { method: 'DELETE' }),
+
+  // ── Admin: Tanggal Ketersediaan Armada ──
+  listCarBlockedDates: (carId: string) =>
+    apiFetch<CarBlockedDate[]>(`/api/admin/cars/${carId}/blocked-dates`),
+  addCarBlockedDate: (carId: string, input: { tanggalMulai: string; tanggalSelesai: string; alasan?: string }) =>
+    apiFetch<CarBlockedDate>(`/api/admin/cars/${carId}/blocked-dates`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  deleteCarBlockedDate: (carId: string, blockedId: string) =>
+    apiFetch<{ success: boolean }>(`/api/admin/cars/${carId}/blocked-dates/${blockedId}`, {
+      method: 'DELETE',
+    }),
 
   // ── Admin: Pesanan (F11) ──
   listAdminBookings: (params: { status?: StatusBooking; dari?: string; sampai?: string; limit?: number } = {}) => {
@@ -741,7 +865,7 @@ export const api = {
     if (params.sampai) qs.set('sampai', params.sampai);
     if (params.limit) qs.set('limit', String(params.limit));
     const query = qs.toString();
-    return apiFetch<PaginatedAdminBookings>(`/api/admin/bookings${query ? `?${query}` : ''}`);
+    return apiFetchFull<PaginatedAdminBookings>(`/api/admin/bookings${query ? `?${query}` : ''}`);
   },
   updateBookingStatus: (id: string, status: StatusBooking) =>
     apiFetch<Booking>(`/api/admin/bookings/${id}/status`, {
@@ -785,7 +909,7 @@ export const api = {
     apiFetch<Review>('/api/reviews', { method: 'POST', body: JSON.stringify(input) }),
 
   // ── Customer: Profil (F8) ──
-  updateMyProfile: (input: Partial<Pick<Profile, 'nama' | 'noHp' | 'noKtp' | 'noSim'>>) =>
+  updateMyProfile: (input: Partial<Pick<Profile, 'nama' | 'noHp' | 'noKtp' | 'noSim' | 'alamat'>>) =>
     apiFetch<Profile>('/api/profiles/me', { method: 'PATCH', body: JSON.stringify(input) }),
   saveDokumenReference: (tipe: 'ktp' | 'sim', storagePath: string) =>
     apiFetch<Profile>('/api/profiles/me/dokumen', {
@@ -889,17 +1013,40 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  // Armada Approval
+  // Armada Approval & Moderasi
   listApprovalCars: (params: { instansiId?: string } = {}) => {
     const qs = new URLSearchParams();
     if (params.instansiId) qs.set('instansiId', params.instansiId);
     const query = qs.toString();
     return apiFetch<SuperAdminCar[]>(`/api/superadmin/armada/approval${query ? `?${query}` : ''}`);
   },
+  listPublishedCars: (params: { instansiId?: string; search?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.instansiId) qs.set('instansiId', params.instansiId);
+    if (params.search) qs.set('search', params.search);
+    const query = qs.toString();
+    return apiFetch<SuperAdminCar[]>(`/api/superadmin/armada/published${query ? `?${query}` : ''}`);
+  },
+  listTakedownCars: (params: { instansiId?: string; search?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.instansiId) qs.set('instansiId', params.instansiId);
+    if (params.search) qs.set('search', params.search);
+    const query = qs.toString();
+    return apiFetch<SuperAdminCar[]>(`/api/superadmin/armada/takedown${query ? `?${query}` : ''}`);
+  },
   approveCar: (id: string, action: 'approve' | 'reject', alasan?: string) =>
     apiFetch<SuperAdminCar>(`/api/superadmin/armada/${id}/approval`, {
       method: 'PATCH',
       body: JSON.stringify({ action, alasan }),
+    }),
+  takedownCar: (id: string, alasan: string) =>
+    apiFetch<{ data: SuperAdminCar; message: string }>(`/api/superadmin/armada/${id}/takedown`, {
+      method: 'PATCH',
+      body: JSON.stringify({ alasan }),
+    }),
+  restoreCar: (id: string) =>
+    apiFetch<{ data: SuperAdminCar; message: string }>(`/api/superadmin/armada/${id}/restore`, {
+      method: 'PATCH',
     }),
 
   // Disbursement Monitoring
@@ -1054,6 +1201,100 @@ export const api = {
         method: 'POST',
       }
     ),
+
+  // ==========================================
+  // Customer Messages API
+  // ==========================================
+  listCustomerConversations: () =>
+    apiFetch<Conversation[]>('/api/messages/conversations'),
+
+  getCustomerUnreadCount: () =>
+    apiFetch<{ unreadCount: number }>('/api/messages/unread-count'),
+
+  createCustomerConversation: (data: { instansiId: string; carId?: string }) =>
+    apiFetch<Conversation>('/api/messages/conversations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
+  getCustomerConversation: (id: string) =>
+    apiFetch<Conversation>(`/api/messages/conversations/${id}`),
+
+  sendCustomerMessage: (id: string, data: { pesan: string; carId?: string }) =>
+    apiFetch<ChatMessage>(`/api/messages/conversations/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
+  // ==========================================
+  // Admin Messages API
+  // ==========================================
+  listAdminConversations: () =>
+    apiFetch<Conversation[]>('/api/admin/messages/conversations'),
+
+  getAdminUnreadCount: () =>
+    apiFetch<{ unreadCount: number }>('/api/admin/messages/unread-count'),
+
+  getAdminConversation: (id: string) =>
+    apiFetch<Conversation>(`/api/admin/messages/conversations/${id}`),
+
+  sendAdminMessage: (id: string, data: { pesan: string }) =>
+    apiFetch<ChatMessage>(`/api/admin/messages/conversations/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
+    }),
 };
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderRole: 'customer' | 'admin' | 'super_admin';
+  pesan: string;
+  carId?: string | null;
+  isRead: boolean;
+  createdAt: string;
+  car?: {
+    id: string;
+    nama: string;
+    hargaPerHari: string;
+    images?: { url: string }[];
+  } | null;
+}
+
+export interface Conversation {
+  id: string;
+  customerId: string;
+  instansiId: string;
+  carId?: string | null;
+  lastMessageAt: string;
+  lastMessageText?: string | null;
+  unreadCustomerCount: number;
+  unreadAdminCount: number;
+  createdAt: string;
+  updatedAt: string;
+  instansi?: {
+    id: string;
+    namaInstansi: string;
+    noHpPic?: string;
+    alamat?: string;
+  };
+  customer?: {
+    id: string;
+    nama: string;
+    email: string;
+    noHp?: string;
+  };
+  car?: {
+    id: string;
+    nama: string;
+    hargaPerHari: string;
+    images?: { url: string }[];
+  } | null;
+  messages?: ChatMessage[];
+}
 
 export { ApiError };

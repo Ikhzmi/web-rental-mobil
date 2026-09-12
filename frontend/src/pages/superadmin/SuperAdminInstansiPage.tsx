@@ -29,12 +29,13 @@ import { getGlassCardClass } from '../../hooks/useGlassStyles';
 // Status labels for filter display
 const INSTANSI_STATUS_LABELS: Record<string, string> = {
   aktif: 'Aktif',
-  menunggu_verifikasi: 'Menunggu',
   nonaktif: 'Nonaktif',
 };
 
 function StatusBadge({ status, isDark }: { status: StatusInstansi; isDark: boolean }) {
-  const config = getInstansiStatusConfig(status, isDark);
+  // Super Admin adalah role tertinggi, jika ada data lama menunggu_verifikasi tampilkan sebagai aktif
+  const normalizedStatus = status === 'menunggu_verifikasi' ? 'aktif' : status;
+  const config = getInstansiStatusConfig(normalizedStatus, isDark);
   const Icon = config.icon;
 
   return (
@@ -599,11 +600,12 @@ function EditInstansiModal({
   );
 }
 
-function InstansiCard({ instansi, index, onDelete, onEdit, isDark }: {
+function InstansiCard({ instansi, index, onDelete, onEdit, onToggleStatus, isDark }: {
   instansi: Instansi;
   index: number;
   onDelete: (id: string) => void;
   onEdit: (instansi: Instansi) => void;
+  onToggleStatus: (id: string, currentlyActive: boolean) => void;
   isDark: boolean;
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -614,6 +616,8 @@ function InstansiCard({ instansi, index, onDelete, onEdit, isDark }: {
       onDelete(instansi.id);
     }
   };
+
+  const isAktif = instansi.status === 'aktif' || instansi.status === 'menunggu_verifikasi';
 
   return (
     <motion.div
@@ -641,6 +645,21 @@ function InstansiCard({ instansi, index, onDelete, onEdit, isDark }: {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => onToggleStatus(instansi.id, isAktif)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all backdrop-blur-xl ${
+                !isAktif
+                  ? isDark
+                    ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                  : isDark
+                    ? 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/30'
+                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+              }`}
+            >
+              {!isAktif ? 'Aktifkan' : 'Nonaktifkan'}
+            </button>
+
             <button
               onClick={() => onEdit(instansi)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all backdrop-blur-xl ${
@@ -750,10 +769,20 @@ export default function SuperAdminInstansiPage() {
     },
   });
 
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, aktif }: { id: string; aktif: boolean }) =>
+      api.updateInstansiStatus(id, aktif),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['superadmin-instansi'] });
+    },
+    onError: (err: unknown) => {
+      alert(err instanceof Error ? err.message : 'Gagal mengubah status instansi');
+    },
+  });
+
   const stats = {
     total: instances?.length ?? 0,
-    aktif: instances?.filter(i => i.status === 'aktif').length ?? 0,
-    menunggu: instances?.filter(i => i.status === 'menunggu_verifikasi').length ?? 0,
+    aktif: instances?.filter(i => i.status === 'aktif' || i.status === 'menunggu_verifikasi').length ?? 0,
     nonaktif: instances?.filter(i => i.status === 'nonaktif').length ?? 0,
   };
 
@@ -790,18 +819,18 @@ export default function SuperAdminInstansiPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           {
+            key: '',
+            label: 'Semua Instansi',
+            value: stats.total,
+            icon: Building2,
+            activeBg: 'bg-white/[0.08]',
+          },
+          {
             key: 'aktif',
             label: 'Aktif',
             value: stats.aktif,
             icon: CheckCircle,
             activeBg: 'bg-emerald-500/10',
-          },
-          {
-            key: 'menunggu_verifikasi',
-            label: 'Menunggu',
-            value: stats.menunggu,
-            icon: AlertCircle,
-            activeBg: 'bg-amber-500/10',
           },
           {
             key: 'nonaktif',
@@ -815,7 +844,7 @@ export default function SuperAdminInstansiPage() {
           const isActive = filter === stat.key;
           return (
             <motion.button
-              key={stat.key}
+              key={stat.key || 'all'}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
@@ -856,7 +885,7 @@ export default function SuperAdminInstansiPage() {
         />
       </motion.div>
 
-      {/* Results count */}
+      {/* Counter & Active Filter */}
       {!isLoading && instances && instances.length > 0 && (
         <p className={`text-xs ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>
           Menampilkan {instances.length} instansi
@@ -892,6 +921,9 @@ export default function SuperAdminInstansiPage() {
               index={i}
               isDark={isDark}
               onEdit={setEditingInstansi}
+              onToggleStatus={(id, isAktif) => {
+                toggleStatusMutation.mutate({ id, aktif: !isAktif });
+              }}
               onDelete={(id) => {
                 if (confirm(`Hapus instansi "${instansi.namaInstansi}"?\n\nTindakan ini tidak dapat dibatalkan.`)) {
                   deleteMutation.mutate(id);

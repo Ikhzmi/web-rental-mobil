@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { motion, AnimatePresence } from 'framer-motion';
 import Nav from './Nav';
+import ChatWidget from './chat/ChatWidget';
 
 export default function Layout() {
   const { pathname } = useLocation();
@@ -33,6 +34,7 @@ export default function Layout() {
           <Outlet />
         </motion.div>
       </AnimatePresence>
+      <ChatWidget />
     </div>
   );
 }

@@ -11,8 +11,6 @@ const SessionExpiredContext = createContext<SessionExpiredContextType | undefine
 
 // Custom event name — must match the one in api.ts
 const SESSION_EXPIRED_EVENT = 'session:expired';
-// Timeout 30 menit ketika tidak ada aktivitas/tidak membuka web
-const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'kerental_last_activity';
 
 export function useSessionExpired() {
@@ -35,51 +33,21 @@ export function SessionExpiredProvider({ children }: { children: ReactNode }) {
     supabase.auth.signOut().catch(() => {});
   }, []);
 
-  // Function to check if 30 minutes of inactivity has elapsed
-  const checkInactivity = useCallback(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        localStorage.removeItem(LAST_ACTIVITY_KEY);
-        return;
-      }
-
-      const lastActivityStr = localStorage.getItem(LAST_ACTIVITY_KEY);
-      const now = Date.now();
-
-      if (lastActivityStr) {
-        const lastActivity = parseInt(lastActivityStr, 10);
-        if (now - lastActivity >= INACTIVITY_TIMEOUT_MS) {
-          handleExpiration();
-          return;
-        }
-      } else {
-        localStorage.setItem(LAST_ACTIVITY_KEY, now.toString());
-      }
-    } catch {
-      // Ignore session check errors
-    }
-  }, [handleExpiration]);
+  // Update activity timestamp ke waktu sekarang
+  const recordActivity = useCallback(() => {
+    localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
+  }, []);
 
   // Track user activity (mousemove, keydown, click, scroll, touchstart)
   useEffect(() => {
     let lastUpdate = 0;
-    const THROTTLE_MS = 5000; // Throttle localStorage update to every 5s max
+    const THROTTLE_MS = 5000; // Throttle ke localStorage maksimal setiap 5 detik
 
     const handleUserActivity = () => {
       const now = Date.now();
       if (now - lastUpdate > THROTTLE_MS) {
         lastUpdate = now;
-
-        const lastActivityStr = localStorage.getItem(LAST_ACTIVITY_KEY);
-        if (lastActivityStr) {
-          const lastActivity = parseInt(lastActivityStr, 10);
-          if (now - lastActivity >= INACTIVITY_TIMEOUT_MS) {
-            checkInactivity();
-            return;
-          }
-        }
-        localStorage.setItem(LAST_ACTIVITY_KEY, now.toString());
+        recordActivity();
       }
     };
 
@@ -89,19 +57,21 @@ export function SessionExpiredProvider({ children }: { children: ReactNode }) {
     return () => {
       events.forEach((evt) => window.removeEventListener(evt, handleUserActivity));
     };
-  }, [checkInactivity]);
+  }, [recordActivity]);
 
-  // Periodic check (every 10 seconds) & check on tab visibility or window focus
+  // Heartbeat: Selama tab terbuka dan terlihat, perbarui aktivitas secara otomatis setiap 1 menit
   useEffect(() => {
-    checkInactivity();
+    recordActivity();
 
     const interval = setInterval(() => {
-      checkInactivity();
-    }, 10_000);
+      if (document.visibilityState === 'visible') {
+        recordActivity();
+      }
+    }, 60_000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        checkInactivity();
+        recordActivity();
       }
     };
 
@@ -113,9 +83,9 @@ export function SessionExpiredProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
     };
-  }, [checkInactivity]);
+  }, [recordActivity]);
 
-  // Listen for SESSION_EXPIRED_EVENT dispatched by api.ts on 401
+  // Listen for SESSION_EXPIRED_EVENT dispatched by api.ts saat token kedaluwarsa & gagal refresh
   useEffect(() => {
     const handler = () => handleExpiration();
     window.addEventListener(SESSION_EXPIRED_EVENT, handler);
@@ -128,14 +98,14 @@ export function SessionExpiredProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT') {
         setIsExpired(false);
         localStorage.removeItem(LAST_ACTIVITY_KEY);
-      } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+      } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
         setIsExpired(false);
-        localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
+        recordActivity();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [recordActivity]);
 
   const handleLogin = useCallback(async () => {
     setIsExpired(false);

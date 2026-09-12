@@ -574,3 +574,123 @@ instansiRouter.get('/disbursements/:id', async (req, res) => {
     res.status(500).json({ error: 'Gagal mengambil detail pencairan' });
   }
 });
+
+/**
+ * GET /api/instansi/activities
+ * Log aktivitas lengkap untuk admin instansi (pesanan, status log, armada)
+ */
+instansiRouter.get('/activities', async (req, res) => {
+  const instansiId = req.instansiScope!.instansiId;
+
+  try {
+    const [recentBookings, statusLogs, recentCars] = await Promise.all([
+      // 1. Pesanan terbaru
+      prisma.booking.findMany({
+        where: { car: { instansiId } },
+        include: {
+          car: { select: { nama: true } },
+          profile: { select: { nama: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+
+      // 2. Log perubahan status pesanan
+      prisma.bookingStatusLog.findMany({
+        where: { booking: { car: { instansiId } } },
+        include: {
+          booking: {
+            include: {
+              car: { select: { nama: true } },
+              profile: { select: { nama: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+
+      // 3. Status armada terbaru
+      prisma.car.findMany({
+        where: { instansiId },
+        select: {
+          id: true,
+          nama: true,
+          status: true,
+          statusApproval: true,
+          alasanPenolakan: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 15,
+      }),
+    ]);
+
+    const activities: Array<{
+      id: string;
+      tipe: 'pesanan' | 'armada';
+      judul: string;
+      deskripsi: string;
+      status: string;
+      waktu: string;
+      detailUrl?: string;
+    }> = [];
+
+    // Map status logs
+    for (const log of statusLogs) {
+      activities.push({
+        id: `log-${log.id}`,
+        tipe: 'pesanan',
+        judul: `Update Status: ${log.booking?.car?.nama ?? 'Armada'}`,
+        deskripsi: `Pesanan oleh ${log.booking?.profile?.nama ?? 'Pelanggan'} diperbarui ke status "${log.statusBaru.replace('_', ' ')}"`,
+        status: log.statusBaru,
+        waktu: log.createdAt.toISOString(),
+        detailUrl: `/admin/pesanan/${log.bookingId}`,
+      });
+    }
+
+    // Map bookings
+    for (const b of recentBookings) {
+      activities.push({
+        id: `book-${b.id}`,
+        tipe: 'pesanan',
+        judul: `Booking Baru: ${b.car?.nama ?? 'Armada'}`,
+        deskripsi: `Pesanan dibuat oleh ${b.profile?.nama ?? 'Pelanggan'} (${b.lokasiAmbil} ➔ ${b.lokasiKembali})`,
+        status: b.status,
+        waktu: b.createdAt.toISOString(),
+        detailUrl: `/admin/pesanan/${b.id}`,
+      });
+    }
+
+    // Map cars
+    for (const c of recentCars) {
+      let desc = 'Armada didaftarkan ke sistem';
+      if (c.statusApproval === 'disetujui') {
+        desc = 'Armada telah disetujui Super Admin & tayang di katalog';
+      } else if (c.statusApproval === 'ditolak') {
+        desc = `Armada ditolak/ditakedown: ${c.alasanPenolakan || 'Melanggar ketentuan'}`;
+      } else if (c.status === 'nonaktif') {
+        desc = 'Armada dinonaktifkan dari katalog';
+      }
+
+      activities.push({
+        id: `car-${c.id}`,
+        tipe: 'armada',
+        judul: `Armada: ${c.nama}`,
+        deskripsi: desc,
+        status: c.statusApproval === 'disetujui' ? c.status : c.statusApproval,
+        waktu: c.createdAt.toISOString(),
+        detailUrl: '/admin/armada',
+      });
+    }
+
+    // Sort by timestamp desc and take top 30
+    activities.sort((a, b) => new Date(b.waktu).getTime() - new Date(a.waktu).getTime());
+    const topActivities = activities.slice(0, 30);
+
+    res.json({ data: topActivities });
+  } catch (error) {
+    console.error('GET /api/instansi/activities error:', error);
+    res.status(500).json({ error: 'Gagal mengambil data log aktivitas' });
+  }
+});

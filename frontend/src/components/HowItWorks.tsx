@@ -132,7 +132,7 @@ export default function HowItWorks() {
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (
-              <div key={step.number} className="step-card relative">
+              <div key={step.number} className="step-card relative z-10">
                 {/* Glass card */}
                 <div className={`
                   relative p-6 rounded-2xl overflow-hidden

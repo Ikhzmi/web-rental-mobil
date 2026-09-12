@@ -17,4 +17,10 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 // login, dan upload ke Storage — sesuai §5/§8 PRD. Pakai anon key, aman
 // untuk diekspos di browser; akses sebenarnya dibatasi oleh aturan
 // Auth/Storage di sisi Supabase.
-export const supabase = createClient(SUPABASE_URL ?? '', SUPABASE_ANON_KEY ?? '');
+export const supabase = createClient(SUPABASE_URL ?? '', SUPABASE_ANON_KEY ?? '', {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
+});

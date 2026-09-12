@@ -1,10 +1,11 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { SessionExpiredProvider } from './contexts/SessionExpiredContext';
+import { ChatProvider } from './context/ChatContext';
 import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
 import ComingSoonPage from './components/ComingSoonPage';
@@ -77,7 +78,8 @@ function App() {
           <ToastProvider>
             <BrowserRouter>
               <SessionExpiredProvider>
-                <Suspense fallback={<RouteFallback />}>
+                <ChatProvider>
+                  <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     {/* Admin — layout sendiri, OUTSIDE Layout untuk smooth navigation */}
                     <Route element={<RequireAdmin />}>
@@ -111,7 +113,8 @@ function App() {
                         <Route path="superadmin/reports" element={<SuperAdminReportsPage />} />
                         <Route path="superadmin/instansi" element={<SuperAdminInstansiPage />} />
                         <Route path="superadmin/admin" element={<SuperAdminAdminPage />} />
-                        <Route path="superadmin/armada/approval" element={<SuperAdminApprovalPage />} />
+                        <Route path="superadmin/armada" element={<SuperAdminApprovalPage />} />
+                        <Route path="superadmin/armada/approval" element={<Navigate to="/superadmin/armada?tab=approval" replace />} />
                         <Route path="superadmin/pencairan" element={<SuperAdminPencairanPage />} />
                       </Route>
                     </Route>
@@ -135,6 +138,7 @@ function App() {
                         <Route path="booking/:carId" element={<BookingPage />} />
                         <Route path="booking/:id/konfirmasi" element={<BookingConfirmationPage />} />
                         <Route path="booking/:id/bayar" element={<PaymentPage />} />
+                        <Route path="akun" element={<Navigate to="/akun/profil" replace />} />
                         <Route path="akun/pesanan" element={<AkunPesananPage />} />
                         <Route path="akun/pesanan/:id" element={<AkunPesananDetailPage />} />
                         <Route path="akun/profil" element={<AkunProfilPage />} />
@@ -153,7 +157,8 @@ function App() {
                     </Route>
                   </Routes>
                 </Suspense>
-              </SessionExpiredProvider>
+              </ChatProvider>
+            </SessionExpiredProvider>
             </BrowserRouter>
           </ToastProvider>
         </ThemeProvider>
