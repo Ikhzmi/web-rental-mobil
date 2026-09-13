@@ -201,6 +201,11 @@ export default function AkunProfilPage() {
   const [kodeposSuggestions, setKodeposSuggestions] = useState<KodeposResult[]>([]);
   const [saved, setSaved] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  // Bank account fields for refund
+  const [namaBank, setNamaBank] = useState('');
+  const [nomorRekening, setNomorRekening] = useState('');
+  const [namaPemilikRekening, setNamaPemilikRekening] = useState('');
+  const [bankSaved, setBankSaved] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -212,6 +217,9 @@ export default function AkunProfilPage() {
         setAlamatLengkap(profile.alamat);
         setAlamatJalan(profile.alamat);
       }
+      setNamaBank(profile.namaBank ?? '');
+      setNomorRekening(profile.nomorRekening ?? '');
+      setNamaPemilikRekening(profile.namaPemilikRekening ?? '');
     }
   }, [profile]);
 
@@ -270,6 +278,15 @@ export default function AkunProfilPage() {
       queryClient.invalidateQueries({ queryKey: ['my-profile'] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
+    },
+  });
+
+  const updateBankMutation = useMutation({
+    mutationFn: () => api.updateMyProfile({ namaBank: namaBank.trim(), nomorRekening: nomorRekening.trim(), namaPemilikRekening: namaPemilikRekening.trim() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-profile'] });
+      setBankSaved(true);
+      setTimeout(() => setBankSaved(false), 2500);
     },
   });
 
@@ -518,6 +535,72 @@ export default function AkunProfilPage() {
               onUploaded={() => queryClient.invalidateQueries({ queryKey: ['my-profile'] })}
               isDark={isDark}
             />
+          </div>
+        </motion.div>
+
+        {/* Rekening Bank untuk Refund */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18 }}
+          className={cardClass}
+        >
+          <h2 className={`text-xs uppercase tracking-wider mb-1 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+            Data Rekening Bank
+          </h2>
+          <p className={`text-xs mb-4 leading-relaxed ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
+            Digunakan untuk proses refund jika terjadi pembatalan pesanan yang sudah dikonfirmasi.
+            Potongan administrasi <span className="font-semibold text-amber-500">3%</span> berlaku untuk refund pesanan dikonfirmasi.
+          </p>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Nama Bank</label>
+              <input
+                value={namaBank}
+                onChange={(e) => setNamaBank(e.target.value)}
+                placeholder="Contoh: BCA, BRI, Mandiri, BNI"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Nomor Rekening</label>
+              <input
+                value={nomorRekening}
+                onChange={(e) => setNomorRekening(e.target.value.replace(/\D/g, ''))}
+                placeholder="Nomor rekening bank"
+                className={`${inputClass} font-mono tracking-wider`}
+              />
+            </div>
+            <div>
+              <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Nama Pemilik Rekening</label>
+              <input
+                value={namaPemilikRekening}
+                onChange={(e) => setNamaPemilikRekening(e.target.value)}
+                placeholder="Sesuai buku tabungan"
+                className={inputClass}
+              />
+            </div>
+
+            {updateBankMutation.isError && (
+              <p className={`text-xs px-3 py-2 rounded-lg ${
+                isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'
+              }`}>
+                Gagal menyimpan rekening. Silakan coba lagi.
+              </p>
+            )}
+            {bankSaved && <p className="text-emerald-500 text-xs font-medium">✓ Data rekening berhasil disimpan.</p>}
+
+            <button
+              type="button"
+              onClick={() => updateBankMutation.mutate()}
+              disabled={updateBankMutation.isPending}
+              className={`text-sm font-medium py-2.5 rounded-full flex items-center justify-center gap-2 transition-all disabled:opacity-60 ${
+                isDark ? 'bg-white text-zinc-900 hover:bg-zinc-100' : 'bg-zinc-800 hover:bg-zinc-900 text-white shadow-lg shadow-black/10'
+              }`}
+            >
+              {updateBankMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+              Simpan Rekening
+            </button>
           </div>
         </motion.div>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect as useEffectDash } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,7 +16,7 @@ import {
   type InstansiRevenueSeries,
   type InstansiActivity,
 } from '../../lib/api';
-import { formatRupiah } from '../../lib/pricing';
+import { formatRupiah, formatCompactRupiah } from '../../lib/pricing';
 import { SkeletonStatsGrid, SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { Sparklines, SparklinesLine } from 'react-sparklines';
@@ -31,11 +31,23 @@ const TIME_FILTERS = [
   { id: 'year', label: 'Tahun Ini' },
 ] as const;
 
+/** Hook sederhana untuk deteksi mobile (<768px) */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffectDash(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+}
+
 // Section 1: Stats Card - Clean style like SuperAdmin (no icon)
 
 function StatCard({
   label,
   value,
+  rawValue,
   change,
   sparklineData,
   caption,
@@ -44,6 +56,8 @@ function StatCard({
 }: {
   label: string;
   value: string | number;
+  /** Nilai numerik mentah (tanpa format) — dipakai untuk format compact di mobile. */
+  rawValue?: number;
   /** Persentase perubahan nyata vs kemarin. Undefined = tidak ada data historis
    *  yang jujur untuk dihitung, jadi badge tren tidak ditampilkan sama sekali
    *  (lebih baik daripada menampilkan angka rekaan). */
@@ -59,39 +73,45 @@ function StatCard({
   const isPositive = (change ?? 0) >= 0;
   const TrendIcon = isPositive ? TrendingUpIcon : TrendingDownIcon;
   const sparklineColor = isPositive ? '#22c55e' : '#ef4444';
+  const isMobile = useIsMobile();
+
+  // Pada mobile, gunakan format compact (Rp1,2jt, Rp250rb) untuk mencegah overflow
+  const displayValue = isMobile && rawValue !== undefined
+    ? formatCompactRupiah(rawValue)
+    : value;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
-      className={`p-5 rounded-2xl ${getGlassCardClass(isDark)}`}
+      className={`p-4 md:p-5 rounded-2xl overflow-hidden ${getGlassCardClass(isDark)}`}
     >
       {/* Label */}
-      <p className={`text-xs font-medium mb-2 ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{label}</p>
+      <p className={`text-[10px] md:text-xs font-medium mb-1.5 md:mb-2 truncate ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{label}</p>
 
-      {/* Value - Large Number */}
-      <p className={`text-3xl font-bold mb-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>{value}</p>
+      {/* Value - Large Number — enlarged font on mobile (text-2xl), standard size on desktop (md:text-3xl) */}
+      <p className={`text-2xl md:text-3xl font-bold mb-1.5 md:mb-2 truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{displayValue}</p>
 
       {/* Trend Badge + Sparkline on right (hanya jika ada data nyata) */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-1 min-w-0">
         {hasTrend ? (
-          <div className={`flex items-center gap-2 text-xs font-semibold px-2.5 py-1.5 rounded-full ${
+          <div className={`flex items-center gap-1 md:gap-2 text-[10px] md:text-xs font-semibold px-1.5 md:px-2.5 py-1 md:py-1.5 rounded-full min-w-0 truncate ${
             isPositive
               ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
               : isDark ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-600'
           }`}>
-            <TrendIcon size={12} />
-            {Math.abs(change ?? 0)}%
-            <span className={`font-normal ${isDark ? 'text-white/40' : 'text-slate-400'}`}>vs kemarin</span>
+            <TrendIcon size={12} className="shrink-0" />
+            <span className="shrink-0">{Math.abs(change ?? 0)}%</span>
+            <span className={`font-normal hidden sm:inline ${isDark ? 'text-white/40' : 'text-slate-400'}`}>vs kemarin</span>
           </div>
         ) : (
-          <span className={`text-xs ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{caption}</span>
+          <span className={`text-[10px] md:text-xs truncate ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{caption}</span>
         )}
 
         {/* Sparkline */}
         {sparklineData && (
-          <div className="h-8 w-20">
+          <div className="h-6 w-14 md:h-8 md:w-20 shrink-0">
             <Sparklines data={sparklineData} margin={2}>
               <SparklinesLine
                 style={{ strokeWidth: 2, fill: 'none' }}
@@ -641,29 +661,42 @@ function RentedVehiclesCard({ isDark }: { isDark: boolean }) {
             <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tidak ada mobil sedang disewa</p>
           </div>
         ) : (
-          displayBookings.map((booking) => (
-            <div key={booking.id} className="flex items-center gap-3 p-4">
-              <div className={`w-14 h-10 rounded-lg flex items-center justify-center ${
-                isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'
-              }`}>
-                <CarFront size={20} className={isDark ? 'text-white/50' : 'text-[#8B7355]/60'} />
+          displayBookings.map((booking) => {
+            const imageUrl = booking.car?.images?.[0]?.url;
+            return (
+              <div key={booking.id} className="flex items-center gap-3 p-4">
+                <div className="relative w-16 sm:w-20 aspect-[16/9] rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-transparent">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={booking.car?.nama ?? 'Mobil'}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center rounded-xl ${
+                      isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'
+                    }`}>
+                      <CarFront size={18} className={isDark ? 'text-white/50' : 'text-[#8B7355]/60'} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {booking.car?.nama ?? '-'}
+                  </p>
+                  <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                    {booking.profile?.nama ?? '-'}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-xs ${isDark ? 'text-white/40' : 'text-[#8B7355]/70'}`}>Selesai</p>
+                  <p className={`text-xs font-medium ${isDark ? 'text-white/60' : 'text-slate-700'}`}>
+                    {new Date(booking.tanggalSelesai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {booking.car?.nama ?? '-'}
-                </p>
-                <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                  {booking.profile?.nama ?? '-'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className={`text-xs ${isDark ? 'text-white/40' : 'text-[#8B7355]/70'}`}>Selesai</p>
-                <p className={`text-xs font-medium ${isDark ? 'text-white/60' : 'text-slate-700'}`}>
-                  {new Date(booking.tanggalSelesai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                </p>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
       <Link
@@ -1201,6 +1234,7 @@ export default function AdminDashboardPage() {
         <StatCard
           label="Pendapatan Hari Ini"
           value={formatRupiah(trends?.pendapatanHariIni ?? 0)}
+          rawValue={trends?.pendapatanHariIni ?? 0}
           change={trends?.trendPendapatan}
           sparklineData={trends?.sparklinePendapatan}
           index={0}
@@ -1209,6 +1243,8 @@ export default function AdminDashboardPage() {
         <StatCard
           label="Booking Aktif"
           value={activeBookings}
+          change={trends?.trendBookingAktif}
+          sparklineData={trends?.sparklineBookingAktif}
           caption="pesanan berjalan saat ini"
           index={1}
           isDark={isDark}
@@ -1216,6 +1252,8 @@ export default function AdminDashboardPage() {
         <StatCard
           label="Armada Tersedia"
           value={data.mobilTersedia}
+          change={trends?.trendArmadaTersedia}
+          sparklineData={trends?.sparklineArmadaTersedia}
           caption={`dari ${data.totalMobil} unit total`}
           index={2}
           isDark={isDark}
@@ -1223,7 +1261,10 @@ export default function AdminDashboardPage() {
         <StatCard
           label="Saldo Tertunda"
           value={formatRupiah(data.saldoTertunda)}
-          caption="menunggu pencairan"
+          rawValue={data.saldoTertunda}
+          change={trends?.trendSaldoTertunda}
+          sparklineData={trends?.sparklineSaldoTertunda}
+          caption={`bersih (setelah komisi ${data.komisiPlatformPersen ?? 10}%)`}
           index={3}
           isDark={isDark}
         />

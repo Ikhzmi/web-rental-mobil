@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -220,7 +253,7 @@ exports.bookingsRouter.get('/:id', async (req, res) => {
     }
     res.json({ data: booking });
 });
-/** PATCH /api/bookings/:id/cancel — hanya pemilik booking, hanya jika masih `pending`. */
+/** PATCH /api/bookings/:id/cancel — pemilik booking, hanya jika masih `menunggu_pembayaran` atau `dikonfirmasi` (H-1). */
 exports.bookingsRouter.patch('/:id/cancel', async (req, res) => {
     // SECURITY: Validate UUID format
     const idParse = uuidSchema.safeParse(req.params.id);
@@ -228,6 +261,7 @@ exports.bookingsRouter.patch('/:id/cancel', async (req, res) => {
         res.status(400).json({ error: 'Format ID booking tidak valid' });
         return;
     }
+    const { alasanPembatalan, rekeningRefund } = req.body;
     const booking = await prisma_1.prisma.booking.findUnique({ where: { id: req.params.id } });
     if (!booking) {
         res.status(404).json({ error: 'Booking tidak ditemukan' });
@@ -237,19 +271,37 @@ exports.bookingsRouter.patch('/:id/cancel', async (req, res) => {
         res.status(403).json({ error: 'Tidak berhak membatalkan booking ini' });
         return;
     }
-    if (booking.status !== 'menunggu_pembayaran') {
-        res.status(409).json({ error: 'Booking hanya bisa dibatalkan selagi menunggu pembayaran' });
+    const allowedStatuses = ['menunggu_pembayaran', 'dikonfirmasi'];
+    if (!allowedStatuses.includes(booking.status)) {
+        res.status(409).json({ error: 'Booking hanya bisa dibatalkan selagi menunggu pembayaran atau sudah dikonfirmasi (maks H-1)' });
         return;
+    }
+    // Untuk status dikonfirmasi: cek syarat H-1
+    if (booking.status === 'dikonfirmasi') {
+        const hariIni = new Date();
+        hariIni.setHours(0, 0, 0, 0);
+        const mulai = new Date(booking.tanggalMulai);
+        mulai.setHours(0, 0, 0, 0);
+        const selisihMs = mulai.getTime() - hariIni.getTime();
+        const selisihHari = selisihMs / (1000 * 60 * 60 * 24);
+        if (selisihHari < 1) {
+            res.status(409).json({ error: 'Pembatalan hanya bisa dilakukan maksimal H-1 sebelum tanggal mulai sewa' });
+            return;
+        }
     }
     const updated = await prisma_1.prisma.$transaction(async (tx) => {
         const b = await tx.booking.update({
             where: { id: booking.id },
-            data: { status: 'dibatalkan' },
+            data: {
+                status: 'dibatalkan',
+                ...(alasanPembatalan !== undefined ? { alasanPembatalan } : {}),
+                ...(rekeningRefund !== undefined ? { rekeningRefund } : {}),
+            },
         });
         await tx.bookingStatusLog.create({
             data: {
                 bookingId: booking.id,
-                statusLama: 'pending',
+                statusLama: booking.status,
                 statusBaru: 'dibatalkan',
                 diubahOleh: req.user.id,
             },
@@ -257,6 +309,108 @@ exports.bookingsRouter.patch('/:id/cancel', async (req, res) => {
         return b;
     });
     res.json({ data: updated });
+});
+/**
+ * POST /api/bookings/:id/reschedule
+ * Pemilik booking bisa mengubah tanggal sewa selama status masih `dikonfirmasi`
+ * dan tanggal baru tersedia (tidak terjadi double booking).
+ */
+exports.bookingsRouter.post('/:id/reschedule', async (req, res) => {
+    const idParse = uuidSchema.safeParse(req.params.id);
+    if (!idParse.success) {
+        res.status(400).json({ error: 'Format ID booking tidak valid' });
+        return;
+    }
+    const bodySchema = zod_1.z.object({
+        tanggalMulai: zod_1.z.coerce.date(),
+        tanggalSelesai: zod_1.z.coerce.date(),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ error: 'Tanggal tidak valid', detail: parsed.error.flatten() });
+        return;
+    }
+    const { tanggalMulai, tanggalSelesai } = parsed.data;
+    if (tanggalSelesai < tanggalMulai) {
+        res.status(400).json({ error: 'tanggal_selesai tidak boleh sebelum tanggal_mulai' });
+        return;
+    }
+    try {
+        const booking = await prisma_1.prisma.booking.findUnique({
+            where: { id: req.params.id },
+            include: { car: true },
+        });
+        if (!booking) {
+            res.status(404).json({ error: 'Booking tidak ditemukan' });
+            return;
+        }
+        if (booking.userId !== req.user.id) {
+            res.status(403).json({ error: 'Tidak berhak mengubah booking ini' });
+            return;
+        }
+        if (booking.status !== 'dikonfirmasi') {
+            res.status(409).json({ error: 'Reschedule hanya bisa dilakukan untuk booking berstatus Dikonfirmasi' });
+            return;
+        }
+        // Check availability excluding this booking
+        const conflictingBooking = await prisma_1.prisma.booking.findFirst({
+            where: {
+                carId: booking.carId,
+                id: { not: booking.id },
+                status: { notIn: ['dibatalkan'] },
+                tanggalMulai: { lte: tanggalSelesai },
+                tanggalSelesai: { gte: tanggalMulai },
+            },
+        });
+        if (conflictingBooking) {
+            res.status(409).json({ error: 'Tanggal baru tidak tersedia — sudah ada booking lain pada periode tersebut' });
+            return;
+        }
+        // Check blocked dates
+        const blockedConflict = await prisma_1.prisma.carBlockedDate.findFirst({
+            where: {
+                carId: booking.carId,
+                tanggalMulai: { lte: tanggalSelesai },
+                tanggalSelesai: { gte: tanggalMulai },
+            },
+        });
+        if (blockedConflict) {
+            res.status(409).json({ error: 'Tanggal baru tidak tersedia — kendaraan diblokir pada periode tersebut' });
+            return;
+        }
+        // Recalculate price for new dates
+        const { hitungRincianHarga } = await Promise.resolve().then(() => __importStar(require('../services/pricing.service')));
+        const existingAddons = await prisma_1.prisma.bookingAddon.findMany({ where: { bookingId: booking.id } });
+        const addonsInput = existingAddons.map(a => ({ jenis: a.jenis, harga: Number(a.harga) }));
+        const rincian = hitungRincianHarga(booking.car, tanggalMulai, tanggalSelesai, addonsInput);
+        const updated = await prisma_1.prisma.$transaction(async (tx) => {
+            const b = await tx.booking.update({
+                where: { id: booking.id },
+                data: {
+                    tanggalMulai,
+                    tanggalSelesai,
+                    hargaDasar: rincian.hargaDasar,
+                    totalAddon: rincian.totalAddon,
+                    totalHarga: rincian.totalHarga,
+                },
+            });
+            await tx.bookingStatusLog.create({
+                data: {
+                    bookingId: booking.id,
+                    statusLama: booking.status,
+                    statusBaru: booking.status, // status tetap, hanya tanggal berubah
+                    diubahOleh: req.user.id,
+                    catatan: `Reschedule: ${tanggalMulai.toISOString().slice(0, 10)} → ${tanggalSelesai.toISOString().slice(0, 10)}`,
+                },
+            });
+            return b;
+        });
+        res.json({ data: updated });
+    }
+    catch (err) {
+        console.error('POST /api/bookings/:id/reschedule error:', err);
+        res.status(500).json({ error: 'Gagal memproses reschedule' });
+    }
 });
 /**
  * POST /api/bookings/:id/checkout

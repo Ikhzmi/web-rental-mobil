@@ -27,11 +27,25 @@ export function SessionExpiredProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   // Handle session expiration — show popup, clear activity timestamp, then sign out
-  const handleExpiration = useCallback(() => {
+  const handleExpiration = useCallback(async () => {
     setIsExpired(true);
     localStorage.removeItem(LAST_ACTIVITY_KEY);
-    supabase.auth.signOut().catch(() => {});
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      // Ignore local sign out errors
+    }
   }, []);
+
+  // Auto-dismiss popup sesi berakhir setelah 5 detik
+  useEffect(() => {
+    if (isExpired) {
+      const timer = setTimeout(() => {
+        setIsExpired(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [isExpired]);
 
   // Update activity timestamp ke waktu sekarang
   const recordActivity = useCallback(() => {

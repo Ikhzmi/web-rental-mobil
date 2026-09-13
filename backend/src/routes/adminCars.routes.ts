@@ -91,13 +91,16 @@ const carBaseSchema = z.object({
   nomorPlat: z.string().trim().min(1).transform((v) => v.toUpperCase()).optional(),
   kategori: z.enum(['city_car', 'hatchback', 'suv', 'mpv', 'minibus', 'pickup', 'mewah', 'electric']),
   transmisi: z.enum(['manual', 'matic']),
+  bahanBakar: z.enum(['bensin', 'diesel', 'hybrid', 'electric']).default('bensin'),
   tipeSewa: z.enum(['lepas_kunci', 'dengan_sopir', 'keduanya']),
   hargaSopirPerHari: z.number().nonnegative().nullable().optional(),
+  hargaAntarJemput: z.number().nonnegative().nullable().optional(),
   kapasitasKursi: z.number().int().positive(),
   hargaPerHari: z.number().positive(),
   status: z.enum(['tersedia', 'maintenance', 'nonaktif']).default('tersedia'),
   deskripsi: z.string().optional(),
 });
+
 
 /** Validasi bisnis: tipeSewa yang butuh harga sopir wajib mengisinya (§9 PRD). */
 function validateTipeSewaHargaSopir(data: z.infer<typeof carBaseSchema>) {

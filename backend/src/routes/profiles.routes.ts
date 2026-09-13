@@ -10,13 +10,49 @@ profilesRouter.use(verifySupabaseToken);
 
 /** GET /api/profiles/me */
 profilesRouter.get('/me', asyncHandler(async (req, res) => {
-  const profile = await prisma.profile.findUnique({ where: { id: req.user!.id } });
+  try {
+    const profile = await prisma.profile.findUnique({ where: { id: req.user!.id } });
 
-  if (!profile) {
-    throw new AppError('Profil tidak ditemukan', 404);
+    if (!profile) {
+      throw new AppError('Profil tidak ditemukan', 404);
+    }
+
+    res.json({ data: profile });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+
+    console.error('[GET /api/profiles/me] Full fetch failed, falling back to core fields:', err);
+    const coreProfile = await prisma.profile.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        id: true,
+        email: true,
+        nama: true,
+        noHp: true,
+        role: true,
+        aktif: true,
+      },
+    });
+
+    if (!coreProfile) {
+      throw new AppError('Profil tidak ditemukan', 404);
+    }
+
+    res.json({
+      data: {
+        ...coreProfile,
+        alamat: null,
+        noKtp: null,
+        noSim: null,
+        dokumenKtpUrl: null,
+        dokumenSimUrl: null,
+        dokumenVerified: false,
+        namaBank: null,
+        nomorRekening: null,
+        namaPemilikRekening: null,
+      },
+    });
   }
-
-  res.json({ data: profile });
 }));
 
 const updateProfileSchema = z.object({
@@ -26,6 +62,9 @@ const updateProfileSchema = z.object({
   noKtp: z.string().trim().optional(),
   noSim: z.string().trim().optional(),
   alamat: z.string().trim().optional(),
+  namaBank: z.string().trim().optional(),
+  nomorRekening: z.string().trim().optional(),
+  namaPemilikRekening: z.string().trim().optional(),
 });
 
 /** PATCH /api/profiles/me */
@@ -35,7 +74,7 @@ profilesRouter.patch('/me', asyncHandler(async (req, res) => {
     throw new AppError('Data tidak valid', 400);
   }
 
-  const { alamat, noKtp, noSim, ...rest } = parsed.data;
+  const { alamat, noKtp, noSim, namaBank, nomorRekening, namaPemilikRekening, ...rest } = parsed.data;
 
   const updated = await prisma.profile.update({
     where: { id: req.user!.id },
@@ -44,6 +83,9 @@ profilesRouter.patch('/me', asyncHandler(async (req, res) => {
       ...(alamat !== undefined ? { alamat } : {}),
       ...(noKtp !== undefined ? { noKtp: noKtp || null } : {}),
       ...(noSim !== undefined ? { noSim: noSim || null } : {}),
+      ...(namaBank !== undefined ? { namaBank: namaBank || null } : {}),
+      ...(nomorRekening !== undefined ? { nomorRekening: nomorRekening || null } : {}),
+      ...(namaPemilikRekening !== undefined ? { namaPemilikRekening: namaPemilikRekening || null } : {}),
     },
   });
   res.json({ data: updated });

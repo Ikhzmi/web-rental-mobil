@@ -66,8 +66,8 @@ export async function verifySupabaseToken(
     return;
   }
 
-  if (!profile.aktif) {
-    res.status(403).json({ error: 'Akun ini telah dinonaktifkan. Hubungi admin.' });
+  if (!profile.aktif && req.method !== 'GET') {
+    res.status(403).json({ error: 'Akun Anda telah dinonaktifkan. Silakan hubungi KerenTal Kita.' });
     return;
   }
 

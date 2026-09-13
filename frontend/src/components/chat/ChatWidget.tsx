@@ -58,10 +58,10 @@ export default function ChatWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.95 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className={`fixed bottom-5 right-5 sm:right-6 z-50 w-[calc(100vw-2.5rem)] sm:w-[380px] h-[540px] max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border ${
+            className={`fixed bottom-5 right-5 sm:right-6 z-50 w-[calc(100vw-2.5rem)] sm:w-[380px] h-[540px] max-h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border transition-all ${
               isDark
-                ? 'bg-neutral-900/95 backdrop-blur-2xl border-white/10 text-white shadow-black/60'
-                : 'bg-white/95 backdrop-blur-2xl border-neutral-200 text-neutral-900 shadow-neutral-400/40'
+                ? 'sa-glass-dark border-white/15 text-white shadow-2xl shadow-black/80'
+                : 'sa-glass-light border-white/80 text-neutral-900 shadow-2xl shadow-slate-900/15'
             }`}
           >
             {activeConversationId ? (
@@ -466,14 +466,14 @@ function ActiveChatRoom({
                   </div>
                 )}
 
-                {/* Message Bubble */}
+                {/* Message Bubble — Liquid Glass */}
                 <div
                   className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-xs leading-relaxed break-words shadow-xs ${
                     isCustomer
-                      ? 'bg-gradient-to-tr from-orange-600 to-amber-600 text-white rounded-br-xs'
+                      ? 'bg-gradient-to-tr from-orange-600 to-amber-600 text-white rounded-br-xs shadow-md shadow-orange-600/20'
                       : isDark
-                        ? 'bg-white/10 text-white rounded-bl-xs border border-white/10'
-                        : 'bg-neutral-100 text-neutral-900 rounded-bl-xs border border-neutral-200/60'
+                        ? 'sa-glass-dark text-white rounded-bl-xs border border-white/15'
+                        : 'sa-glass-light text-neutral-900 rounded-bl-xs border border-white/80 shadow-sm'
                   }`}
                 >
                   <p>{msg.pesan}</p>

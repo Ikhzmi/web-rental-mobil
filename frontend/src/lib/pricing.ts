@@ -69,3 +69,16 @@ export function estimasiHarga(
 export function formatRupiah(value: number): string {
   return `Rp${value.toLocaleString('id-ID')}`;
 }
+
+export function formatCompactRupiah(value: number): string {
+  if (!value || isNaN(value)) return 'Rp0';
+  if (value >= 1_000_000) {
+    const jt = value / 1_000_000;
+    return `Rp${jt % 1 === 0 ? jt : jt.toFixed(1)}jt`;
+  }
+  if (value >= 1_000) {
+    const rb = value / 1_000;
+    return `Rp${rb % 1 === 0 ? rb : rb.toFixed(0)}rb`;
+  }
+  return `Rp${value}`;
+}

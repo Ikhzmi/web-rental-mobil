@@ -55,6 +55,15 @@ enum Transmisi {
   @@map("transmisi")
 }
 
+enum BahanBakar {
+  bensin
+  diesel
+  hybrid
+  electric
+
+  @@map("bahan_bakar")
+}
+
 enum TipeSewa {
   lepas_kunci
   dengan_sopir
@@ -156,9 +165,12 @@ model Profile {
   noSim           String?  @map("no_sim")
   dokumenKtpUrl   String?  @map("dokumen_ktp_url")
   dokumenSimUrl   String?  @map("dokumen_sim_url")
-  dokumenVerified Boolean  @default(false) @map("dokumen_verified")
   aktif           Boolean  @default(true)
   lastSeenAt      DateTime? @map("last_seen_at")
+  namaBank            String?  @map("nama_bank")
+  nomorRekening       String?  @map("nomor_rekening")
+  namaPemilikRekening String?  @map("nama_pemilik_rekening")
+  dokumenVerified Boolean  @default(false) @map("dokumen_verified")
   createdAt       DateTime @default(now()) @map("created_at")
 
   /// BARU v1.3: Relasi ke instansi untuk admin
@@ -185,8 +197,10 @@ model Car {
   nomorPlat          String?       @map("nomor_plat") // Nomor polisi kendaraan, e.g. "B 1234 XYZ"
   kategori           KategoriMobil
   transmisi          Transmisi
+  bahanBakar         BahanBakar    @default(bensin) @map("bahan_bakar")
   tipeSewa           TipeSewa      @map("tipe_sewa")
   hargaSopirPerHari  Decimal?      @map("harga_sopir_per_hari") @db.Decimal(12, 2)
+  hargaAntarJemput   Decimal?      @map("harga_antar_jemput") @db.Decimal(12, 2)
   kapasitasKursi     Int           @map("kapasitas_kursi")
   hargaPerHari       Decimal       @map("harga_per_hari") @db.Decimal(12, 2)
   status             StatusMobil   @default(tersedia)
@@ -257,6 +271,8 @@ model Booking {
   totalHarga     Decimal       @map("total_harga") @db.Decimal(12, 2)
   /// Default 'menunggu_pembayaran' karena menunggu konfirmasi dari payment gateway
   status         StatusBooking @default(menunggu_pembayaran)
+  alasanPembatalan String?       @map("alasan_pembatalan")
+  rekeningRefund   String?       @map("rekening_refund")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
@@ -296,6 +312,7 @@ model BookingStatusLog {
   statusLama  String   @map("status_lama")
   statusBaru  String   @map("status_baru")
   diubahOleh  String   @map("diubah_oleh") @db.Uuid
+  catatan     String?  @map("catatan")
   createdAt   DateTime @default(now()) @map("created_at")
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)

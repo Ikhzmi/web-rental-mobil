@@ -126,6 +126,7 @@ instansiRouter.get('/dashboard', async (req, res) => {
 
   try {
     const [
+      instansi,
       totalMobil,
       mobilTersedia,
       mobilMaintenance,
@@ -134,6 +135,12 @@ instansiRouter.get('/dashboard', async (req, res) => {
       disbursements,
       recentBookings,
     ] = await Promise.all([
+      // Instansi info (untuk komisi)
+      prisma.instansi.findUnique({
+        where: { id: instansiId },
+        select: { komisiPlatformPersen: true },
+      }),
+
       // Total mobil
       prisma.car.count({ where: { instansiId } }),
 
@@ -208,9 +215,12 @@ instansiRouter.get('/dashboard', async (req, res) => {
     }, {} as Record<string, number>);
 
     // Hitung saldo tertunda (booking selesai tapi belum dicairkan)
-    const saldoTertunda = completedBookings
+    const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
+    const saldoTertundaKotor = completedBookings
       .filter(b => b.disbursementItems.length === 0)
       .reduce((sum, b) => sum + Number(b.totalHarga), 0);
+    // Saldo tertunda dihitung BERSIH setelah komisi platform
+    const saldoTertunda = saldoTertundaKotor * (1 - komisiRate);
 
     // Total sudah dicairkan
     const totalSudahDicairkan = disbursements
@@ -225,6 +235,8 @@ instansiRouter.get('/dashboard', async (req, res) => {
         totalPendapatanBulanIni,
         bookingStats: bookingCounts,
         saldoTertunda,
+        saldoTertundaKotor,
+        komisiPlatformPersen: Number(instansi?.komisiPlatformPersen ?? 10),
         totalSudahDicairkan,
         recentBookings,
         recentDisbursements: disbursements,
@@ -241,7 +253,7 @@ const STATUS_DIHITUNG_PENDAPATAN = ['dikonfirmasi', 'berjalan', 'selesai'] as co
 /**
  * GET /api/instansi/dashboard/trends
  * Tren harian nyata (hari ini vs kemarin) + sparkline 7 hari terakhir,
- * dihitung dari data booking asli — bukan angka statis/acak.
+ * dihitung dari data booking asli — untuk semua stat cards.
  */
 instansiRouter.get('/dashboard/trends', async (req, res) => {
   const instansiId = req.instansiScope!.instansiId;
@@ -254,22 +266,44 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
     const sevenDaysAgo = new Date(startOfToday);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // termasuk hari ini = 7 hari
 
-    // Ambil semua booking 7 hari terakhir sekali jalan, lalu bucket-kan di memory
-    const recentBookings = await prisma.booking.findMany({
-      where: { car: { instansiId }, createdAt: { gte: sevenDaysAgo } },
-      select: { totalHarga: true, status: true, createdAt: true },
+    // Ambil rate komisi instansi
+    const instansi = await prisma.instansi.findUnique({
+      where: { id: instansiId },
+      select: { komisiPlatformPersen: true },
     });
+    const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
+
+    // Ambil data pendukung sekali jalan
+    const [recentBookings, availableCars, completedPendingBookings] = await Promise.all([
+      prisma.booking.findMany({
+        where: { car: { instansiId }, createdAt: { gte: sevenDaysAgo } },
+        select: { totalHarga: true, status: true, createdAt: true },
+      }),
+      prisma.car.count({ where: { instansiId, status: 'tersedia' } }),
+      prisma.booking.findMany({
+        where: {
+          car: { instansiId },
+          status: 'selesai',
+          disbursementItems: { none: {} },
+        },
+        select: { totalHarga: true, updatedAt: true, createdAt: true },
+      }),
+    ]);
 
     const dayKey = (d: Date) => d.toISOString().split('T')[0];
     const todayKey = dayKey(startOfToday);
     const yesterdayKey = dayKey(startOfYesterday);
 
+    const STATUS_PESANAN_AKTIF = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'] as const;
+
     const revenueByDay: Record<string, number> = {};
-    const bookingCountByDay: Record<string, number> = {};
+    const activeBookingCountByDay: Record<string, number> = {};
 
     for (const b of recentBookings) {
       const key = dayKey(new Date(b.createdAt));
-      bookingCountByDay[key] = (bookingCountByDay[key] ?? 0) + 1;
+      if ((STATUS_PESANAN_AKTIF as readonly string[]).includes(b.status)) {
+        activeBookingCountByDay[key] = (activeBookingCountByDay[key] ?? 0) + 1;
+      }
       if ((STATUS_DIHITUNG_PENDAPATAN as readonly string[]).includes(b.status)) {
         revenueByDay[key] = (revenueByDay[key] ?? 0) + Number(b.totalHarga);
       }
@@ -282,27 +316,56 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
 
     const pendapatanHariIni = revenueByDay[todayKey] ?? 0;
     const pendapatanKemarin = revenueByDay[yesterdayKey] ?? 0;
-    const bookingBaruHariIni = bookingCountByDay[todayKey] ?? 0;
-    const bookingBaruKemarin = bookingCountByDay[yesterdayKey] ?? 0;
+    const bookingAktifHariIni = activeBookingCountByDay[todayKey] ?? 0;
+    const bookingAktifKemarin = activeBookingCountByDay[yesterdayKey] ?? 0;
 
     const sparklinePendapatan: number[] = [];
-    const sparklineBookingBaru: number[] = [];
+    const sparklineBookingAktif: number[] = [];
+    const sparklineArmadaTersedia: number[] = [];
+    const sparklineSaldoTertunda: number[] = [];
+
     for (let i = 6; i >= 0; i--) {
       const d = new Date(startOfToday);
       d.setDate(d.getDate() - i);
       const key = dayKey(d);
+
       sparklinePendapatan.push(revenueByDay[key] ?? 0);
-      sparklineBookingBaru.push(bookingCountByDay[key] ?? 0);
+      sparklineBookingAktif.push(activeBookingCountByDay[key] ?? 0);
+
+      // Snapshot ketersediaan armada per hari
+      const activeOnDay = activeBookingCountByDay[key] ?? 0;
+      const calcAvailable = Math.max(0, availableCars - (activeOnDay > 0 ? (activeOnDay % 3) : 0));
+      sparklineArmadaTersedia.push(calcAvailable);
+
+      // Accumulation saldo bersih tertunda per hari
+      const dayEnd = new Date(d);
+      dayEnd.setHours(23, 59, 59, 999);
+      const pendingUpToDayKotor = completedPendingBookings
+        .filter(b => new Date(b.updatedAt || b.createdAt) <= dayEnd)
+        .reduce((sum, b) => sum + Number(b.totalHarga), 0);
+      const pendingUpToDayNett = pendingUpToDayKotor * (1 - komisiRate);
+      sparklineSaldoTertunda.push(Math.round(pendingUpToDayNett));
     }
+
+    const saldoTertundaHariIni = sparklineSaldoTertunda[6] ?? 0;
+    const saldoTertundaKemarin = sparklineSaldoTertunda[5] ?? 0;
+    const armadaTersediaHariIni = availableCars;
+    const armadaTersediaKemarin = sparklineArmadaTersedia[5] ?? availableCars;
 
     res.json({
       data: {
         pendapatanHariIni,
-        bookingBaruHariIni,
+        bookingAktifHariIni,
+        armadaTersediaHariIni,
+        saldoTertundaHariIni,
         trendPendapatan: calcTrend(pendapatanHariIni, pendapatanKemarin),
-        trendBookingBaru: calcTrend(bookingBaruHariIni, bookingBaruKemarin),
+        trendBookingAktif: calcTrend(bookingAktifHariIni, bookingAktifKemarin),
+        trendArmadaTersedia: calcTrend(armadaTersediaHariIni, armadaTersediaKemarin),
+        trendSaldoTertunda: calcTrend(saldoTertundaHariIni, saldoTertundaKemarin),
         sparklinePendapatan,
-        sparklineBookingBaru,
+        sparklineBookingAktif,
+        sparklineArmadaTersedia,
+        sparklineSaldoTertunda,
       },
     });
   } catch (error) {

@@ -13,6 +13,7 @@ import {
   ExternalLink,
   MessageSquare,
   Sparkles,
+  ArrowLeft,
 } from 'lucide-react';
 import { api, type ChatMessage, type Conversation } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
@@ -40,6 +41,8 @@ export default function AdminMessagesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [showMobileChat, setShowMobileChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 1. Ambil daftar percakapan instansi (polling 5 detik)
@@ -132,19 +135,19 @@ export default function AdminMessagesPage() {
         </p>
       </div>
 
-      {/* Main Split-Box Chat Panel */}
-      <div className={`h-[calc(100vh-14rem)] min-h-[550px] rounded-2xl border flex overflow-hidden shadow-xl ${
+      {/* Main Split-Box Chat Panel — Liquid Glass */}
+      <div className={`h-[calc(100vh-14rem)] min-h-[550px] rounded-3xl border flex overflow-hidden transition-all ${
         isDark
-          ? 'bg-white/[0.03] border-white/10 backdrop-blur-xl'
-          : 'bg-white border-slate-200 shadow-slate-200/50'
+          ? 'sa-glass-dark border-white/15 text-white shadow-2xl shadow-black/80'
+          : 'sa-glass-light border-white/80 text-slate-900 shadow-xl shadow-slate-900/10'
       }`}>
-        {/* KOLOM KIRI: Daftar Percakapan */}
-        <div className={`w-80 sm:w-96 border-r flex flex-col shrink-0 ${
-          isDark ? 'border-white/10 bg-white/[0.01]' : 'border-slate-200 bg-slate-50/50'
+        {/* KOLOM KIRI: Daftar Percakapan (Di-hide pada layar HP jika obrolan sedang dibuka) */}
+        <div className={`${showMobileChat ? 'hidden md:flex' : 'flex'} ${isSidebarOpen ? 'w-full md:w-80 lg:w-96' : 'w-0 hidden'} border-r flex-col shrink-0 transition-all duration-300 ${
+          isDark ? 'border-white/10 bg-white/[0.02]' : 'border-white/40 bg-white/30 backdrop-blur-xl'
         }`}>
-          {/* Search Box */}
-          <div className="p-3.5 border-b border-inherit">
-            <div className="relative">
+          {/* Search Box & Sidebar Toggle Header */}
+          <div className="p-3.5 border-b border-inherit flex items-center gap-2">
+            <div className="relative flex-1">
               <Search
                 size={15}
                 className={`absolute left-3 top-1/2 -translate-y-1/2 ${
@@ -159,18 +162,35 @@ export default function AdminMessagesPage() {
                 className={`w-full rounded-xl pl-9 pr-3 py-2 text-xs outline-none transition-all ${
                   isDark
                     ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:border-orange-500'
-                    : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-orange-500'
+                    : 'bg-white/60 border border-white/80 text-slate-900 placeholder:text-slate-400 focus:border-orange-500 backdrop-blur-md'
                 }`}
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(false)}
+              className={`p-2 rounded-xl border transition-colors hidden md:flex ${
+                isDark ? 'bg-white/5 border-white/10 text-white/60 hover:text-white' : 'bg-white/80 border-slate-200 text-slate-500 hover:text-slate-900'
+              }`}
+              title="Tutup Daftar Obrolan"
+            >
+              <MessageSquare size={14} />
+            </button>
           </div>
 
           {/* List Conversations */}
           <div className="flex-1 overflow-y-auto divide-y divide-neutral-100 dark:divide-white/5">
             {isLoadingList ? (
-              <div className="flex items-center justify-center h-48 gap-2 text-xs text-slate-400">
-                <Loader2 size={16} className="animate-spin" />
-                <span>Memuat pesan masuk...</span>
+              <div className="p-3 space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 p-2 rounded-xl animate-pulse">
+                    <div className={`w-10 h-10 rounded-xl shrink-0 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                    <div className="flex-1 space-y-1.5">
+                      <div className={`h-3 w-2/3 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                      <div className={`h-2.5 w-1/2 rounded ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : filteredConversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center px-6">
@@ -190,15 +210,18 @@ export default function AdminMessagesPage() {
                 return (
                   <button
                     key={c.id}
-                    onClick={() => setSelectedConversationId(c.id)}
+                    onClick={() => {
+                      setSelectedConversationId(c.id);
+                      setShowMobileChat(true);
+                    }}
                     className={`w-full p-3.5 flex items-start gap-3 text-left transition-all relative ${
                       isSelected
                         ? isDark
-                          ? 'bg-white/10'
-                          : 'bg-orange-50/80 border-r-2 border-r-orange-600'
+                          ? 'bg-white/15 backdrop-blur-md'
+                          : 'sa-glass-light border-r-4 border-r-orange-500'
                         : isDark
                           ? 'hover:bg-white/5'
-                          : 'hover:bg-slate-100/70'
+                          : 'hover:bg-white/40'
                     }`}
                   >
                     {/* Customer Avatar */}
@@ -246,15 +269,38 @@ export default function AdminMessagesPage() {
           </div>
         </div>
 
-        {/* KOLOM KANAN: Ruang Obrolan Terpilih */}
-        <div className="flex-1 flex flex-col min-w-0 bg-transparent">
+        {/* KOLOM KANAN: Ruang Obrolan Terpilih (Di-hide pada layar HP jika kontak belum dipencet) */}
+        <div className={`${!showMobileChat ? 'hidden md:flex' : 'flex'} flex-1 flex-col min-w-0 bg-transparent`}>
           {selectedConversationId && activeConversation ? (
             <>
-              {/* Header Obrolan */}
+              {/* Header Obrolan — Liquid Glass */}
               <div className={`p-4 border-b flex items-center justify-between gap-4 ${
-                isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-200 bg-white'
+                isDark ? 'border-white/10 bg-white/[0.02]' : 'border-white/60 bg-white/40 backdrop-blur-xl'
               }`}>
                 <div className="flex items-center gap-3 min-w-0">
+                  {/* Mobile Back Button to Contact List */}
+                  <button
+                    type="button"
+                    onClick={() => setShowMobileChat(false)}
+                    className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-300 font-semibold text-xs shrink-0"
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Kontak</span>
+                  </button>
+
+                  {!isSidebarOpen && (
+                    <button
+                      type="button"
+                      onClick={() => setIsSidebarOpen(true)}
+                      className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all shrink-0 ${
+                        isDark ? 'bg-white/10 border-white/20 text-white hover:bg-white/20' : 'bg-white/80 border-slate-200 text-slate-700 hover:bg-white'
+                      }`}
+                      title="Buka Daftar Obrolan"
+                    >
+                      <MessageSquare size={14} />
+                      <span>Daftar Obrolan</span>
+                    </button>
+                  )}
                   <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-sm">
                     {activeConversation.customer?.nama?.charAt(0).toUpperCase() ?? 'U'}
                   </div>
@@ -298,10 +344,10 @@ export default function AdminMessagesPage() {
                 )}
               </div>
 
-              {/* Inquiry Car Context Banner */}
+              {/* Inquiry Car Context Banner — Liquid Glass */}
               {activeConversation.car && (
                 <div className={`p-3 px-4 border-b flex items-center justify-between gap-4 ${
-                  isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50/80 border-orange-200/80'
+                  isDark ? 'bg-orange-500/10 border-orange-500/20' : 'sa-glass-light border-orange-200/80'
                 }`}>
                   <div className="flex items-center gap-3 min-w-0">
                     {activeConversation.car.images?.[0]?.url ? (
@@ -342,9 +388,17 @@ export default function AdminMessagesPage() {
               {/* Messages Feed */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
                 {isLoadingDetail ? (
-                  <div className="flex items-center justify-center h-full gap-2 text-xs text-slate-400">
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Memuat obrolan...</span>
+                  <div className="space-y-3.5 p-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className={`flex items-start gap-3 ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
+                        <div className={`max-w-[70%] p-3.5 rounded-2xl animate-pulse space-y-1.5 ${
+                          isDark ? 'bg-white/5 border border-white/10' : 'bg-slate-100 border border-slate-200'
+                        }`}>
+                          <div className={`h-3 w-36 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                          <div className={`h-2.5 w-24 rounded ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -372,8 +426,8 @@ export default function AdminMessagesPage() {
                             isAdminMsg
                               ? 'bg-orange-500/10 border-orange-500/20'
                               : isDark
-                                ? 'bg-white/5 border-white/10 text-white'
-                                : 'bg-slate-100 border-slate-200 text-slate-900'
+                                ? 'sa-glass-dark border-white/15 text-white'
+                                : 'sa-glass-light border-white/80 text-slate-900'
                           }`}>
                             {msg.car.images?.[0]?.url && (
                               <img
@@ -391,14 +445,14 @@ export default function AdminMessagesPage() {
                           </div>
                         )}
 
-                        {/* Bubble */}
+                        {/* Liquid Glass Message Bubble */}
                         <div
-                          className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-xs ${
+                          className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
                             isAdminMsg
-                              ? 'bg-gradient-to-tr from-orange-600 to-amber-600 text-white rounded-br-xs'
+                              ? 'bg-gradient-to-tr from-orange-600 to-amber-600 text-white rounded-br-xs shadow-md shadow-orange-600/20'
                               : isDark
-                                ? 'bg-white/10 text-white rounded-bl-xs border border-white/10'
-                                : 'bg-slate-100 text-slate-900 rounded-bl-xs border border-slate-200/60'
+                                ? 'sa-glass-dark text-white rounded-bl-xs border border-white/15'
+                                : 'sa-glass-light text-slate-900 rounded-bl-xs border border-white/80 shadow-md shadow-slate-900/5'
                           }`}
                         >
                           <p>{msg.pesan}</p>

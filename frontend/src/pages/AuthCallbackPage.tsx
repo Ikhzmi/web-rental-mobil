@@ -43,6 +43,50 @@ export default function AuthCallbackPage() {
         redirectTo,
       });
 
+      const redirectUserWithRole = async (accessToken: string, defaultPath: string) => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser(accessToken);
+          if (user?.id) {
+            const { data: p } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', user.id)
+              .maybeSingle();
+
+            if (p?.role === 'super_admin') {
+              window.location.href = '/superadmin';
+              return;
+            }
+            if (p?.role === 'admin') {
+              window.location.href = '/admin';
+              return;
+            }
+          }
+
+          const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/profiles/me`, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          });
+          if (res.ok) {
+            const json = await res.json();
+            const profile = json?.data || json;
+            if (profile?.role === 'super_admin') {
+              window.location.href = '/superadmin';
+              return;
+            }
+            if (profile?.role === 'admin') {
+              window.location.href = '/admin';
+              return;
+            }
+          }
+        } catch (e) {
+          console.error('[AuthCallback] Role check error:', e);
+        }
+        navigate(defaultPath || '/', { replace: true });
+      };
+
       // Flow 1: OAuth PKCE flow (Google OAuth mengirim ?code=xxx)
       if (code) {
         try {
@@ -52,7 +96,8 @@ export default function AuthCallbackPage() {
             const { data: fallbackData } = await supabase.auth.getSession();
             if (fallbackData.session && isMounted) {
               setStatus('success');
-              setTimeout(() => navigate(redirectTo || '/', { replace: true }), 1200);
+              const sessionToken = fallbackData.session.access_token;
+              setTimeout(() => redirectUserWithRole(sessionToken, redirectTo || '/'), 1200);
               return;
             }
             if (isMounted) {
@@ -65,7 +110,8 @@ export default function AuthCallbackPage() {
 
           if (data.session && isMounted) {
             setStatus('success');
-            setTimeout(() => navigate(redirectTo || '/', { replace: true }), 1200);
+            const sessionToken = data.session.access_token;
+            setTimeout(() => redirectUserWithRole(sessionToken, redirectTo || '/'), 1200);
             return;
           }
         } catch (err) {
@@ -122,7 +168,8 @@ export default function AuthCallbackPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session && isMounted) {
         setStatus('success');
-        setTimeout(() => navigate(redirectTo || '/', { replace: true }), 1200);
+        const sessionToken = session.access_token;
+        setTimeout(() => redirectUserWithRole(sessionToken, redirectTo || '/'), 1200);
         return;
       }
 
@@ -131,7 +178,8 @@ export default function AuthCallbackPage() {
         if (newSession && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
           if (isMounted) {
             setStatus('success');
-            setTimeout(() => navigate(redirectTo || '/', { replace: true }), 1000);
+            const sessionToken = newSession.access_token;
+            setTimeout(() => redirectUserWithRole(sessionToken, redirectTo || '/'), 1000);
           }
         }
       });

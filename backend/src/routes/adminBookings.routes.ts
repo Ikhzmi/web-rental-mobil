@@ -91,7 +91,7 @@ adminBookingsRouter.get('/', async (req, res) => {
  */
 const VALID_TRANSITIONS: Record<string, string[]> = {
   menunggu_pembayaran: ['dikonfirmasi', 'dibatalkan'],
-  dikonfirmasi: ['berjalan'],
+  dikonfirmasi: ['berjalan', 'dibatalkan'],
   berjalan: ['selesai'],
   selesai: [],
   dibatalkan: [],

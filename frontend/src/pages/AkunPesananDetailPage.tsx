@@ -1,8 +1,9 @@
 import { useState, Fragment } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, ArrowLeft, MessageCircle, Star, Check } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Loader2, ArrowLeft, MessageCircle, Star, Check, Calendar as CalendarIcon, AlertTriangle, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { DayPicker, type DateRange } from 'react-day-picker';
 import { api, ApiError, type StatusBooking } from '../lib/api';
 import { formatRupiah } from '../lib/pricing';
 import { useTheme } from '../hooks/useTheme';
@@ -40,11 +41,12 @@ function formatTanggal(iso: string): string {
   });
 }
 
+function formatTanggalShort(iso: string): string {
+  return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 /**
- * Form ulasan — cuma dirender kalau booking.status === 'selesai' (dicek
- * juga di server, ini bukan satu-satunya lapisan validasi). Setelah
- * terkirim tidak bisa diedit/dihapus (keputusan produk), jadi UI langsung
- * masuk mode "sudah diulas" tanpa opsi ubah.
+ * Form ulasan — cuma dirender kalau booking.status === 'selesai'
  */
 function ReviewSection({ bookingId, isDark }: { bookingId: string; isDark: boolean }) {
   const queryClient = useQueryClient();
@@ -71,7 +73,7 @@ function ReviewSection({ bookingId, isDark }: { bookingId: string; isDark: boole
   if (isLoading) return null;
   if (!reviewStatus) return null;
 
-  // Sudah pernah diulas — tampilkan ringkasan, tidak ada tombol edit/hapus.
+  // Sudah pernah diulas
   if (reviewStatus.alreadyReviewed && reviewStatus.review) {
     const r = reviewStatus.review;
     return (
@@ -183,8 +185,17 @@ export default function AkunPesananDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Cancel state
   const [cancelError, setCancelError] = useState<string | null>(null);
-  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [alasanPembatalan, setAlasanPembatalan] = useState('');
+  const [rekeningRefund, setRekeningRefund] = useState('');
+
+  // Reschedule state
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleRange, setRescheduleRange] = useState<DateRange | undefined>();
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
   const { data: booking, isLoading, isError } = useQuery({
     queryKey: ['my-booking', id],
@@ -193,14 +204,35 @@ export default function AkunPesananDetailPage() {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: () => api.cancelBooking(id!),
+    mutationFn: () => api.cancelBooking(id!, {
+      alasanPembatalan: alasanPembatalan.trim() || undefined,
+      rekeningRefund: rekeningRefund.trim() || undefined,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-booking', id] });
       queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
-      setConfirmingCancel(false);
+      setShowCancelModal(false);
     },
     onError: (err) => {
       setCancelError(err instanceof ApiError ? err.message : 'Gagal membatalkan pesanan');
+    },
+  });
+
+  const rescheduleMutation = useMutation({
+    mutationFn: () => {
+      if (!rescheduleRange?.from || !rescheduleRange?.to) throw new Error('Pilih tanggal baru terlebih dahulu');
+      const fmt = (d: Date) => d.toISOString().slice(0, 10);
+      return api.rescheduleBooking(id!, fmt(rescheduleRange.from), fmt(rescheduleRange.to));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-booking', id] });
+      queryClient.invalidateQueries({ queryKey: ['my-bookings'] });
+      setShowRescheduleModal(false);
+      setRescheduleRange(undefined);
+      setRescheduleError(null);
+    },
+    onError: (err) => {
+      setRescheduleError(err instanceof ApiError ? err.message : 'Gagal memproses reschedule');
     },
   });
 
@@ -210,12 +242,17 @@ export default function AkunPesananDetailPage() {
 
   const statusBadge = isDark ? STATUS_BADGE_DARK : STATUS_BADGE_LIGHT;
 
+  // Calculate refund amount (3% deduction for dikonfirmasi cancellation)
+  const refundEstimasi = booking
+    ? booking.status === 'dikonfirmasi'
+      ? Math.round(Number(booking.totalHarga) * 0.97)
+      : Number(booking.totalHarga)
+    : 0;
+
   if (isLoading) {
     return (
       <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
-        isDark
-          ? 'bg-[#0a0a0a]'
-          : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
+        isDark ? 'bg-[#0a0a0a]' : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
         <Loader2 size={18} className="animate-spin" />
         <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Memuat pesanan...</span>
@@ -226,9 +263,7 @@ export default function AkunPesananDetailPage() {
   if (isError || !booking) {
     return (
       <main className={`min-h-screen flex flex-col items-center justify-center gap-3 text-center px-5 transition-colors duration-300 ${
-        isDark
-          ? 'bg-[#0a0a0a]'
-          : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
+        isDark ? 'bg-[#0a0a0a]' : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
         <p className={`text-sm ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Pesanan tidak ditemukan.</p>
         <Link to="/akun/pesanan" className={isDark ? 'text-white/60 text-sm hover:underline' : 'text-slate-600 text-sm hover:underline'}>
@@ -238,11 +273,17 @@ export default function AkunPesananDetailPage() {
     );
   }
 
+  // Check H-1 rule: can only cancel dikonfirmasi if at least 1 day before start
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const mulai = new Date(booking.tanggalMulai);
+  mulai.setHours(0, 0, 0, 0);
+  const selisihHari = (mulai.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  const canCancelDikonfirmasi = booking.status === 'dikonfirmasi' && selisihHari >= 1;
+
   return (
     <main className={`min-h-screen pt-24 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
-      isDark
-        ? 'bg-[#0a0a0a]'
-        : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
+      isDark ? 'bg-[#0a0a0a]' : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
     }`}>
       <div className="max-w-lg mx-auto">
         <motion.button
@@ -321,10 +362,7 @@ export default function AkunPesananDetailPage() {
           </div>
         </motion.div>
 
-        {/* Tanya soal pesanan ini — link WA dengan konteks booking sudah
-            terisi otomatis (nomor pesanan, nama mobil), supaya admin bisa
-            langsung tahu pesanan mana yang dimaksud tanpa customer perlu
-            jelaskan ulang dari nol. */}
+        {/* Tanya soal pesanan */}
         <motion.a
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -344,53 +382,236 @@ export default function AkunPesananDetailPage() {
           Tanya soal pesanan ini
         </motion.a>
 
+        {/* Rating (selesai) */}
         {booking.status === 'selesai' && (
           <ReviewSection bookingId={booking.id} isDark={isDark} />
         )}
 
-        {booking.status === 'menunggu_pembayaran' && (
+        {/* Reschedule (dikonfirmasi only) */}
+        {booking.status === 'dikonfirmasi' && (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
             className={`mt-5 rounded-2xl p-5 ${isDark ? 'bg-white/[0.04] border border-white/10' : 'bg-white/60 backdrop-blur-xl border border-white/80'}`}
           >
-            {!confirmingCancel ? (
-              <button
-                onClick={() => setConfirmingCancel(true)}
-                className="text-red-500 hover:text-red-400 text-sm font-medium transition-colors"
-              >
-                Batalkan Pesanan
-              </button>
-            ) : (
-              <div>
-                <p className={`text-sm mb-3 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>Yakin batalkan pesanan ini?</p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => cancelMutation.mutate()}
-                    disabled={cancelMutation.isPending}
-                    className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-colors disabled:opacity-60 ${
-                      isDark
-                        ? 'bg-red-500/15 hover:bg-red-500/25 text-red-400'
-                        : 'bg-red-100 hover:bg-red-200 text-red-600'
-                    }`}
-                  >
-                    {cancelMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                    Ya, Batalkan
-                  </button>
-                  <button
-                    onClick={() => setConfirmingCancel(false)}
-                    className={`text-sm px-4 py-2 transition-colors ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
-                  >
-                    Tidak
-                  </button>
-                </div>
-                {cancelError && <p className="text-red-500 text-xs mt-2">{cancelError}</p>}
-              </div>
+            <h3 className={`text-sm font-medium mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>Ubah Jadwal Sewa</h3>
+            <p className={`text-xs mb-3 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+              Reschedule hanya bisa dilakukan untuk pesanan yang sudah dikonfirmasi.
+            </p>
+            <button
+              onClick={() => setShowRescheduleModal(true)}
+              className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
+                isDark
+                  ? 'bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/20'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
+              }`}
+            >
+              <CalendarIcon size={14} />
+              Ganti Tanggal
+            </button>
+          </motion.div>
+        )}
+
+        {/* Cancel (menunggu_pembayaran or dikonfirmasi with H-1 check) */}
+        {(booking.status === 'menunggu_pembayaran' || canCancelDikonfirmasi) && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.27 }}
+            className={`mt-5 rounded-2xl p-5 ${isDark ? 'bg-white/[0.04] border border-white/10' : 'bg-white/60 backdrop-blur-xl border border-white/80'}`}
+          >
+            <button
+              onClick={() => { setShowCancelModal(true); setCancelError(null); }}
+              className="text-red-500 hover:text-red-400 text-sm font-medium transition-colors"
+            >
+              Batalkan Pesanan
+            </button>
+            {booking.status === 'dikonfirmasi' && (
+              <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
+                Pembatalan pesanan dikonfirmasi dikenakan potongan administrasi 3%. Refund diproses dalam 1×24 jam.
+              </p>
             )}
           </motion.div>
         )}
       </div>
+
+      {/* ─── Reschedule Modal ─── */}
+      <AnimatePresence>
+        {showRescheduleModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowRescheduleModal(false)} />
+            <motion.div
+              className={`relative z-10 w-full max-w-sm rounded-3xl p-6 shadow-2xl ${
+                isDark ? 'bg-[#141414] border border-white/10' : 'bg-white border border-slate-200'
+              }`}
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={`font-semibold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>Ubah Jadwal Sewa</h3>
+                <button onClick={() => setShowRescheduleModal(false)} className={isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-slate-700'}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className={`text-xs mb-4 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                Tanggal saat ini: <strong>{formatTanggalShort(booking.tanggalMulai)} — {formatTanggalShort(booking.tanggalSelesai)}</strong>
+              </p>
+
+              <div className={`rounded-2xl overflow-hidden mb-4 ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
+                <DayPicker
+                  mode="range"
+                  selected={rescheduleRange}
+                  onSelect={setRescheduleRange}
+                  disabled={{ before: new Date() }}
+                  className={isDark ? 'text-white' : ''}
+                />
+              </div>
+
+              {rescheduleRange?.from && rescheduleRange?.to && (
+                <p className={`text-xs mb-3 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                  Tanggal baru: <strong>{formatTanggalShort(rescheduleRange.from.toISOString())} — {formatTanggalShort(rescheduleRange.to.toISOString())}</strong>
+                </p>
+              )}
+
+              {rescheduleError && (
+                <p className={`text-xs px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'}`}>
+                  {rescheduleError}
+                </p>
+              )}
+
+              <button
+                onClick={() => rescheduleMutation.mutate()}
+                disabled={!rescheduleRange?.from || !rescheduleRange?.to || rescheduleMutation.isPending}
+                className={`w-full flex items-center justify-center gap-2 text-sm font-medium py-2.5 rounded-full transition-all disabled:opacity-40 ${
+                  isDark ? 'bg-white text-slate-900 hover:bg-white/90' : 'bg-slate-900 text-white hover:bg-slate-800'
+                }`}
+              >
+                {rescheduleMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                Konfirmasi Ubah Jadwal
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Cancel/Refund Modal ─── */}
+      <AnimatePresence>
+        {showCancelModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowCancelModal(false)} />
+            <motion.div
+              className={`relative z-10 w-full max-w-sm rounded-3xl p-6 shadow-2xl ${
+                isDark ? 'bg-[#141414] border border-white/10' : 'bg-white border border-slate-200'
+              }`}
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={`font-semibold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>Batalkan Pesanan</h3>
+                <button onClick={() => setShowCancelModal(false)} className={isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-slate-700'}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Info refund jika status dikonfirmasi */}
+              {booking.status === 'dikonfirmasi' && (
+                <div className={`flex gap-3 p-3.5 rounded-2xl mb-4 ${isDark ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
+                  <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className={`text-xs font-semibold mb-1 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>Info Refund</p>
+                    <p className={`text-xs leading-relaxed ${isDark ? 'text-amber-400/80' : 'text-amber-600'}`}>
+                      Pembatalan pesanan yang sudah dikonfirmasi dikenakan potongan administrasi <strong>3%</strong>.
+                      Estimasi refund: <strong>{formatRupiah(refundEstimasi)}</strong>.
+                      Refund akan diproses dalam <strong>1×24 jam</strong> ke rekening yang Anda cantumkan.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 mb-4">
+                <div>
+                  <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                    Alasan Pembatalan <span className={isDark ? 'text-white/30' : 'text-slate-400'}>(opsional)</span>
+                  </label>
+                  <textarea
+                    value={alasanPembatalan}
+                    onChange={(e) => setAlasanPembatalan(e.target.value)}
+                    rows={2}
+                    placeholder="Ceritakan alasan pembatalan..."
+                    className={`w-full text-sm rounded-xl px-3.5 py-2.5 outline-none resize-none transition-all ${
+                      isDark
+                        ? 'bg-white/5 border border-white/15 text-white placeholder:text-white/30 focus:border-white/30'
+                        : 'bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
+                    }`}
+                  />
+                </div>
+
+                {booking.status === 'dikonfirmasi' && (
+                  <div>
+                    <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                      Nomor Rekening Refund <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      value={rekeningRefund}
+                      onChange={(e) => setRekeningRefund(e.target.value)}
+                      placeholder="Bank - Nomor Rekening - Nama Pemilik"
+                      className={`w-full text-sm rounded-xl px-3.5 py-2.5 outline-none transition-all ${
+                        isDark
+                          ? 'bg-white/5 border border-white/15 text-white placeholder:text-white/30 focus:border-white/30'
+                          : 'bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
+                      }`}
+                    />
+                    <p className={`text-[11px] mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
+                      Contoh: BCA - 1234567890 - Budi Santoso
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {cancelError && (
+                <p className={`text-xs px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'}`}>
+                  {cancelError}
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => cancelMutation.mutate()}
+                  disabled={cancelMutation.isPending || (booking.status === 'dikonfirmasi' && !rekeningRefund.trim())}
+                  className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium px-4 py-2.5 rounded-full transition-colors disabled:opacity-60 ${
+                    isDark
+                      ? 'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/20'
+                      : 'bg-red-100 hover:bg-red-200 text-red-600 border border-red-200'
+                  }`}
+                >
+                  {cancelMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  Ya, Batalkan
+                </button>
+                <button
+                  onClick={() => setShowCancelModal(false)}
+                  className={`px-4 py-2.5 text-sm transition-colors rounded-full ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Tidak
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

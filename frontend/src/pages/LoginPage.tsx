@@ -206,32 +206,67 @@ export default function LoginPage() {
 
       if (authData?.user) {
         try {
-          const profile = await api.getMyProfile();
+          let profile: any = null;
 
-          if (profile && profile.aktif === false) {
-            await supabase.auth.signOut();
-            setLoading(false);
-            setError('Akun Anda telah dinonaktifkan oleh administrator. Silakan hubungi admin untuk bantuan.');
-            return;
+          const token = authData.session?.access_token;
+          if (token) {
+            try {
+              const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/profiles/me`, {
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+              });
+              if (res.ok) {
+                const json = await res.json();
+                profile = json?.data || json;
+              }
+            } catch (e) {
+              console.warn('Express profile API fetch failed, trying fallback:', e);
+            }
+          }
+
+          if (!profile) {
+            try {
+              profile = await api.getMyProfile();
+            } catch (e) {
+              console.warn('api.getMyProfile failed, trying Supabase direct:', e);
+            }
+          }
+
+          if (!profile) {
+            try {
+              const { data: supaProfile } = await supabase
+                .from('profiles')
+                .select('role, aktif')
+                .eq('id', authData.user.id)
+                .maybeSingle();
+              if (supaProfile) {
+                profile = supaProfile;
+              }
+            } catch (e) {
+              console.warn('Supabase direct query failed:', e);
+            }
           }
 
           setLoading(false);
 
-          if (profile.role === 'super_admin') {
+          if (profile?.role === 'super_admin') {
             window.location.href = '/superadmin';
             return;
           }
 
-          if (profile.role === 'admin') {
+          if (profile?.role === 'admin') {
             window.location.href = '/admin';
+            return;
+          }
+
+          if (profile?.aktif === false) {
+            window.location.href = '/history';
             return;
           }
         } catch (profileError) {
           console.error('Error fetching profile on login:', profileError);
-          const profileMsg = profileError instanceof Error ? profileError.message : '';
-          if (profileMsg.toLowerCase().includes('failed to fetch') || !navigator.onLine) {
-            setError('Berhasil login, tetapi gagal menghubungi server data. Silakan muat ulang halaman.');
-          }
         }
       }
 

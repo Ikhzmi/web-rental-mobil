@@ -63,7 +63,7 @@ export function globalErrorHandler(
   // Prisma errors
   if (err.name === 'PrismaClientKnownRequestError') {
     const prismaError = err as Error & { code: string; meta?: unknown };
-    console.error('Prisma error:', prismaError.code);
+    console.error('Prisma error:', prismaError.code, err.message, prismaError.meta);
 
     // Handle specific Prisma error codes
     switch (prismaError.code) {
@@ -74,7 +74,7 @@ export function globalErrorHandler(
         res.status(404).json({ error: 'Data tidak ditemukan' });
         return;
       default:
-        res.status(400).json({ error: 'Data tidak valid' });
+        res.status(400).json({ error: 'Data tidak valid', message: err.message, code: prismaError.code });
         return;
     }
   }

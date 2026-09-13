@@ -81,6 +81,7 @@ const carBaseSchema = zod_1.z.object({
     transmisi: zod_1.z.enum(['manual', 'matic']),
     tipeSewa: zod_1.z.enum(['lepas_kunci', 'dengan_sopir', 'keduanya']),
     hargaSopirPerHari: zod_1.z.number().nonnegative().nullable().optional(),
+    hargaAntarJemput: zod_1.z.number().nonnegative().nullable().optional(),
     kapasitasKursi: zod_1.z.number().int().positive(),
     hargaPerHari: zod_1.z.number().positive(),
     status: zod_1.z.enum(['tersedia', 'maintenance', 'nonaktif']).default('tersedia'),

@@ -15,7 +15,8 @@ const listCarsQuerySchema = zod_1.z.object({
     hargaMax: zod_1.z.coerce.number().nonnegative().optional(),
     kapasitasMin: zod_1.z.coerce.number().int().positive().optional(),
     cari: zod_1.z.string().trim().min(1).optional(),
-    sort: zod_1.z.enum(['harga_asc', 'harga_desc']).optional(),
+    sort: zod_1.z.enum(['harga_asc', 'harga_desc', 'top_booked']).optional(),
+    limit: zod_1.z.coerce.number().int().positive().max(50).optional(),
 });
 // SECURITY: UUID validation schema
 const uuidSchema = zod_1.z.string().uuid();
@@ -25,29 +26,48 @@ exports.carsRouter.get('/', (0, errorHandler_1.asyncHandler)(async (req, res) =>
     if (!parsed.success) {
         throw new errorHandler_1.AppError('Query tidak valid', 400);
     }
-    const { kategori, transmisi, tipeSewa, hargaMin, hargaMax, kapasitasMin, cari, sort } = parsed.data;
+    const { kategori, transmisi, tipeSewa, hargaMin, hargaMax, kapasitasMin, cari, sort, limit } = parsed.data;
+    const whereClause = {
+        status: 'tersedia',
+        statusApproval: 'disetujui',
+        ...(kategori && { kategori }),
+        ...(transmisi && { transmisi }),
+        ...(tipeSewa && {
+            tipeSewa: tipeSewa === 'keduanya' ? 'keduanya' : { in: [tipeSewa, 'keduanya'] },
+        }),
+        ...(kapasitasMin && { kapasitasKursi: { gte: kapasitasMin } }),
+        ...(cari && { nama: { contains: cari, mode: 'insensitive' } }),
+        ...((hargaMin !== undefined || hargaMax !== undefined) && {
+            hargaPerHari: {
+                ...(hargaMin !== undefined && { gte: hargaMin }),
+                ...(hargaMax !== undefined && { lte: hargaMax }),
+            },
+        }),
+    };
+    // Special case: top_booked — sort by booking count descending
+    if (sort === 'top_booked') {
+        const cars = await prisma_1.prisma.car.findMany({
+            where: whereClause,
+            include: {
+                images: { orderBy: { urutan: 'asc' }, take: 1 },
+                _count: { select: { bookings: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            ...(limit && { take: limit }),
+        });
+        // Sort by booking count desc in-memory (prisma doesn't support orderBy relation count on all versions)
+        cars.sort((a, b) => (b._count?.bookings ?? 0) - (a._count?.bookings ?? 0));
+        const result = limit ? cars.slice(0, limit) : cars;
+        res.json({ data: result });
+        return;
+    }
     const cars = await prisma_1.prisma.car.findMany({
-        where: {
-            status: 'tersedia',
-            statusApproval: 'disetujui',
-            ...(kategori && { kategori }),
-            ...(transmisi && { transmisi }),
-            ...(tipeSewa && {
-                tipeSewa: tipeSewa === 'keduanya' ? 'keduanya' : { in: [tipeSewa, 'keduanya'] },
-            }),
-            ...(kapasitasMin && { kapasitasKursi: { gte: kapasitasMin } }),
-            ...(cari && { nama: { contains: cari, mode: 'insensitive' } }),
-            ...((hargaMin !== undefined || hargaMax !== undefined) && {
-                hargaPerHari: {
-                    ...(hargaMin !== undefined && { gte: hargaMin }),
-                    ...(hargaMax !== undefined && { lte: hargaMax }),
-                },
-            }),
-        },
+        where: whereClause,
         include: {
             images: { orderBy: { urutan: 'asc' }, take: 1 },
         },
         orderBy: sort === 'harga_desc' ? { hargaPerHari: 'desc' } : sort === 'harga_asc' ? { hargaPerHari: 'asc' } : { createdAt: 'desc' },
+        ...(limit && { take: limit }),
     });
     res.json({ data: cars });
 }));

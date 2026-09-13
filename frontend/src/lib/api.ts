@@ -6,6 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL ? String(import.meta.env.VITE_API_U
 // Kategori diperluas dari 4 ke 8 di v1.3
 export type Kategori = 'city_car' | 'hatchback' | 'suv' | 'mpv' | 'minibus' | 'pickup' | 'mewah' | 'electric';
 export type Transmisi = 'manual' | 'matic';
+export type BahanBakar = 'bensin' | 'diesel' | 'hybrid' | 'electric';
 export type TipeSewa = 'lepas_kunci' | 'dengan_sopir' | 'keduanya';
 export type StatusMobil = 'tersedia' | 'maintenance' | 'nonaktif';
 
@@ -27,18 +28,19 @@ export interface CarBlockedDate {
 export interface Car {
   id: string;
   nama: string;
-  nomorPlat?: string | null; // Nomor polisi kendaraan, e.g. "B 1234 XYZ"
+  nomorPlat?: string | null;
   kategori: Kategori;
   transmisi: Transmisi;
+  bahanBakar?: BahanBakar;
   tipeSewa: TipeSewa;
   hargaSopirPerHari: string | null;
+  hargaAntarJemput?: string | null;
   kapasitasKursi: number;
   hargaPerHari: string;
   status: StatusMobil;
-  statusApproval?: 'menunggu_persetujuan' | 'disetujui' | 'ditolak'; // v1.3: Super Admin approval
+  statusApproval?: 'menunggu_persetujuan' | 'disetujui' | 'ditolak';
   deskripsi: string | null;
   images: CarImage[];
-  // v1.3: Instance info for multi-tenancy label
   instansi?: {
     id: string;
     namaInstansi: string;
@@ -80,7 +82,11 @@ export interface Profile {
   dokumenSimUrl: string | null;
   dokumenVerified: boolean;
   aktif: boolean;
+  namaBank?: string | null;
+  nomorRekening?: string | null;
+  namaPemilikRekening?: string | null;
 }
+
 
 export type JenisAddon = 'sopir' | 'asuransi' | 'antar_jemput';
 
@@ -150,6 +156,8 @@ export interface InstansiDashboardData {
   totalPendapatanBulanIni: number;
   bookingStats: Record<string, number>;
   saldoTertunda: number;
+  saldoTertundaKotor?: number;
+  komisiPlatformPersen?: number;
   totalSudahDicairkan: number;
   recentBookings: Array<{
     id: string;
@@ -157,9 +165,6 @@ export interface InstansiDashboardData {
     profile: { nama: string };
     totalHarga: string;
     status: string;
-    // Backend mengirim ini via Prisma `include` (semua kolom scalar Booking
-    // ikut terbawa) — sebelumnya tidak dideklarasikan di sini walau dipakai
-    // di UI, sehingga kode terpaksa pakai `as any` untuk mengaksesnya.
     createdAt: string;
   }>;
   recentDisbursements: Array<{
@@ -170,15 +175,20 @@ export interface InstansiDashboardData {
   }>;
 }
 
-// Data tren nyata (hari ini vs kemarin) untuk StatCard di Admin Dashboard —
-// dihitung server-side dari booking asli, bukan angka statis/acak.
+// Data tren nyata (hari ini vs kemarin) + 7-day sparklines untuk StatCard di Admin Dashboard
 export interface InstansiDashboardTrends {
   pendapatanHariIni: number;
-  bookingBaruHariIni: number;
+  bookingAktifHariIni: number;
+  armadaTersediaHariIni: number;
+  saldoTertundaHariIni: number;
   trendPendapatan: number;
-  trendBookingBaru: number;
+  trendBookingAktif: number;
+  trendArmadaTersedia: number;
+  trendSaldoTertunda: number;
   sparklinePendapatan: number[];
-  sparklineBookingBaru: number[];
+  sparklineBookingAktif: number[];
+  sparklineArmadaTersedia: number[];
+  sparklineSaldoTertunda: number[];
 }
 
 // Data grafik pendapatan per bucket waktu, dihitung dari booking asli.
@@ -583,8 +593,10 @@ export interface CarInput {
   nomorPlat?: string | null;
   kategori: Kategori;
   transmisi: Transmisi;
+  bahanBakar?: BahanBakar;
   tipeSewa: TipeSewa;
   hargaSopirPerHari?: number | null;
+  hargaAntarJemput?: number | null;
   kapasitasKursi: number;
   hargaPerHari: number;
   status: StatusMobil;
@@ -599,7 +611,8 @@ export interface ListCarsParams {
   hargaMax?: number;
   kapasitasMin?: number;
   cari?: string;
-  sort?: 'harga_asc' | 'harga_desc';
+  sort?: 'harga_asc' | 'harga_desc' | 'top_booked';
+  limit?: number;
 }
 
 class ApiError extends Error {
@@ -614,8 +627,14 @@ class ApiError extends Error {
 
 // Custom event types for session management
 const SESSION_EXPIRED_EVENT = 'session:expired';
+let lastSessionExpiredDispatch = 0;
 
 export function dispatchSessionExpired() {
+  const now = Date.now();
+  if (now - lastSessionExpiredDispatch < 10_000) {
+    return;
+  }
+  lastSessionExpiredDispatch = now;
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
 }
 
@@ -910,8 +929,16 @@ export const api = {
 
     // ── Customer: Riwayat Pesanan (F7) ──
   listMyBookings: () => apiFetch<Booking[]>('/api/bookings/mine'),
-  cancelBooking: (id: string) =>
-    apiFetch<Booking>(`/api/bookings/${id}/cancel`, { method: 'PATCH' }),
+  cancelBooking: (id: string, data?: { alasanPembatalan?: string; rekeningRefund?: string }) =>
+    apiFetch<Booking>(`/api/bookings/${id}/cancel`, {
+      method: 'PATCH',
+      body: JSON.stringify(data ?? {}),
+    }),
+  rescheduleBooking: (id: string, tanggalMulai: string, tanggalSelesai: string) =>
+    apiFetch<Booking>(`/api/bookings/${id}/reschedule`, {
+      method: 'POST',
+      body: JSON.stringify({ tanggalMulai, tanggalSelesai }),
+    }),
 
   // ── Ulasan (Review) ──
   listReviews: (carId?: string) =>
@@ -925,7 +952,11 @@ export const api = {
     apiFetch<Review>('/api/reviews', { method: 'POST', body: JSON.stringify(input) }),
 
   // ── Customer: Profil (F8) ──
-  updateMyProfile: (input: Partial<Pick<Profile, 'nama' | 'noHp' | 'noKtp' | 'noSim' | 'alamat'>>) =>
+  updateMyProfile: (input: Partial<Pick<Profile, 'nama' | 'noHp' | 'noKtp' | 'noSim' | 'alamat'>> & {
+    namaBank?: string;
+    nomorRekening?: string;
+    namaPemilikRekening?: string;
+  }) =>
     apiFetch<Profile>('/api/profiles/me', { method: 'PATCH', body: JSON.stringify(input) }),
   saveDokumenReference: (tipe: 'ktp' | 'sim', storagePath: string) =>
     apiFetch<Profile>('/api/profiles/me/dokumen', {
@@ -1025,6 +1056,16 @@ export const api = {
     instansiId: string;
   }) =>
     apiFetch<SuperAdminUser>('/api/superadmin/admin', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  createAdminUser: (input: {
+    email: string;
+    password: string;
+    nama: string;
+    noHp: string;
+  }) =>
+    apiFetch<Profile>('/api/admin/users/create-admin', {
       method: 'POST',
       body: JSON.stringify(input),
     }),

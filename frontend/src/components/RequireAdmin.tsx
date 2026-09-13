@@ -40,7 +40,7 @@ function ForbiddenPage() {
  */
 export default function RequireAdmin() {
   const { session, loading: sessionLoading } = useSession();
-  const { isAdmin, loading: profileLoading } = useProfile();
+  const { isAdmin, loading: profileLoading, profile, error } = useProfile();
   const location = useLocation();
 
   if (sessionLoading || profileLoading) return <GuardFallback />;
@@ -48,6 +48,10 @@ export default function RequireAdmin() {
   if (!session) {
     const redirect = `${location.pathname}${location.search}`;
     return <Navigate to={`/login?redirect=${encodeURIComponent(redirect)}`} replace />;
+  }
+
+  if (error && !profile) {
+    return <GuardFallback />;
   }
 
   if (!isAdmin) {

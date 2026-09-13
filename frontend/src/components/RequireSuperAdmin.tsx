@@ -12,7 +12,7 @@ function LoadingPage() {
 
 export default function RequireSuperAdmin() {
   const { session, loading: sessionLoading } = useSession();
-  const { profile, loading: profileLoading } = useProfile();
+  const { profile, isSuperAdmin, loading: profileLoading, error } = useProfile();
 
   // Show loading while session and profile are being checked
   if (sessionLoading || profileLoading) {
@@ -24,8 +24,13 @@ export default function RequireSuperAdmin() {
     return <Navigate to="/login" replace />;
   }
 
+  // If there was an error fetching profile and no profile data, stay loading/fallback instead of booting immediately
+  if (error && !profile) {
+    return <LoadingPage />;
+  }
+
   // Not a super_admin - redirect to home
-  if (profile?.role !== 'super_admin') {
+  if (!isSuperAdmin) {
     return <Navigate to="/" replace />;
   }
 

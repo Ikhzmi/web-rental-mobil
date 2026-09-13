@@ -6,8 +6,8 @@ import {
   ChevronLeft, ChevronRight, AlertCircle, Key, UserCheck, Camera, Users, Clock, CheckCircle2, Layers, XCircle, Calendar as CalendarIcon
 } from 'lucide-react';
 import { DayPicker, type DateRange } from 'react-day-picker';
-import { api, type Car, type CarImage, type Kategori, type Transmisi, type StatusMobil, type TipeSewa } from '../../lib/api';
-import { formatRupiah } from '../../lib/pricing';
+import { api, type Car, type CarImage, type Kategori, type Transmisi, type BahanBakar, type StatusMobil, type TipeSewa } from '../../lib/api';
+import { formatRupiah, formatCompactRupiah } from '../../lib/pricing';
 import { supabase } from '../../lib/supabase';
 import { SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
@@ -198,16 +198,20 @@ function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: ()
   const [status, setStatus] = useState<StatusMobil>(car.status);
   const [nomorPlat, setNomorPlat] = useState(car.nomorPlat ?? '');
   const [tipeSewa, setTipeSewa] = useState<TipeSewa>(car.tipeSewa);
+  const [bahanBakar, setBahanBakar] = useState<BahanBakar>(car.bahanBakar ?? 'bensin');
   const [hargaPerHari, setHargaPerHari] = useState(car.hargaPerHari);
   const [hargaSopirPerHari, setHargaSopirPerHari] = useState(car.hargaSopirPerHari ?? '');
+  const [hargaAntarJemput, setHargaAntarJemput] = useState(car.hargaAntarJemput ?? '');
 
   const mutation = useMutation({
     mutationFn: () => api.updateAdminCar(car.id, {
       status,
       nomorPlat: nomorPlat.trim().toUpperCase() || undefined,
       tipeSewa,
+      bahanBakar,
       hargaPerHari: Number(hargaPerHari),
       hargaSopirPerHari: tipeSewa === 'lepas_kunci' ? null : hargaSopirPerHari ? Number(hargaSopirPerHari) : null,
+      hargaAntarJemput: hargaAntarJemput ? Number(hargaAntarJemput) : null,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-cars'] });
@@ -367,6 +371,23 @@ function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: ()
             </div>
           </div>
 
+          {/* Bahan Bakar */}
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider mb-1.5 block text-white/70">
+              Bahan Bakar
+            </label>
+            <select
+              value={bahanBakar}
+              onChange={(e) => setBahanBakar(e.target.value as BahanBakar)}
+              className={inputClass}
+            >
+              <option value="bensin">Bensin</option>
+              <option value="diesel">Diesel</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="electric">Electric (EV)</option>
+            </select>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider mb-1.5 block text-white/70">
@@ -394,6 +415,21 @@ function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: ()
                 />
               </div>
             )}
+          </div>
+
+          {/* Biaya Antar/Jemput */}
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-wider mb-1.5 block text-white/70">
+              Biaya Antar/Jemput ke Rumah (Rp) <span className="text-white/30 normal-case font-normal">opsional</span>
+            </label>
+            <input
+              type="number"
+              value={hargaAntarJemput}
+              onChange={(e) => setHargaAntarJemput(e.target.value)}
+              placeholder="Contoh: 50000"
+              className={inputClass}
+            />
+            <p className="text-[10px] text-white/30 mt-1">Jika diisi, biaya ini otomatis dikenakan saat pelanggan memilih jemput ke rumah.</p>
           </div>
 
           {mutation.isError && (
@@ -781,10 +817,12 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
   const [nomorPlat, setNomorPlat] = useState('');
   const [kategori, setKategori] = useState<Kategori>('city_car');
   const [transmisi, setTransmisi] = useState<Transmisi>('manual');
+  const [bahanBakar, setBahanBakar] = useState<BahanBakar>('bensin');
   const [tipeSewa, setTipeSewa] = useState<TipeSewa>('lepas_kunci');
   const [kapasitasKursi, setKapasitasKursi] = useState('5');
   const [hargaPerHari, setHargaPerHari] = useState('');
   const [hargaSopirPerHari, setHargaSopirPerHari] = useState('');
+  const [hargaAntarJemput, setHargaAntarJemput] = useState('');
   const [deskripsi, setDeskripsi] = useState('');
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -852,10 +890,12 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
         nomorPlat: nomorPlat.trim().toUpperCase(),
         kategori,
         transmisi,
+        bahanBakar,
         tipeSewa,
         kapasitasKursi: Number(kapasitasKursi),
         hargaPerHari: Number(hargaPerHari),
         hargaSopirPerHari: tipeSewa === 'lepas_kunci' ? null : hargaSopirPerHari ? Number(hargaSopirPerHari) : null,
+        hargaAntarJemput: hargaAntarJemput ? Number(hargaAntarJemput) : null,
         status: 'tersedia',
         deskripsi: deskripsi || undefined,
       });
@@ -995,7 +1035,7 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className={`text-xs font-semibold uppercase tracking-wider mb-1.5 block ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
                 Kategori
@@ -1014,6 +1054,17 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
                 {TRANSMISI_OPTIONS.map((t) => (
                   <option key={t} value={t} className="capitalize">{t}</option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <label className={`text-xs font-semibold uppercase tracking-wider mb-1.5 block ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+                Bahan Bakar
+              </label>
+              <select value={bahanBakar} onChange={(e) => setBahanBakar(e.target.value as BahanBakar)} className={inputClass}>
+                <option value="bensin">Bensin</option>
+                <option value="diesel">Diesel</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="electric">Electric (EV)</option>
               </select>
             </div>
           </div>
@@ -1123,7 +1174,20 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
             </div>
           )}
 
-          {/* Bagian Foto Mobil dengan Preview Langsung */}
+          {/* Biaya Antar/Jemput */}
+          <div>
+            <label className={`text-xs font-semibold uppercase tracking-wider mb-1.5 block ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
+              Biaya Antar/Jemput ke Rumah (Rp) <span className="text-xs font-normal opacity-50">opsional</span>
+            </label>
+            <input
+              type="number"
+              value={hargaAntarJemput}
+              onChange={(e) => setHargaAntarJemput(e.target.value)}
+              placeholder="Contoh: 50000"
+              className={inputClass}
+            />
+            <p className={`text-[10px] mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>Jika diisi, biaya ini otomatis dikenakan saat pelanggan memilih jemput ke rumah.</p>
+          </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
@@ -1649,11 +1713,12 @@ function CarCard({ car, onEdit, onDelete, onManageAvailability, isDark }: {
               </p>
               <div className="flex items-baseline gap-1">
                 <span
-                  className={`font-extrabold text-lg sm:text-xl tracking-tight ${
+                  className={`font-extrabold text-base sm:text-xl tracking-tight ${
                     isDark ? 'text-white' : 'text-slate-950'
                   }`}
                 >
-                  {formatRupiah(Number(car.hargaPerHari))}
+                  <span className="hidden sm:inline">{formatRupiah(Number(car.hargaPerHari))}</span>
+                  <span className="inline sm:hidden">{formatCompactRupiah(Number(car.hargaPerHari))}</span>
                 </span>
                 <span className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>/hari</span>
               </div>

@@ -16,16 +16,19 @@ export function useProfile() {
   const { session, loading: sessionLoading } = useSession();
 
   const query = useQuery({
-    queryKey: ['my-profile', session?.user.id],
+    queryKey: ['my-profile', session?.user?.id],
     queryFn: api.getMyProfile,
     enabled: !!session,
     staleTime: 60_000,
+    retry: 2,
   });
 
   return {
     profile: query.data,
-    isAdmin: query.data?.role === 'admin',
+    isAdmin: query.data?.role === 'admin' || query.data?.role === 'super_admin',
     isSuperAdmin: query.data?.role === 'super_admin',
-    loading: sessionLoading || (!!session && query.isLoading),
+    loading: sessionLoading || (!!session && (query.isLoading || (query.isFetching && !query.data))),
+    error: query.error,
+    refetch: query.refetch,
   };
 }

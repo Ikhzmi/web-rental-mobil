@@ -218,15 +218,27 @@ bookingsRouter.get('/:id', async (req, res) => {
     return;
   }
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: req.params.id },
-    include: {
-      car: true,
-      addons: true,
-      statusLogs: { orderBy: { createdAt: 'asc' } },
-      profile: { select: { nama: true, email: true, noHp: true, dokumenVerified: true } },
-    },
-  });
+  const booking = await prisma.booking
+    .findUnique({
+      where: { id: req.params.id },
+      include: {
+        car: true,
+        addons: true,
+        statusLogs: { orderBy: { createdAt: 'asc' } },
+        profile: { select: { nama: true, email: true, noHp: true, dokumenVerified: true } },
+      },
+    })
+    .catch(async () => {
+      return await prisma.booking.findUnique({
+        where: { id: req.params.id },
+        include: {
+          car: true,
+          addons: true,
+          statusLogs: { orderBy: { createdAt: 'asc' } },
+          profile: { select: { nama: true, email: true, noHp: true } },
+        },
+      });
+    });
 
   if (!booking) {
     res.status(404).json({ error: 'Booking tidak ditemukan' });
@@ -240,7 +252,7 @@ bookingsRouter.get('/:id', async (req, res) => {
   res.json({ data: booking });
 });
 
-/** PATCH /api/bookings/:id/cancel — hanya pemilik booking, hanya jika masih `pending`. */
+/** PATCH /api/bookings/:id/cancel — pemilik booking, hanya jika masih `menunggu_pembayaran` atau `dikonfirmasi` (H-1). */
 bookingsRouter.patch('/:id/cancel', async (req, res) => {
   // SECURITY: Validate UUID format
   const idParse = uuidSchema.safeParse(req.params.id);
@@ -248,6 +260,11 @@ bookingsRouter.patch('/:id/cancel', async (req, res) => {
     res.status(400).json({ error: 'Format ID booking tidak valid' });
     return;
   }
+
+  const { alasanPembatalan, rekeningRefund } = req.body as {
+    alasanPembatalan?: string;
+    rekeningRefund?: string;
+  };
 
   const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
 
@@ -259,20 +276,40 @@ bookingsRouter.patch('/:id/cancel', async (req, res) => {
     res.status(403).json({ error: 'Tidak berhak membatalkan booking ini' });
     return;
   }
-  if (booking.status !== 'menunggu_pembayaran') {
-    res.status(409).json({ error: 'Booking hanya bisa dibatalkan selagi menunggu pembayaran' });
+
+  const allowedStatuses = ['menunggu_pembayaran', 'dikonfirmasi'];
+  if (!allowedStatuses.includes(booking.status)) {
+    res.status(409).json({ error: 'Booking hanya bisa dibatalkan selagi menunggu pembayaran atau sudah dikonfirmasi (maks H-1)' });
     return;
+  }
+
+  // Untuk status dikonfirmasi: cek syarat H-1
+  if (booking.status === 'dikonfirmasi') {
+    const hariIni = new Date();
+    hariIni.setHours(0, 0, 0, 0);
+    const mulai = new Date(booking.tanggalMulai);
+    mulai.setHours(0, 0, 0, 0);
+    const selisihMs = mulai.getTime() - hariIni.getTime();
+    const selisihHari = selisihMs / (1000 * 60 * 60 * 24);
+    if (selisihHari < 1) {
+      res.status(409).json({ error: 'Pembatalan hanya bisa dilakukan maksimal H-1 sebelum tanggal mulai sewa' });
+      return;
+    }
   }
 
   const updated = await prisma.$transaction(async (tx) => {
     const b = await tx.booking.update({
       where: { id: booking.id },
-      data: { status: 'dibatalkan' },
+      data: {
+        status: 'dibatalkan',
+        ...(alasanPembatalan !== undefined ? { alasanPembatalan } : {}),
+        ...(rekeningRefund !== undefined ? { rekeningRefund } : {}),
+      },
     });
     await tx.bookingStatusLog.create({
       data: {
         bookingId: booking.id,
-        statusLama: 'pending',
+        statusLama: booking.status,
         statusBaru: 'dibatalkan',
         diubahOleh: req.user!.id,
       },
@@ -282,6 +319,118 @@ bookingsRouter.patch('/:id/cancel', async (req, res) => {
 
   res.json({ data: updated });
 });
+
+/**
+ * POST /api/bookings/:id/reschedule
+ * Pemilik booking bisa mengubah tanggal sewa selama status masih `dikonfirmasi`
+ * dan tanggal baru tersedia (tidak terjadi double booking).
+ */
+bookingsRouter.post('/:id/reschedule', async (req, res) => {
+  const idParse = uuidSchema.safeParse(req.params.id);
+  if (!idParse.success) {
+    res.status(400).json({ error: 'Format ID booking tidak valid' });
+    return;
+  }
+
+  const bodySchema = z.object({
+    tanggalMulai: z.coerce.date(),
+    tanggalSelesai: z.coerce.date(),
+  });
+  const parsed = bodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Tanggal tidak valid', detail: parsed.error.flatten() });
+    return;
+  }
+
+  const { tanggalMulai, tanggalSelesai } = parsed.data;
+  if (tanggalSelesai < tanggalMulai) {
+    res.status(400).json({ error: 'tanggal_selesai tidak boleh sebelum tanggal_mulai' });
+    return;
+  }
+
+  try {
+    const booking = await prisma.booking.findUnique({
+      where: { id: req.params.id },
+      include: { car: true },
+    });
+
+    if (!booking) {
+      res.status(404).json({ error: 'Booking tidak ditemukan' });
+      return;
+    }
+    if (booking.userId !== req.user!.id) {
+      res.status(403).json({ error: 'Tidak berhak mengubah booking ini' });
+      return;
+    }
+    if (booking.status !== 'dikonfirmasi') {
+      res.status(409).json({ error: 'Reschedule hanya bisa dilakukan untuk booking berstatus Dikonfirmasi' });
+      return;
+    }
+
+    // Check availability excluding this booking
+    const conflictingBooking = await prisma.booking.findFirst({
+      where: {
+        carId: booking.carId,
+        id: { not: booking.id },
+        status: { notIn: ['dibatalkan'] },
+        tanggalMulai: { lte: tanggalSelesai },
+        tanggalSelesai: { gte: tanggalMulai },
+      },
+    });
+    if (conflictingBooking) {
+      res.status(409).json({ error: 'Tanggal baru tidak tersedia — sudah ada booking lain pada periode tersebut' });
+      return;
+    }
+
+    // Check blocked dates
+    const blockedConflict = await prisma.carBlockedDate.findFirst({
+      where: {
+        carId: booking.carId,
+        tanggalMulai: { lte: tanggalSelesai },
+        tanggalSelesai: { gte: tanggalMulai },
+      },
+    });
+    if (blockedConflict) {
+      res.status(409).json({ error: 'Tanggal baru tidak tersedia — kendaraan diblokir pada periode tersebut' });
+      return;
+    }
+
+    // Recalculate price for new dates
+    const { hitungRincianHarga } = await import('../services/pricing.service');
+    const existingAddons = await prisma.bookingAddon.findMany({ where: { bookingId: booking.id } });
+    const addonsInput = existingAddons.map(a => ({ jenis: a.jenis, harga: Number(a.harga) }));
+    const rincian = hitungRincianHarga(booking.car, tanggalMulai, tanggalSelesai, addonsInput);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const b = await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          tanggalMulai,
+          tanggalSelesai,
+          hargaDasar: rincian.hargaDasar,
+          totalAddon: rincian.totalAddon,
+          totalHarga: rincian.totalHarga,
+        },
+      });
+      await tx.bookingStatusLog.create({
+        data: {
+          bookingId: booking.id,
+          statusLama: booking.status,
+          statusBaru: booking.status, // status tetap, hanya tanggal berubah
+          diubahOleh: req.user!.id,
+          catatan: `Reschedule: ${tanggalMulai.toISOString().slice(0, 10)} → ${tanggalSelesai.toISOString().slice(0, 10)}`,
+        },
+      });
+      return b;
+    });
+
+    res.json({ data: updated });
+  } catch (err) {
+    console.error('POST /api/bookings/:id/reschedule error:', err);
+    res.status(500).json({ error: 'Gagal memproses reschedule' });
+  }
+});
+
 
 /**
  * POST /api/bookings/:id/checkout

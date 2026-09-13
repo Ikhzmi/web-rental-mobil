@@ -23,6 +23,9 @@ const updateProfileSchema = zod_1.z.object({
     noKtp: zod_1.z.string().trim().optional(),
     noSim: zod_1.z.string().trim().optional(),
     alamat: zod_1.z.string().trim().optional(),
+    namaBank: zod_1.z.string().trim().optional(),
+    nomorRekening: zod_1.z.string().trim().optional(),
+    namaPemilikRekening: zod_1.z.string().trim().optional(),
 });
 /** PATCH /api/profiles/me */
 exports.profilesRouter.patch('/me', (0, errorHandler_1.asyncHandler)(async (req, res) => {
@@ -30,7 +33,7 @@ exports.profilesRouter.patch('/me', (0, errorHandler_1.asyncHandler)(async (req,
     if (!parsed.success) {
         throw new errorHandler_1.AppError('Data tidak valid', 400);
     }
-    const { alamat, noKtp, noSim, ...rest } = parsed.data;
+    const { alamat, noKtp, noSim, namaBank, nomorRekening, namaPemilikRekening, ...rest } = parsed.data;
     const updated = await prisma_1.prisma.profile.update({
         where: { id: req.user.id },
         data: {
@@ -38,6 +41,9 @@ exports.profilesRouter.patch('/me', (0, errorHandler_1.asyncHandler)(async (req,
             ...(alamat !== undefined ? { alamat } : {}),
             ...(noKtp !== undefined ? { noKtp: noKtp || null } : {}),
             ...(noSim !== undefined ? { noSim: noSim || null } : {}),
+            ...(namaBank !== undefined ? { namaBank: namaBank || null } : {}),
+            ...(nomorRekening !== undefined ? { nomorRekening: nomorRekening || null } : {}),
+            ...(namaPemilikRekening !== undefined ? { namaPemilikRekening: namaPemilikRekening || null } : {}),
         },
     });
     res.json({ data: updated });

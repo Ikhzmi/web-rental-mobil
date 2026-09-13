@@ -463,9 +463,10 @@ export default function ArmadaDetailPage() {
               )}
 
               {/* Key Specs Grid */}
-              <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 {[
                   { icon: Gauge, label: 'Transmisi', value: car.transmisi },
+                  { icon: Fuel, label: 'Bahan Bakar', value: car.bahanBakar || 'bensin' },
                   { icon: Users, label: 'Kapasitas', value: `${car.kapasitasKursi} Kursi` },
                   { icon: ShieldCheck, label: 'Asuransi', value: 'Proteksi Penuh' },
                 ].map((spec) => (
@@ -720,7 +721,7 @@ export default function ArmadaDetailPage() {
                     </div>
                     <p className={`text-[10px] ${isDark ? 'text-emerald-300/70' : 'text-emerald-700'}`}>
                       {range?.from?.toLocaleDateString('id-ID')}
-                      {rentalCalculation.days === 1 ? ' (08:00 – 20:00 WIB)' : ` s/d ${range?.to?.toLocaleDateString('id-ID')}`}
+                      {rentalCalculation.days === 1 ? ' (Mulai 00:00 WIB)' : ` s/d ${range?.to?.toLocaleDateString('id-ID')}`}
                     </p>
                   </motion.div>
                 )}
