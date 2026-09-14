@@ -1,9 +1,9 @@
-import { useState, Fragment } from 'react';
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, ArrowLeft, FileText, ExternalLink, CheckCircle, Car, User, Calendar, MapPin, ShieldCheck, Clock, AlertTriangle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api, ApiError, type StatusBooking, type AdminBooking } from '../../lib/api';
+import { api, ApiError, type StatusBooking, type Booking } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getBookingStatusWithIcon } from '../../lib/statusConfig';
@@ -122,7 +122,7 @@ function DetailStatusConfirmModal({
   isPending,
   isDark,
 }: {
-  booking: AdminBooking;
+  booking: Booking;
   targetStatus: StatusBooking;
   onClose: () => void;
   onConfirm: () => void;
