@@ -250,6 +250,7 @@ export interface Instansi {
   status: StatusInstansi;
   komisiPlatformPersen: string;
   rekeningBank: string | null;
+  npwp?: string | null;
   createdAt: string;
   _count?: {
     cars: number;
@@ -412,11 +413,22 @@ export interface ApprovalSummary {
 
 export interface Notification {
   id: string;
+  userId?: string | null;
+  instansiId?: string | null;
+  targetRole?: string | null;
   type: string;
   title: string;
   message: string;
-  data: Record<string, unknown> | null;
+  data: {
+    actionUrl?: string;
+    bookingId?: string;
+    carId?: string;
+    instansiId?: string;
+    disbursementId?: string;
+    [key: string]: unknown;
+  } | null;
   isRead: boolean;
+  readAt?: string | null;
   createdAt: string;
 }
 
@@ -644,26 +656,19 @@ export function onSessionExpired(callback: () => void) {
   return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handler);
 }
 
-// Proactive refresh: cek expiry sebelum request agar user aktif tidak kena 401 dadakan
-export async function ensureFreshToken(): Promise<string | null> {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const s = data.session;
-    if (!s) return null;
-    const expMs = s.expires_at ? s.expires_at * 1000 : 0;
-    if (expMs && expMs - Date.now() < 10 * 60 * 1000) {
-      return refreshSessionToken();
-    }
-    return s.access_token;
-  } catch {
-    return null;
-  }
-}
-
 // Mutex / promise share untuk token refresh agar tidak terjadi duplicate refresh request secara bersamaan
 let refreshPromise: Promise<string | null> | null = null;
+let lastRefreshSuccess = 0;
 
 async function refreshSessionToken(): Promise<string | null> {
+  // Jika baru saja sukses di-refresh dalam 5 detik terakhir, gunakan token sesi terbaru untuk menghindari race condition Supabase
+  if (Date.now() - lastRefreshSuccess < 5000) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) {
+      return data.session.access_token;
+    }
+  }
+
   if (refreshPromise) {
     return refreshPromise;
   }
@@ -674,6 +679,7 @@ async function refreshSessionToken(): Promise<string | null> {
       if (error || !data.session) {
         return null;
       }
+      lastRefreshSuccess = Date.now();
       return data.session.access_token;
     } catch {
       return null;
@@ -685,14 +691,31 @@ async function refreshSessionToken(): Promise<string | null> {
   return refreshPromise;
 }
 
+// Proactive refresh: cek expiry sebelum request agar user aktif tidak kena 401 dadakan
+export async function ensureFreshToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const s = data.session;
+    if (!s) return null;
+    const expMs = s.expires_at ? s.expires_at * 1000 : 0;
+    // Jika token sudah kedaluwarsa atau tersisa kurang dari 10 menit, refresh secara proaktif
+    if (!expMs || expMs - Date.now() < 10 * 60 * 1000) {
+      const refreshed = await refreshSessionToken();
+      if (refreshed) return refreshed;
+    }
+    return s.access_token;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetch wrapper ke Express API. Menyisipkan Bearer token dari sesi
  * Supabase yang sedang aktif (kalau ada) — dibutuhkan endpoint
  * Customer/Admin sesuai §10 PRD. Endpoint publik tetap jalan tanpa token.
  */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const { data } = await supabase.auth.getSession();
-  let token = data.session?.access_token;
+  let token = await ensureFreshToken();
 
   if (import.meta.env.DEV) {
     console.log(`[API] ${init?.method ?? 'GET'} ${path}`);
@@ -753,8 +776,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 // Wrapper for endpoints that return additional metadata (pagination, summary, etc.)
 async function apiFetchFull<T>(path: string, init?: RequestInit): Promise<T> {
-  const { data } = await supabase.auth.getSession();
-  let token = data.session?.access_token;
+  let token = await ensureFreshToken();
 
   let res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -849,11 +871,29 @@ export const api = {
   getInstansiActivities: () =>
     apiFetch<InstansiActivity[]>('/api/instansi/activities'),
 
-  // ── Admin: Notifications ──
+  // ── Unified Notifications (All Roles: Customer, Admin, SuperAdmin) ──
+  getNotifications: (params?: { unreadOnly?: boolean; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.unreadOnly) qs.set('unreadOnly', 'true');
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return apiFetch<NotificationResponse>(`/api/notifications${query ? `?${query}` : ''}`);
+  },
+  getNotificationUnreadCount: () =>
+    apiFetch<{ unreadCount: number }>('/api/notifications/unread-count'),
+  markNotificationRead: (id: string) =>
+    apiFetch<Notification>(`/api/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllNotificationsRead: () =>
+    apiFetch<{ success: boolean; count: number }>('/api/notifications/mark-all-read', { method: 'POST' }),
+  deleteNotification: (id: string) =>
+    apiFetch<{ success: boolean }>(`/api/notifications/${id}`, { method: 'DELETE' }),
+
+  // ── Admin: Notifications (Kompatibilitas) ──
   getAdminNotifications: (unreadOnly?: boolean) =>
-    apiFetch<NotificationResponse>(`/api/admin/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
+    apiFetch<NotificationResponse>(`/api/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
   markAdminNotificationRead: (id: string) =>
-    apiFetch<Notification>(`/api/admin/notifications/${id}/read`, { method: 'PATCH' }),
+    apiFetch<Notification>(`/api/notifications/${id}/read`, { method: 'PATCH' }),
 
   // ── Admin: Armada (F10) ──
   listAdminCars: (params: { page?: number; limit?: number; cari?: string } = {}) => {
@@ -976,8 +1016,6 @@ export const api = {
   getSuperAdminApprovals: () => apiFetch<ApprovalSummary>('/api/superadmin/dashboard/approvals'),
   getSuperAdminNotifications: (unreadOnly?: boolean) =>
     apiFetch<NotificationResponse>(`/api/superadmin/dashboard/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
-  markNotificationRead: (id: string) =>
-    apiFetch<Notification>(`/api/superadmin/dashboard/notifications/${id}/read`, { method: 'PATCH' }),
   getTopCompanies: () => apiFetch<TopCompany[]>('/api/superadmin/dashboard/top-companies'),
   getPopularVehicles: () => apiFetch<PopularVehicle[]>('/api/superadmin/dashboard/popular-vehicles'),
   getCommissionStats: () => apiFetch<CommissionStats>('/api/superadmin/dashboard/commission'),
@@ -1010,6 +1048,7 @@ export const api = {
     noHpPic: string;
     emailPic: string;
     rekeningBank?: string;
+    npwp?: string;
     komisiPlatformPersen?: number;
   }) =>
     apiFetch<Instansi>('/api/superadmin/instansi', {
@@ -1022,6 +1061,7 @@ export const api = {
     noHpPic: string;
     emailPic: string;
     rekeningBank: string | null;
+    npwp: string | null;
     komisiPlatformPersen: number;
   }>) =>
     apiFetch<Instansi>(`/api/superadmin/instansi/${id}`, {

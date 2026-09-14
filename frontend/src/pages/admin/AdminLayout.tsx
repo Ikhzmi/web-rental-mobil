@@ -11,23 +11,17 @@ import {
   LogOut,
   Sun,
   Moon,
-  Bell,
-  CheckCircle,
-  AlertCircle,
-  Info,
-  XCircle,
-  ClipboardCheck,
   MessageSquare,
   Calendar,
   Settings,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../hooks/useTheme';
-import { useToast } from '../../contexts/ToastContext';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
-import type { NotificationResponse } from '../../lib/api';
 import InactiveNoticeBanner from '../../components/InactiveNoticeBanner';
+import { NotificationBell } from '../../components/NotificationBell';
 import bgDashboardDark from '../../assets/bg-dashboard-dark.jpg';
 import bgDashboardLight from '../../assets/bg-dashboard-light.png';
 
@@ -46,8 +40,7 @@ const ADMIN_BOTTOM_LINKS = [
 export default function AdminLayout() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
-  const queryClient = useQueryClient();
-  const { showToast } = useToast();
+
 
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -75,60 +68,6 @@ export default function AdminLayout() {
 
   const headerRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const notificationRef = useRef<HTMLDivElement>(null);
-
-  // Fetch notifications for admin dashboard
-  const { data: notificationsData } = useQuery<NotificationResponse>({
-    queryKey: ['admin-notifications'],
-    queryFn: () => api.getAdminNotifications(),
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
-    retry: 1,
-    throwOnError: false,
-  });
-
-  const notifications = notificationsData?.data ?? [];
-  const unreadCount = notificationsData?.unreadCount ?? 0;
-
-  const markAllAsRead = async () => {
-    for (const notification of notifications) {
-      if (!notification.isRead) {
-        try {
-          await api.markAdminNotificationRead(notification.id);
-        } catch {
-          // Individual errors are ignored, but show toast if all fail
-        }
-      }
-    }
-    queryClient.invalidateQueries({ queryKey: ['admin-notifications'] });
-    showToast('success', 'Berhasil', 'Semua notifikasi telah dibaca');
-  };
-
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'approval': return <AlertCircle size={18} className="text-amber-400" />;
-      case 'booking': return <ClipboardCheck size={18} className="text-blue-400" />;
-      case 'success': return <CheckCircle size={18} className="text-emerald-400" />;
-      case 'payment': return <Info size={18} className="text-cyan-400" />;
-      case 'error': return <XCircle size={18} className="text-red-400" />;
-      default: return <Bell size={18} className="text-slate-400" />;
-    }
-  };
-
-  const formatNotificationTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Baru saja';
-    if (diffMins < 60) return `${diffMins} menit lalu`;
-    if (diffHours < 24) return `${diffHours} jam lalu`;
-    if (diffDays < 7) return `${diffDays} hari lalu`;
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -537,87 +476,8 @@ export default function AdminLayout() {
 
             {/* Header Right Icons */}
             <div className="flex items-center gap-2">
-              {/* Notification Bell - Hover to show */}
-              <div ref={notificationRef} className="relative">
-                <div className="group/notif p-2 -m-2">
-                  <button
-                    className={`p-2.5 rounded-xl transition-all duration-300 relative ${
-                      isDark
-                        ? 'glass-daftar-btn-dark'
-                        : 'glass-daftar-btn-light'
-                    }`}
-                    aria-label="Notifications"
-                  >
-                    <Bell size={18} className={isDark ? 'text-white/70' : 'text-slate-600'} />
-                    {unreadCount > 0 && (
-                      <span className="absolute flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full -top-1 -right-1">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Notification Popup - Glass Effect on Hover */}
-                  <div className={`
-                    absolute right-0 top-10 w-80 rounded-2xl overflow-hidden shadow-2xl z-50
-                    pointer-events-none opacity-0 group-hover/notif:pointer-events-auto group-hover/notif:opacity-100
-                    transition-all duration-300 transform translate-y-[-8px] group-hover/notif:translate-y-0
-                    backdrop-blur-xl
-                    ${isDark
-                      ? 'bg-[#1a1a1a]/90 border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]'
-                      : 'bg-[#F9EFE8]/90 border border-[#D4CFC7]/60 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.1)]'
-                    }
-                  `}>
-                    {/* Popup Header */}
-                    <div className={`px-4 py-3 flex items-center justify-between border-b ${isDark ? 'border-white/10' : 'border-[#D4CFC7]/40'}`}>
-                      <h3 className={`font-semibold ${textClass}`}>Notifikasi</h3>
-                      <button
-                        onClick={markAllAsRead}
-                        className={`text-xs ${isDark ? 'text-white/50 hover:text-white' : 'text-[#8B7355] hover:text-[#6B5344]'}`}
-                      >
-                        Tandai semua dibaca
-                      </button>
-                    </div>
-
-                    {/* Notification List */}
-                    <div className="overflow-y-auto max-h-80">
-                      {notifications.length === 0 ? (
-                        <div className={`px-4 py-8 text-center ${isDark ? 'text-white/40' : 'text-[#8B7355]'}`}>
-                          <Bell size={24} className="mx-auto mb-2 opacity-50" />
-                          <p className="text-sm">Tidak ada notifikasi</p>
-                        </div>
-                      ) : (
-                        notifications.map((notification: { id: string; title: string; message: string; type: string; isRead: boolean; createdAt: string }) => (
-                          <div
-                            key={notification.id}
-                            className={`px-4 py-3 flex items-start gap-3 border-b last:border-b-0 transition-colors cursor-pointer ${
-                              isDark ? 'border-white/5 hover:bg-white/10' : 'border-[#D4CFC7]/30 hover:bg-[#F5F0E8]'
-                            } ${!notification.isRead ? (isDark ? 'bg-white/5' : 'bg-[#F5F0E8]/80') : ''}`}
-                          >
-                            <div className="mt-0.5">
-                              {getNotificationIcon(notification.type)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium ${textClass}`}>{notification.title}</p>
-                              <p className={`text-xs mt-0.5 ${isDark ? 'text-white/50' : 'text-[#8B7355]/80'}`}>{notification.message}</p>
-                              <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-[#8B7355]/60'}`}>{formatNotificationTime(notification.createdAt)}</p>
-                            </div>
-                            {!notification.isRead && (
-                              <div className="w-2 h-2 mt-2 bg-[#e8702a] rounded-full" />
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    {/* Popup Footer */}
-                    {notifications.length > 0 && (
-                      <div className={`px-4 py-2.5 text-center border-t ${isDark ? 'border-white/10 text-white/30' : 'border-[#D4CFC7]/40 text-[#8B7355]/60'}`}>
-                        <span className="text-xs">Menampilkan {notifications.length} notifikasi terbaru</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* Notification Bell */}
+              <NotificationBell align="right" />
 
               {/* Theme Toggle */}
               <button

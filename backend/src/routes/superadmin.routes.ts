@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireSuperAdmin } from '../middleware/verifySupabaseToken';
 import { createClient } from '@supabase/supabase-js';
+import { notifyInstansi } from '../services/notification.service';
 
 export const superadminRouter = Router();
 
@@ -366,6 +367,22 @@ superadminRouter.patch('/instansi/:id/verifikasi', async (req, res) => {
       },
     });
 
+    if (action === 'approve') {
+      void notifyInstansi(instansi.id, {
+        type: 'approval',
+        title: 'Akun Instansi Diverifikasi!',
+        message: 'Selamat! Instansi Anda telah diverifikasi dan aktif. Anda sekarang dapat mendaftarkan armada mobil.',
+        data: { actionUrl: '/admin/armada' },
+      });
+    } else {
+      void notifyInstansi(instansi.id, {
+        type: 'approval',
+        title: 'Pendaftaran Instansi Ditolak',
+        message: `Pendaftaran instansi Anda belum dapat disetujui.${alasan ? ' Alasan: ' + alasan : ''}`,
+        data: { actionUrl: '/admin/pengaturan' },
+      });
+    }
+
     res.json({
       data: updated,
       message: action === 'approve'
@@ -414,6 +431,7 @@ const createInstansiSchema = z.object({
   noHpPic: z.string().min(10, 'No HP minimal 10 digit'),
   emailPic: z.string().email('Email tidak valid'),
   rekeningBank: z.string().optional(),
+  npwp: z.string().optional(),
   komisiPlatformPersen: z.number().min(0).max(100).default(10),
 });
 
@@ -433,6 +451,7 @@ superadminRouter.post('/instansi', async (req, res) => {
         noHpPic: parsed.data.noHpPic,
         emailPic: parsed.data.emailPic,
         rekeningBank: parsed.data.rekeningBank,
+        npwp: parsed.data.npwp,
         komisiPlatformPersen: parsed.data.komisiPlatformPersen,
         status: 'aktif',
       },
@@ -455,6 +474,7 @@ const updateInstansiSchema = z.object({
   noHpPic: z.string().min(10).optional(),
   emailPic: z.string().email().optional(),
   rekeningBank: z.string().nullable().optional(),
+  npwp: z.string().nullable().optional(),
   komisiPlatformPersen: z.number().min(0).max(100).optional(),
 });
 
@@ -481,6 +501,7 @@ superadminRouter.put('/instansi/:id', async (req, res) => {
         ...(parsed.data.noHpPic && { noHpPic: parsed.data.noHpPic }),
         ...(parsed.data.emailPic && { emailPic: parsed.data.emailPic }),
         ...(parsed.data.rekeningBank !== undefined && { rekeningBank: parsed.data.rekeningBank }),
+        ...(parsed.data.npwp !== undefined && { npwp: parsed.data.npwp }),
         ...(parsed.data.komisiPlatformPersen && { komisiPlatformPersen: parsed.data.komisiPlatformPersen }),
       },
     });
@@ -815,6 +836,22 @@ superadminRouter.patch('/armada/:id/approval', async (req, res) => {
         ...(action === 'approve' && { status: 'tersedia' }),
       },
     });
+
+    if (action === 'approve') {
+      void notifyInstansi(car.instansiId, {
+        type: 'approval',
+        title: 'Mobil Disetujui Super Admin',
+        message: `Unit ${car.nama} (${car.nomorPlat ?? 'Tanpa Plat'}) telah disetujui dan kini tayang di katalog pencarian.`,
+        data: { actionUrl: '/admin/armada', carId: car.id },
+      });
+    } else {
+      void notifyInstansi(car.instansiId, {
+        type: 'approval',
+        title: 'Pengajuan Mobil Ditolak',
+        message: `Pengajuan unit ${car.nama} ditolak.${alasan ? ' Alasan: ' + alasan : ''}`,
+        data: { actionUrl: '/admin/armada', carId: car.id },
+      });
+    }
 
     res.json({
       data: updated,
@@ -1219,6 +1256,22 @@ superadminRouter.patch('/disbursements/:id/status', async (req, res) => {
       },
     });
 
+    if (parsed.data.status === 'berhasil') {
+      void notifyInstansi(updated.instansiId, {
+        type: 'disbursement',
+        title: 'Dana Berhasil Dicairkan!',
+        message: `Pencairan dana sebesar Rp ${Number(updated.jumlahBersih).toLocaleString('id-ID')} telah berhasil ditransfer.${updated.bankTransferId ? ' (Ref: ' + updated.bankTransferId + ')' : ''}`,
+        data: { actionUrl: '/admin/dashboard', disbursementId: updated.id },
+      });
+    } else if (parsed.data.status === 'gagal') {
+      void notifyInstansi(updated.instansiId, {
+        type: 'disbursement',
+        title: 'Pencairan Dana Gagal',
+        message: `Pencairan dana Rp ${Number(updated.jumlahBersih).toLocaleString('id-ID')} gagal diproses. Harap periksa nomor rekening instansi Anda.`,
+        data: { actionUrl: '/admin/pengaturan', disbursementId: updated.id },
+      });
+    }
+
     res.json({ data: updated });
   } catch (error) {
     console.error('PATCH /api/superadmin/disbursements/:id/status error:', error);
@@ -1609,8 +1662,10 @@ superadminRouter.get('/dashboard/top-companies', async (_req, res) => {
     // Calculate revenue per instansi
     const revenueByInstansi: Record<string, number> = {};
     for (const booking of bookings) {
-      const instId = booking.car.instansiId;
-      revenueByInstansi[instId] = (revenueByInstansi[instId] || 0) + Number(booking.totalHarga);
+      const instId = booking.car?.instansiId;
+      if (instId) {
+        revenueByInstansi[instId] = (revenueByInstansi[instId] || 0) + Number(booking.totalHarga);
+      }
     }
 
     // Get instansi details and combine
@@ -1664,10 +1719,16 @@ superadminRouter.get('/dashboard/top-companies', async (_req, res) => {
     const previousRevenueByInstansi: Record<string, number> = {};
 
     for (const b of recentBookings) {
-      recentRevenueByInstansi[b.car.instansiId] = (recentRevenueByInstansi[b.car.instansiId] || 0) + Number(b.totalHarga);
+      const instId = b.car?.instansiId;
+      if (instId) {
+        recentRevenueByInstansi[instId] = (recentRevenueByInstansi[instId] || 0) + Number(b.totalHarga);
+      }
     }
     for (const b of previousBookings) {
-      previousRevenueByInstansi[b.car.instansiId] = (previousRevenueByInstansi[b.car.instansiId] || 0) + Number(b.totalHarga);
+      const instId = b.car?.instansiId;
+      if (instId) {
+        previousRevenueByInstansi[instId] = (previousRevenueByInstansi[instId] || 0) + Number(b.totalHarga);
+      }
     }
 
     const topCompaniesWithGrowth = topCompanies.map((company) => {

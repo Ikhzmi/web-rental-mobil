@@ -19,13 +19,13 @@ export function TodayBookings() {
   // Calculate confirmed: total - (pending + running + completed + cancelled)
   const confirmed = Math.max(0, (bookings?.total ?? 0) - ((bookings?.pending ?? 0) + (bookings?.running ?? 0) + (bookings?.completed ?? 0) + (bookings?.cancelled ?? 0)));
 
-  // 5 statuses - no colors
+  // 5 statuses with unified colors
   const stats = [
-    { label: 'Menunggu Bayar', value: bookings?.pending ?? 0 },
-    { label: 'Dikonfirmasi', value: confirmed },
-    { label: 'Berjalan', value: bookings?.running ?? 0 },
-    { label: 'Selesai', value: bookings?.completed ?? 0 },
-    { label: 'Dibatalkan', value: bookings?.cancelled ?? 0 },
+    { label: 'Menunggu Bayar', value: bookings?.pending ?? 0, color: '#f59e0b', dotClass: 'bg-amber-400' },
+    { label: 'Dikonfirmasi', value: confirmed, color: '#3b82f6', dotClass: 'bg-blue-400' },
+    { label: 'Berjalan', value: bookings?.running ?? 0, color: '#8b5cf6', dotClass: 'bg-purple-400' },
+    { label: 'Selesai', value: bookings?.completed ?? 0, color: '#10b981', dotClass: 'bg-emerald-400' },
+    { label: 'Dibatalkan', value: bookings?.cancelled ?? 0, color: '#ef4444', dotClass: 'bg-rose-400' },
   ];
 
   const radius = 42;
@@ -80,7 +80,7 @@ export function TodayBookings() {
                       cy="50"
                       r={radius}
                       fill="none"
-                      stroke="#94a3b8"
+                      stroke={stat.color}
                       strokeWidth="12"
                       strokeDasharray={`${dashLength} ${circumference - dashLength}`}
                       strokeDashoffset={dashOffset}
@@ -99,7 +99,7 @@ export function TodayBookings() {
           </div>
         </div>
 
-        {/* Right: 5 Status Legend - No Colors */}
+        {/* Right: 5 Status Legend With Harmonized Color Dots */}
         <div className="flex-1 flex flex-col justify-center pl-4">
           {isLoading ? (
             <div className="space-y-2">
@@ -114,7 +114,10 @@ export function TodayBookings() {
             <div className="space-y-1.5">
               {stats.map((stat) => (
                 <div key={stat.label} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-white/5 dark:bg-white/5">
-                  <span className={`text-xs ${isDark ? 'text-white/70' : 'text-slate-600'}`}>{stat.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${stat.dotClass} shrink-0`} />
+                    <span className={`text-xs ${isDark ? 'text-white/70' : 'text-slate-600'}`}>{stat.label}</span>
+                  </div>
                   <span className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{stat.value}</span>
                 </div>
               ))}

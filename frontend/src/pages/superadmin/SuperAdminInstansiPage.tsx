@@ -18,6 +18,7 @@ import {
   Percent,
   Users,
   Car,
+  FileText,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Instansi, StatusInstansi } from '../../lib/api';
@@ -139,6 +140,7 @@ function CreateInstansiModal({ onClose, onSuccess, isDark }: { onClose: () => vo
     noHpPic: '',
     emailPic: '',
     rekeningBank: '',
+    npwp: '',
     komisiPlatformPersen: 10,
   });
   const [error, setError] = useState('');
@@ -160,6 +162,7 @@ function CreateInstansiModal({ onClose, onSuccess, isDark }: { onClose: () => vo
     createMutation.mutate({
       ...form,
       rekeningBank: form.rekeningBank || undefined,
+      npwp: form.npwp || undefined,
     });
   };
 
@@ -177,14 +180,14 @@ function CreateInstansiModal({ onClose, onSuccess, isDark }: { onClose: () => vo
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-lg rounded-2xl overflow-hidden ${
+        className={`w-full max-w-lg rounded-2xl overflow-hidden max-h-[90vh] flex flex-col ${
           isDark
             ? 'login-card-dark'
             : 'login-card-light'
         }`}
       >
         {/* Header */}
-        <div className={`relative px-6 py-5 ${isDark ? 'border-b border-white/10' : 'border-b border-[#D4CFC7]/40'}`}>
+        <div className={`relative px-6 py-5 shrink-0 ${isDark ? 'border-b border-white/10' : 'border-b border-[#D4CFC7]/40'}`}>
           <div className="flex items-center gap-3">
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${
               isDark ? 'bg-white/10' : 'bg-[#f5ebe0]'
@@ -210,7 +213,7 @@ function CreateInstansiModal({ onClose, onSuccess, isDark }: { onClose: () => vo
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 flex-1 overflow-y-auto">
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -271,15 +274,25 @@ function CreateInstansiModal({ onClose, onSuccess, isDark }: { onClose: () => vo
             />
           </div>
 
-          {/* Rekening */}
-          <FormField
-            label="Nomor Rekening"
-            icon={CreditCard}
-            value={form.rekeningBank}
-            onChange={(val) => setForm({ ...form, rekeningBank: val })}
-            placeholder="BCA - 1234567890 (opsional)"
-            dark={isDark}
-          />
+          {/* NPWP & Rekening */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="NPWP Instansi"
+              icon={FileText}
+              value={form.npwp}
+              onChange={(val) => setForm({ ...form, npwp: val })}
+              placeholder="01.234.567.8-901.000 (opsional)"
+              dark={isDark}
+            />
+            <FormField
+              label="Nomor Rekening"
+              icon={CreditCard}
+              value={form.rekeningBank}
+              onChange={(val) => setForm({ ...form, rekeningBank: val })}
+              placeholder="BCA - 1234567890 (opsional)"
+              dark={isDark}
+            />
+          </div>
 
           {/* Komisi Slider */}
           <div>
@@ -382,6 +395,7 @@ function EditInstansiModal({
     noHpPic: instansi.noHpPic,
     emailPic: instansi.emailPic,
     rekeningBank: instansi.rekeningBank ?? '',
+    npwp: instansi.npwp ?? '',
     komisiPlatformPersen: Math.round(Number(instansi.komisiPlatformPersen)),
   });
   const [error, setError] = useState('');
@@ -391,6 +405,7 @@ function EditInstansiModal({
       api.updateInstansi(instansi.id, {
         ...form,
         rekeningBank: form.rekeningBank || null,
+        npwp: form.npwp || null,
       }),
     onSuccess: () => {
       onSuccess();
@@ -421,12 +436,12 @@ function EditInstansiModal({
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-lg rounded-2xl overflow-hidden my-10 ${
+        className={`w-full max-w-lg rounded-2xl overflow-hidden max-h-[90vh] flex flex-col ${
           isDark ? 'login-card-dark' : 'login-card-light'
         }`}
       >
         {/* Header */}
-        <div className={`relative px-6 py-5 ${isDark ? 'border-b border-white/10' : 'border-b border-[#D4CFC7]/40'}`}>
+        <div className={`relative px-6 py-5 shrink-0 ${isDark ? 'border-b border-white/10' : 'border-b border-[#D4CFC7]/40'}`}>
           <div className="flex items-center gap-3">
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${
               isDark ? 'bg-white/10' : 'bg-[#f5ebe0]'
@@ -452,7 +467,7 @@ function EditInstansiModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 flex-1 overflow-y-auto">
           {error && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -517,14 +532,25 @@ function EditInstansiModal({
             />
           </div>
 
-          <FormField
-            label="Nomor Rekening"
-            icon={CreditCard}
-            value={form.rekeningBank}
-            onChange={(val) => setForm({ ...form, rekeningBank: val })}
-            placeholder="BCA - 1234567890 (opsional)"
-            dark={isDark}
-          />
+          {/* NPWP & Rekening */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="NPWP Instansi"
+              icon={FileText}
+              value={form.npwp}
+              onChange={(val) => setForm({ ...form, npwp: val })}
+              placeholder="01.234.567.8-901.000 (opsional)"
+              dark={isDark}
+            />
+            <FormField
+              label="Nomor Rekening"
+              icon={CreditCard}
+              value={form.rekeningBank}
+              onChange={(val) => setForm({ ...form, rekeningBank: val })}
+              placeholder="BCA - 1234567890 (opsional)"
+              dark={isDark}
+            />
+          </div>
 
           <div>
             <label className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
@@ -712,6 +738,14 @@ function InstansiCard({ instansi, index, onDelete, onEdit, onToggleStatus, isDar
               {instansi.alamat}
             </span>
           </div>
+          {instansi.npwp && (
+            <div className="col-span-2 flex items-center gap-2 pt-1 border-t border-white/5">
+              <FileText size={12} className={isDark ? 'text-white/40' : 'text-[#8B7355]/60'} />
+              <span className={`text-xs ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                NPWP: <span className="font-mono text-[11px]">{instansi.npwp}</span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Stats Row */}

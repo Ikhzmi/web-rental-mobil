@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Search, Car, Clock, Building2, ChevronLeft, ChevronRight, Loader2, X, Mail, Phone, MapPin, User } from 'lucide-react';
+import { ClipboardList, Search, Car, Clock, Building2, ChevronLeft, ChevronRight, X, Mail, Phone, MapPin, User } from 'lucide-react';
 import { api, type StatusBooking, type SuperAdminBookingItem } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
@@ -307,14 +307,30 @@ export default function SuperAdminBookingsPage() {
 
       {/* List */}
       {isLoading ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className={`text-center py-16 rounded-2xl ${getGlassCardClass(isDark)}`}
-        >
-          <Loader2 size={48} className={`mx-auto mb-4 animate-spin ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
-          <p className={`text-lg ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Memuat data...</p>
-        </motion.div>
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className={`rounded-2xl overflow-hidden p-4 sm:p-5 animate-pulse ${getGlassCardClass(isDark)}`}
+            >
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <div className={`w-full sm:w-20 h-24 sm:h-20 rounded-xl shrink-0 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                <div className="flex-1 min-w-0 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-5 w-40 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                    <div className={`h-5 w-16 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                    <div className={`h-5 w-20 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  </div>
+                  <div className={`h-3.5 w-48 rounded ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                  <div className={`h-3.5 w-64 rounded ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                </div>
+                <div className="sm:text-right shrink-0">
+                  <div className={`h-6 w-28 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : isError ? (
         <motion.div
           initial={{ opacity: 0 }}

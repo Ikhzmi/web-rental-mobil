@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { verifyPakasirWebhook, isPakasirConfigured } from '../services/pakasir.service';
 import { getSystemActorId } from '../lib/systemActor';
 import { sendBookingConfirmedEmail, sendBookingCancelledEmail } from '../services/email.service';
+import { notifyUser, notifyInstansi, notifySuperAdmins } from '../services/notification.service';
 
 export const webhooksRouter = Router();
 
@@ -195,6 +196,27 @@ async function processPakasirWebhook(
 // Exported handlers for on-demand payment status sync (polling)
 export { handlePakasirPaymentPaid, handlePakasirPaymentExpired };
 
+interface ConfirmedBookingInfo {
+  userId: string;
+  email: string;
+  nama: string;
+  carNama: string;
+  instansiId: string;
+  tanggalMulai: Date;
+  tanggalSelesai: Date;
+  totalHarga: number;
+}
+
+interface CancelledBookingInfo {
+  userId: string;
+  instansiId: string;
+  email: string;
+  nama: string;
+  carNama: string;
+  tanggalMulai: Date;
+  tanggalSelesai: Date;
+}
+
 async function handlePakasirPaymentPaid(
   paymentId: string,
   bookingId: string,
@@ -203,15 +225,8 @@ async function handlePakasirPaymentPaid(
   amount?: number
 ) {
   const systemActorId = await getSystemActorId();
-  let confirmedBookingInfo: {
-    email: string;
-    nama: string;
-    carNama: string;
-    tanggalMulai: Date;
-    tanggalSelesai: Date;
-  } | null = null;
 
-  await prisma.$transaction(async (tx) => {
+  const confirmedInfo = await prisma.$transaction(async (tx): Promise<ConfirmedBookingInfo | null> => {
     const payment = await tx.payment.findUnique({
       where: { id: paymentId },
     });
@@ -222,7 +237,7 @@ async function handlePakasirPaymentPaid(
         bookingId,
         transactionId,
       });
-      return;
+      return null;
     }
 
     const updateData: { status: 'paid'; paidAt: Date; jumlah?: number } = {
@@ -241,7 +256,7 @@ async function handlePakasirPaymentPaid(
     const booking = await tx.booking.findUnique({
       where: { id: bookingId },
       include: {
-        car: { select: { nama: true } },
+        car: { select: { nama: true, instansiId: true } },
         profile: { select: { nama: true, email: true } },
       },
     });
@@ -263,24 +278,23 @@ async function handlePakasirPaymentPaid(
         });
       }
 
-      confirmedBookingInfo = {
+      return {
+        userId: booking.userId,
         email: booking.profile.email,
         nama: booking.profile.nama,
         carNama: booking.car.nama,
+        instansiId: booking.car.instansiId,
         tanggalMulai: booking.tanggalMulai,
         tanggalSelesai: booking.tanggalSelesai,
+        totalHarga: Number(booking.totalHarga),
       };
     }
+
+    return null;
   });
 
-  if (confirmedBookingInfo) {
-    const info: {
-      email: string;
-      nama: string;
-      carNama: string;
-      tanggalMulai: Date;
-      tanggalSelesai: Date;
-    } = confirmedBookingInfo;
+  if (confirmedInfo) {
+    const info = confirmedInfo;
     void sendBookingConfirmedEmail({
       to: info.email,
       namaPenyewa: info.nama,
@@ -288,6 +302,30 @@ async function handlePakasirPaymentPaid(
       bookingId,
       tanggalMulai: info.tanggalMulai.toISOString(),
       tanggalSelesai: info.tanggalSelesai.toISOString(),
+    });
+
+    // 1. Notif ke Customer
+    void notifyUser(info.userId, {
+      type: 'payment',
+      title: 'Pembayaran Berhasil!',
+      message: `Pesanan #${bookingId.slice(0, 8)} untuk mobil ${info.carNama} telah dikonfirmasi.`,
+      data: { actionUrl: `/akun/pesanan/${bookingId}`, bookingId },
+    });
+
+    // 2. Notif ke Admin Instansi
+    void notifyInstansi(info.instansiId, {
+      type: 'payment',
+      title: 'Pembayaran Diterima!',
+      message: `Pesanan #${bookingId.slice(0, 8)} untuk ${info.carNama} oleh ${info.nama} telah lunas.`,
+      data: { actionUrl: `/admin/pesanan/${bookingId}`, bookingId },
+    });
+
+    // 3. Notif ke Superadmin
+    void notifySuperAdmins({
+      type: 'payment',
+      title: 'Pembayaran Booking Sukses',
+      message: `Booking #${bookingId.slice(0, 8)} lunas (Rp ${info.totalHarga.toLocaleString('id-ID')}).`,
+      data: { actionUrl: '/superadmin/transactions', bookingId },
     });
   }
 
@@ -300,15 +338,8 @@ async function handlePakasirPaymentPaid(
 
 async function handlePakasirPaymentExpired(paymentId: string, bookingId: string) {
   const systemActorId = await getSystemActorId();
-  let cancelledBookingInfo: {
-    email: string;
-    nama: string;
-    carNama: string;
-    tanggalMulai: Date;
-    tanggalSelesai: Date;
-  } | null = null;
 
-  await prisma.$transaction(async (tx) => {
+  const cancelInfo = await prisma.$transaction(async (tx): Promise<CancelledBookingInfo | null> => {
     await tx.payment.update({
       where: { id: paymentId },
       data: { status: 'expired' },
@@ -317,7 +348,7 @@ async function handlePakasirPaymentExpired(paymentId: string, bookingId: string)
     const booking = await tx.booking.findUnique({
       where: { id: bookingId },
       include: {
-        car: { select: { nama: true } },
+        car: { select: { nama: true, instansiId: true } },
         profile: { select: { nama: true, email: true } },
       },
     });
@@ -339,7 +370,9 @@ async function handlePakasirPaymentExpired(paymentId: string, bookingId: string)
         });
       }
 
-      cancelledBookingInfo = {
+      return {
+        userId: booking.userId,
+        instansiId: booking.car.instansiId,
         email: booking.profile.email,
         nama: booking.profile.nama,
         carNama: booking.car.nama,
@@ -347,16 +380,12 @@ async function handlePakasirPaymentExpired(paymentId: string, bookingId: string)
         tanggalSelesai: booking.tanggalSelesai,
       };
     }
+
+    return null;
   });
 
-  if (cancelledBookingInfo) {
-    const info: {
-      email: string;
-      nama: string;
-      carNama: string;
-      tanggalMulai: Date;
-      tanggalSelesai: Date;
-    } = cancelledBookingInfo;
+  if (cancelInfo) {
+    const info = cancelInfo;
     void sendBookingCancelledEmail(
       {
         to: info.email,
@@ -368,6 +397,22 @@ async function handlePakasirPaymentExpired(paymentId: string, bookingId: string)
       },
       'dibatalkan_otomatis'
     );
+
+    // Notif ke Customer
+    void notifyUser(info.userId, {
+      type: 'payment',
+      title: 'Pembayaran Kedaluwarsa',
+      message: `Batas waktu pembayaran pesanan #${bookingId.slice(0, 8)} untuk ${info.carNama} telah berakhir.`,
+      data: { actionUrl: `/akun/pesanan/${bookingId}`, bookingId },
+    });
+
+    // Notif ke Admin Instansi
+    void notifyInstansi(info.instansiId, {
+      type: 'booking',
+      title: 'Pesanan Dibatalkan Otomatis',
+      message: `Pesanan #${bookingId.slice(0, 8)} untuk ${info.carNama} kedaluwarsa karena tidak dibayar.`,
+      data: { actionUrl: `/admin/pesanan/${bookingId}`, bookingId },
+    });
   }
 
   logPaymentAudit('PAKASIR_BOOKING_EXPIRED', {

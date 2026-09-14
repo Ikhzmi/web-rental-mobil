@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireAdmin } from '../middleware/verifySupabaseToken';
 import { asyncHandler, AppError } from '../lib/errorHandler';
+import { notifySuperAdmins } from '../services/notification.service';
 
 export const adminCarsRouter = Router();
 
@@ -136,6 +137,14 @@ adminCarsRouter.post('/', asyncHandler(async (req, res) => {
     data: { ...parsed.data, instansiId },
     include: { images: true },
   });
+
+  void notifySuperAdmins({
+    type: 'approval',
+    title: 'Pengajuan Mobil Baru',
+    message: `Mobil baru ${car.nama} (${car.nomorPlat ?? 'Tanpa plat'}) diajukan oleh instansi dan menunggu persetujuan.`,
+    data: { actionUrl: '/superadmin/approval', carId: car.id },
+  });
+
   res.status(201).json({ data: car });
 }));
 

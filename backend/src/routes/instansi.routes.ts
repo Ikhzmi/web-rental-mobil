@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken } from '../middleware/verifySupabaseToken';
 import { scopeToInstansi } from '../middleware/scopeToInstansi';
+import { notifySuperAdmins } from '../services/notification.service';
 
 // Schema untuk pendaftaran instansi baru (public)
 import { z } from 'zod';
@@ -51,6 +52,13 @@ instansiRouter.post('/daftar', async (req, res) => {
         dokumenLegalitasUrl,
         status: 'menunggu_verifikasi',
       },
+    });
+
+    void notifySuperAdmins({
+      type: 'approval',
+      title: 'Pendaftaran Instansi Baru',
+      message: `Instansi baru ${instansi.namaInstansi} mendaftar dan menunggu verifikasi legalitas dokumen.`,
+      data: { actionUrl: '/superadmin/approval', instansiId: instansi.id },
     });
 
     res.status(201).json({

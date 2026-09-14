@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import { CreditCard, CheckCircle, XCircle, ArrowRight, Clock, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { CreditCard, CheckCircle, XCircle, ArrowRight, Clock, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api, type SuperAdminTransactionItem } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
@@ -147,60 +147,95 @@ export default function SuperAdminTransactionsPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        {/* Type Filter */}
-        <div className="flex flex-wrap gap-2">
-          {[
-            { key: 'all', label: 'Semua' },
-            { key: 'payment', label: 'Pembayaran' },
-            { key: 'commission', label: 'Komisi' },
-            { key: 'disbursement', label: 'Pencairan' },
-            { key: 'refund', label: 'Refund' },
-          ].map((item) => (
-            <button
-              key={item.key}
-              onClick={() => { setFilterType(item.key as FilterType); handleFilterChange(); }}
-              className={`px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                filterType === item.key
-                  ? isDark
-                    ? 'bg-white/10 text-white border-white/20'
-                    : 'bg-blue-100 text-slate-700 border-slate-300'
-                  : isDark
-                  ? 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
-                  : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+      {/* Filters Container */}
+      <div className={`p-4 rounded-2xl mb-6 space-y-4 border ${isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white/80 border-slate-200'}`}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Type Filter */}
+          <div className="space-y-1.5 flex-1">
+            <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+              Tipe Transaksi
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: 'all', label: 'Semua Tipe' },
+                { key: 'payment', label: 'Pembayaran' },
+                { key: 'commission', label: 'Komisi' },
+                { key: 'disbursement', label: 'Pencairan' },
+                { key: 'refund', label: 'Refund' },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => { setFilterType(item.key as FilterType); handleFilterChange(); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                    filterType === item.key
+                      ? isDark
+                        ? 'bg-white text-slate-900 shadow-md font-semibold'
+                        : 'bg-slate-900 text-white shadow-md font-semibold'
+                      : isDark
+                      ? 'bg-white/5 text-white/70 hover:bg-white/10 border border-white/10'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div className="space-y-1.5">
+            <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+              Status Transaksi
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: 'all', label: 'Semua Status' },
+                { key: 'success', label: 'Berhasil' },
+                { key: 'pending', label: 'Pending' },
+                { key: 'failed', label: 'Gagal' },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => { setFilterStatus(item.key as FilterStatus); handleFilterChange(); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                    filterStatus === item.key
+                      ? item.key === 'success'
+                        ? 'bg-emerald-600 text-white font-semibold shadow-md'
+                        : item.key === 'pending'
+                        ? 'bg-amber-600 text-white font-semibold shadow-md'
+                        : item.key === 'failed'
+                        ? 'bg-red-600 text-white font-semibold shadow-md'
+                        : isDark
+                        ? 'bg-white text-slate-900 shadow-md font-semibold'
+                        : 'bg-slate-900 text-white shadow-md font-semibold'
+                      : isDark
+                      ? 'bg-white/5 text-white/70 hover:bg-white/10 border border-white/10'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Status Filter */}
-        <div className="flex flex-wrap gap-2">
-          {[
-            { key: 'all', label: 'Semua Status' },
-            { key: 'success', label: 'Berhasil' },
-            { key: 'pending', label: 'Pending' },
-            { key: 'failed', label: 'Gagal' },
-          ].map((item) => (
+        {(filterType !== 'all' || filterStatus !== 'all' || search) && (
+          <div className="flex items-center justify-between pt-2 border-t border-white/5">
+            <span className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Filter aktif diterapkan</span>
             <button
-              key={item.key}
-              onClick={() => { setFilterStatus(item.key as FilterStatus); handleFilterChange(); }}
-              className={`px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                filterStatus === item.key
-                  ? isDark
-                    ? 'bg-white/10 text-white border-white/20'
-                    : 'bg-blue-100 text-slate-700 border-slate-300'
-                  : isDark
-                  ? 'bg-white/5 text-white/50 border-white/10 hover:bg-white/10'
-                  : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-              }`}
+              onClick={() => {
+                setFilterType('all');
+                setFilterStatus('all');
+                setSearch('');
+                setCurrentPage(1);
+              }}
+              className="text-xs font-medium text-red-400 hover:underline"
             >
-              {item.label}
+              Reset Semua Filter
             </button>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Search */}
@@ -226,14 +261,31 @@ export default function SuperAdminTransactionsPage() {
 
       {/* List */}
       {isLoading ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className={`text-center py-16 rounded-2xl ${getGlassCardClass(isDark)}`}
-        >
-          <Loader2 size={48} className={`mx-auto mb-4 animate-spin ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
-          <p className={`text-lg ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Memuat data...</p>
-        </motion.div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              className={`p-4 rounded-xl border flex items-center justify-between gap-4 animate-pulse ${
+                isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white border-slate-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                <div className="space-y-1.5">
+                  <div className={`h-4 w-48 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <div className={`h-3 w-32 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right space-y-1.5">
+                  <div className={`h-4 w-28 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <div className={`h-3 w-20 rounded ml-auto ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                </div>
+                <div className={`w-20 h-6 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : isError ? (
         <motion.div
           initial={{ opacity: 0 }}

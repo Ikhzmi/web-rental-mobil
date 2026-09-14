@@ -230,83 +230,105 @@ function DisbursementCard({ disbursement, index, isDark }: { disbursement: Disbu
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
-      whileHover={{ y: -2 }}
-      className={`group relative rounded-2xl overflow-hidden transition-all duration-300 ${getGlassCardClass(isDark)}`}
+      transition={{ delay: index * 0.04 }}
+      className={`group rounded-2xl p-5 transition-all duration-300 ${getGlassCardClass(isDark)} hover:scale-[1.005]`}
     >
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center backdrop-blur-xl border ${
-              isDark ? 'bg-[#6b5545]/20 border-[#6b5545]/30' : 'bg-[#f5ebe0] border-[#d5c9bc]'
-            }`}>
-              <Wallet size={22} className={isDark ? 'text-[#f5ebe0]' : 'text-[#6b5545]'} />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        {/* Left Section: Info & Status */}
+        <div className="flex items-start sm:items-center gap-3.5 min-w-[280px]">
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 backdrop-blur-xl border ${
+            isDark ? 'bg-[#6b5545]/20 border-[#6b5545]/30 text-[#f5ebe0]' : 'bg-[#f5ebe0] border-[#d5c9bc] text-[#6b5545]'
+          }`}>
+            <Wallet size={22} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className={`font-bold text-sm sm:text-base truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {disbursement.instansi.namaInstansi}
+              </h3>
+              <StatusBadge status={disbursement.status} isDark={isDark} />
             </div>
-            <div>
-              <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{disbursement.instansi.namaInstansi}</h3>
-              <p className={`text-sm ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>{formattedDate}</p>
+            <div className="flex items-center gap-3 text-xs mt-1 text-slate-500 dark:text-white/50 flex-wrap">
+              <span>{formattedDate}</span>
+              <span>•</span>
+              <span>{disbursement.items.length} booking</span>
+              {disbursement.bankTransferId && (
+                <>
+                  <span>•</span>
+                  <span className="font-mono text-[11px] opacity-75">Ref: {disbursement.bankTransferId}</span>
+                </>
+              )}
             </div>
           </div>
-          <StatusBadge status={disbursement.status} isDark={isDark} />
         </div>
 
-        {/* Amount Breakdown */}
-        <div className={`rounded-xl p-4 mb-4 backdrop-blur-xl border ${
-          isDark ? 'bg-white/[0.02] border-white/5' : 'bg-white/50 border-[#D4CFC7]/30'
+        {/* Center Section: Financial Breakdown (Horizontal) */}
+        <div className={`flex items-center justify-between sm:justify-center gap-6 sm:gap-8 px-4 py-2.5 rounded-xl border ${
+          isDark ? 'bg-white/[0.02] border-white/5' : 'bg-white/60 border-slate-200/60'
         }`}>
-          <div className="flex items-center justify-between mb-2">
-            <span className={`text-sm ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>Jumlah Kotor</span>
-            <span className={`font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatRupiah(Number(disbursement.jumlahKotor))}</span>
+          <div className="text-left sm:text-center">
+            <span className={`text-[10px] uppercase tracking-wider block ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+              Jumlah Kotor
+            </span>
+            <span className={`text-xs sm:text-sm font-semibold ${isDark ? 'text-white/80' : 'text-slate-700'}`}>
+              {formatRupiah(Number(disbursement.jumlahKotor))}
+            </span>
           </div>
-          <div className="flex items-center justify-between mb-2">
-            <span className={`text-sm ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>Komisi Platform</span>
-            <span className={isDark ? 'text-red-400' : 'text-red-500'}>-{formatRupiah(Number(disbursement.komisiPlatform))}</span>
+
+          <div className="text-left sm:text-center">
+            <span className={`text-[10px] uppercase tracking-wider block ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+              Komisi Platform
+            </span>
+            <span className={`text-xs sm:text-sm font-semibold ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+              -{formatRupiah(Number(disbursement.komisiPlatform))}
+            </span>
           </div>
-          <div className={`flex items-center justify-between pt-2 ${isDark ? 'border-t border-white/10' : 'border-t border-[#D4CFC7]/30'}`}>
-            <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>Jumlah Bersih</span>
-            <span className={`font-bold text-lg ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{formatRupiah(Number(disbursement.jumlahBersih))}</span>
+
+          <div className="text-left sm:text-center pl-2 sm:pl-4 border-l border-white/10 dark:border-white/10">
+            <span className={`text-[10px] uppercase tracking-wider block ${isDark ? 'text-emerald-400/70' : 'text-emerald-600/70'}`}>
+              Jumlah Bersih
+            </span>
+            <span className={`text-sm sm:text-base font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+              {formatRupiah(Number(disbursement.jumlahBersih))}
+            </span>
           </div>
         </div>
 
-        {/* Items */}
-        <div className={`flex items-center gap-3 text-sm mb-1 ${isDark ? 'text-white/50' : 'text-[#8B7355]/60'}`}>
-          <div className="flex items-center gap-1.5">
-            <div className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-[#f5ebe0]' : 'bg-[#6b5545]'}`} />
-            {disbursement.items.length} booking
-          </div>
-          {disbursement.bankTransferId && (
-            <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-purple-400' : 'bg-purple-500'}`} />
-              <span className={isDark ? 'text-white/30' : 'text-[#8B7355]/40'}>Ref: {disbursement.bankTransferId.slice(0, 12)}...</span>
+        {/* Right Section: Actions */}
+        <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
+          {disbursement.status === 'diproses' ? (
+            <>
+              <button
+                onClick={() => statusMutation.mutate('berhasil')}
+                disabled={statusMutation.isPending}
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all shadow-sm ${
+                  isDark
+                    ? 'bg-emerald-600/80 hover:bg-emerald-600 text-white'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                }`}
+              >
+                <CheckCircle size={14} /> Berhasil
+              </button>
+              <button
+                onClick={() => statusMutation.mutate('gagal')}
+                disabled={statusMutation.isPending}
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2.5 rounded-xl transition-all ${
+                  isDark
+                    ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25 border border-red-500/30'
+                    : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                }`}
+              >
+                <XCircle size={14} /> Gagal
+              </button>
+            </>
+          ) : (
+            <div className={`text-xs px-3 py-1.5 rounded-xl ${isDark ? 'text-white/40 bg-white/5' : 'text-slate-400 bg-slate-100'}`}>
+              {disbursement.status === 'berhasil' ? 'Telah Dicairkan' : 'Dibatalkan/Gagal'}
             </div>
           )}
         </div>
-
-        {/* Manual status actions — hanya muncul saat masih 'diproses' */}
-        {disbursement.status === 'diproses' && (
-          <div className={`flex items-center gap-2 mt-4 pt-4 ${isDark ? 'border-t border-white/10' : 'border-t border-[#D4CFC7]/30'}`}>
-            <button
-              onClick={() => statusMutation.mutate('berhasil')}
-              disabled={statusMutation.isPending}
-              className={`flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2.5 rounded-xl transition-colors disabled:opacity-50 ${
-                isDark ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-              }`}
-            >
-              <CheckCircle size={13} /> Tandai Berhasil
-            </button>
-            <button
-              onClick={() => statusMutation.mutate('gagal')}
-              disabled={statusMutation.isPending}
-              className={`flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2.5 rounded-xl transition-colors disabled:opacity-50 ${
-                isDark ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-red-50 text-red-600 hover:bg-red-100'
-              }`}
-            >
-              <XCircle size={13} /> Tandai Gagal
-            </button>
-          </div>
-        )}
       </div>
     </motion.div>
   );
@@ -478,7 +500,7 @@ export default function SuperAdminPencairanPage() {
           </button>
         </motion.div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-3">
           {filteredDisbursements.map((d, i) => (
             <DisbursementCard key={d.id} disbursement={d} index={i} isDark={isDark} />
           ))}

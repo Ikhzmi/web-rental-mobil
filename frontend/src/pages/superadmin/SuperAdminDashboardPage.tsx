@@ -2,17 +2,11 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownRight, RefreshCw, AlertTriangle, Database, Clock, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, RefreshCw, AlertTriangle, Clock, ChevronRight } from 'lucide-react';
 import { api } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { Sparklines, SparklinesLine } from 'react-sparklines';
-import { useMockDataContext } from '../../contexts/MockDataContext';
-import {
-  MOCK_DASHBOARD_DATA,
-  MOCK_TREND_DATA,
-  MOCK_POPULAR_VEHICLES,
-} from '../../lib/mockData';
 
 // Components
 import { RevenueChart } from '../../components/superadmin/RevenueChart';
@@ -122,7 +116,6 @@ const staggerContainer = {
 export default function SuperAdminDashboardPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const { useMockData, setUseMockData } = useMockDataContext();
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -131,30 +124,35 @@ export default function SuperAdminDashboardPage() {
     queryFn: api.getSuperAdminDashboard,
     retry: 1,
     throwOnError: false,
-    enabled: !useMockData,
   });
 
   const { data: trendData } = useQuery<DashboardTrendData>({
     queryKey: ['superadmin-dashboard-trends'],
     queryFn: api.getDashboardTrends,
-    enabled: !!data && !useMockData,
+    enabled: !!data,
     retry: 1,
     throwOnError: false,
   });
 
-  // Use mock data when toggle is active
-  const displayData = useMockData ? MOCK_DASHBOARD_DATA : (data ?? MOCK_DASHBOARD_DATA);
-  const displayTrendData = useMockData ? MOCK_TREND_DATA : (trendData ?? MOCK_TREND_DATA);
+  const displayData = data ?? {
+    totalInstansiAktif: 0,
+    totalInstansiMenunggu: 0,
+    totalUsers: 0,
+    totalMobil: 0,
+    mobilMenungguApproval: 0,
+    totalPendapatanPlatform: 0,
+    totalKomisiTerkumpul: 0,
+    bookingStats: {},
+  };
 
-  // Extract trend data BEFORE early return
-  const trendInstansi = displayTrendData?.trendInstansi ?? 0;
-  const trendUsers = displayTrendData?.trendUsers ?? 0;
-  const trendArmada = displayTrendData?.trendArmada ?? 0;
-  const trendKomisi = displayTrendData?.trendKomisi ?? 0;
-  const sparklineInstansi = displayTrendData?.sparklineInstansi ?? [];
-  const sparklineUsers = displayTrendData?.sparklineUsers ?? [];
-  const sparklineArmada = displayTrendData?.sparklineArmada ?? [];
-  const sparklineKomisi = displayTrendData?.sparklineKomisi ?? [];
+  const trendInstansi = trendData?.trendInstansi ?? 0;
+  const trendUsers = trendData?.trendUsers ?? 0;
+  const trendArmada = trendData?.trendArmada ?? 0;
+  const trendKomisi = trendData?.trendKomisi ?? 0;
+  const sparklineInstansi = trendData?.sparklineInstansi ?? [];
+  const sparklineUsers = trendData?.sparklineUsers ?? [];
+  const sparklineArmada = trendData?.sparklineArmada ?? [];
+  const sparklineKomisi = trendData?.sparklineKomisi ?? [];
 
   // Refresh handler
   const handleRefresh = async () => {
@@ -173,11 +171,7 @@ export default function SuperAdminDashboardPage() {
   const pendingApprovals = (displayData as DashboardData).mobilMenungguApproval ?? 0;
   const pendingInstansi = (displayData as DashboardData).totalInstansiMenunggu ?? 0;
 
-  // Kondisi urut: loading dulu, lalu error (kecuali sedang pakai mock data),
-  // baru render konten. Sebelumnya ada dua blok return yang isinya nyaris
-  // identik — satu ditandai komentar "DEBUG" yang selalu tereksekusi lebih
-  // dulu, sehingga blok animasi di bawahnya jadi dead code. Sudah disatukan.
-  if (isLoading && !useMockData) {
+  if (isLoading) {
     return (
       <motion.div
         key="dashboard-loading"
@@ -202,7 +196,7 @@ export default function SuperAdminDashboardPage() {
     );
   }
 
-  if ((isError || !data) && !useMockData) {
+  if (isError || !data) {
     return (
       <motion.div
         key="dashboard-error"
@@ -265,7 +259,7 @@ export default function SuperAdminDashboardPage() {
           {/* Refresh Button */}
           <button
             onClick={handleRefresh}
-            disabled={isRefreshing || useMockData}
+            disabled={isRefreshing}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
               isRefreshing
                 ? isDark ? 'bg-white/5 text-white/40 border-white/10' : 'bg-slate-50 text-slate-300 border-slate-200'
@@ -277,29 +271,14 @@ export default function SuperAdminDashboardPage() {
             <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
             Refresh
           </button>
-
-          {/* Mock Data Toggle */}
-          <button
-            onClick={() => setUseMockData(!useMockData)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${
-              useMockData
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                : isDark
-                ? 'bg-white/10 text-white/70 border-white/20 hover:bg-white/20'
-                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-            }`}
-          >
-            <Database size={16} />
-            {useMockData ? 'Data Mockup' : 'Mockup'}
-          </button>
         </div>
       </motion.div>
 
       {/* ROW 1: 4 Statistics Cards */}
       <motion.div variants={fadeInUp} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard label="Instansi Aktif" value={displayData.totalInstansiAktif} trend={trendInstansi} sparklineData={sparklineInstansi} isDark={isDark} href="/superadmin/instansi" />
-        <StatCard label="Total Pengguna" value={displayData.totalUsers.toLocaleString('id-ID')} trend={trendUsers} sparklineData={sparklineUsers} isDark={isDark} href="/superadmin/reports" />
-        <StatCard label="Total Armada" value={displayData.totalMobil} trend={trendArmada} sparklineData={sparklineArmada} isDark={isDark} href="/superadmin/armada/approval" />
+        <StatCard label="Total Pengguna" value={displayData.totalUsers.toLocaleString('id-ID')} trend={trendUsers} sparklineData={sparklineUsers} isDark={isDark} href="/superadmin/admin" />
+        <StatCard label="Total Armada" value={displayData.totalMobil} trend={trendArmada} sparklineData={sparklineArmada} isDark={isDark} href="/superadmin/armada" />
         <StatCard label="Total Komisi" value={formatRupiah(displayData.totalKomisiTerkumpul ?? 0)} trend={trendKomisi} sparklineData={sparklineKomisi} isDark={isDark} href="/superadmin/pencairan" />
       </motion.div>
 
@@ -327,43 +306,7 @@ export default function SuperAdminDashboardPage() {
       {/* ROW 5: Top Companies + Popular Vehicles */}
       <motion.div variants={fadeInUp} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <TopCompanies />
-        {useMockData ? (
-          <div className={`p-5 rounded-2xl ${getGlassCardClass(isDark)}`}>
-            <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Kendaraan Populer</h3>
-            <div className="grid grid-cols-3 gap-3.5">
-              {MOCK_POPULAR_VEHICLES.map((vehicle) => (
-                <div key={vehicle.id} className="group flex flex-col bg-transparent border-0 shadow-none transition-transform duration-300 hover:-translate-y-1">
-                  <div className="h-16 relative overflow-hidden bg-transparent flex items-center justify-center rounded-lg mb-1.5">
-                    <span className="text-2xl">🚗</span>
-                  </div>
-                  <div
-                    className={`p-2.5 rounded-xl backdrop-blur-xl border transition-all duration-300 ${
-                      isDark
-                        ? 'bg-white/[0.06] hover:bg-white/[0.12] border-white/15 text-white shadow-lg shadow-black/30'
-                        : 'bg-white/75 hover:bg-white/95 border-white/80 text-slate-900 shadow-md shadow-slate-200/50'
-                    }`}
-                    style={{
-                      boxShadow: isDark
-                        ? 'inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.2)'
-                        : 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 12px rgba(0, 0, 0, 0.05)',
-                    }}
-                  >
-                    <p className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{vehicle.nama}</p>
-                    <p className={`text-[10px] font-medium truncate mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                      🏢 Rental {vehicle.kategori}
-                    </p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className={`text-[10px] font-extrabold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>{vehicle.totalBooking}x sewa</span>
-                      <span className={`text-[10px] font-medium ${isDark ? 'text-amber-300' : 'text-amber-600'}`}>⭐ {vehicle.rating}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <PopularVehicles />
-        )}
+        <PopularVehicles />
       </motion.div>
 
       {/* ROW 6: Notification, System, Summary */}

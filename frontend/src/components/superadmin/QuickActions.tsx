@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
-import { Plus, CheckCircle, FileText, Wallet, Building2, Users } from 'lucide-react';
+import { Plus, CheckCircle, FileText, Wallet, Users } from 'lucide-react';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 const vibrantActions = [
   {
-    label: 'Tambah Rental',
+    label: 'Tambah Instansi',
     href: '/superadmin/instansi',
     icon: Plus,
     gradient: 'from-emerald-600/80 to-emerald-700/80',
@@ -22,7 +22,7 @@ const vibrantActions = [
   },
   {
     label: 'Approve Kendaraan',
-    href: '/superadmin/armada/approval',
+    href: '/superadmin/armada',
     icon: CheckCircle,
     gradient: 'from-zinc-600/80 to-zinc-700/80',
     hoverGradient: 'hover:from-zinc-500/90 hover:to-zinc-600/90',
@@ -34,14 +34,6 @@ const vibrantActions = [
     icon: Wallet,
     gradient: 'from-amber-600/80 to-amber-700/80',
     hoverGradient: 'hover:from-amber-500/90 hover:to-amber-600/90',
-    textClass: 'text-white/90',
-  },
-  {
-    label: 'Kelola Instansi',
-    href: '/superadmin/instansi',
-    icon: Building2,
-    gradient: 'from-teal-600/80 to-teal-700/80',
-    hoverGradient: 'hover:from-teal-500/90 hover:to-teal-600/90',
     textClass: 'text-white/90',
   },
   {

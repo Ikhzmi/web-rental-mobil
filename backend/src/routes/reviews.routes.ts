@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken } from '../middleware/verifySupabaseToken';
+import { notifyInstansi } from '../services/notification.service';
 
 export const reviewsRouter = Router();
 
@@ -101,7 +102,14 @@ reviewsRouter.post('/', async (req, res) => {
 
   const booking = await prisma.booking.findUnique({
     where: { id: parsed.data.bookingId },
-    select: { id: true, userId: true, carId: true, status: true },
+    select: {
+      id: true,
+      userId: true,
+      carId: true,
+      status: true,
+      car: { select: { nama: true, instansiId: true } },
+      profile: { select: { nama: true } },
+    },
   });
 
   if (!booking || booking.userId !== req.user!.id) {
@@ -124,6 +132,16 @@ reviewsRouter.post('/', async (req, res) => {
         komentar: parsed.data.komentar,
       },
     });
+
+    if (booking.car?.instansiId) {
+      void notifyInstansi(booking.car.instansiId, {
+        type: 'review',
+        title: `Ulasan Baru Diterima (★ ${parsed.data.rating})`,
+        message: `${booking.profile.nama} memberi ulasan untuk ${booking.car.nama}: "${parsed.data.komentar ? parsed.data.komentar.slice(0, 80) : 'Rating ' + parsed.data.rating + ' bintang'}"`,
+        data: { actionUrl: `/admin/armada`, carId: booking.carId },
+      });
+    }
+
     res.status(201).json({ data: review });
   } catch (err) {
     // Unique constraint pada bookingId -> sudah pernah direview

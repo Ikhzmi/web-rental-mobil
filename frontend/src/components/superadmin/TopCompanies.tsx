@@ -9,10 +9,11 @@ export function TopCompanies() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const { data: companies, isLoading } = useQuery({
+  const { data: companies, isLoading, isError, refetch } = useQuery({
     queryKey: ['superadmin-top-companies'],
     queryFn: api.getTopCompanies,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    retry: 2,
   });
 
   return (
@@ -34,16 +35,27 @@ export function TopCompanies() {
           <>
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-3">
-                <div className={`w-6 h-6 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
-                <div className="flex-1">
-                  <div className={`h-4 w-3/4 rounded mb-1 ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
-                  <div className={`h-3 w-1/2 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                <div className={`w-7 h-7 rounded-lg ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse shrink-0`} />
+                <div className="flex-1 space-y-1.5">
+                  <div className={`h-3.5 w-3/4 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                  <div className={`h-2.5 w-1/3 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
                 </div>
+                <div className={`w-12 h-5 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
               </div>
             ))}
           </>
+        ) : isError ? (
+          <div className="text-center py-6">
+            <p className={`text-xs mb-2 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Gagal memuat data perusahaan</p>
+            <button
+              onClick={() => refetch()}
+              className={`text-xs font-medium underline ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+            >
+              Coba lagi
+            </button>
+          </div>
         ) : !companies?.length ? (
-          <p className={`text-sm text-center py-8 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Belum ada data</p>
+          <p className={`text-sm text-center py-8 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Belum ada data instansi</p>
         ) : (
           companies.map((company, index) => (
             <div key={company.id} className="flex items-center gap-3">

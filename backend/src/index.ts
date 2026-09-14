@@ -17,6 +17,7 @@ import { webhooksRouter } from './routes/webhooks.routes';
 import { reviewsRouter } from './routes/reviews.routes';
 import { publicStatsRouter } from './routes/publicStats.routes';
 import { customerMessagesRouter, adminMessagesRouter } from './routes/messages.routes';
+import { notificationsRouter } from './routes/notifications.routes';
 import { globalErrorHandler, notFoundHandler } from './lib/errorHandler';
 import { cronRouter } from './routes/cron.routes';
 
@@ -109,6 +110,8 @@ app.use('/api/bookings', authLimiter, bookingsRouter);
 app.use('/api/profiles', authLimiter, profilesRouter);
 app.use('/api/reviews', reviewsRouter);
 app.use('/api/messages', authLimiter, customerMessagesRouter);
+app.use('/api/notifications', authLimiter, notificationsRouter);
+app.use('/api/admin/notifications', authLimiter, notificationsRouter);
 
 // Admin (verifySupabaseToken + requireAdmin dipasang di dalam masing-masing router)
 app.use('/api/admin/cars', adminCarsRouter);

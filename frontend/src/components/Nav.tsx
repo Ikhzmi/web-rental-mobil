@@ -8,6 +8,7 @@ import { useSession } from '../hooks/useSession';
 import { useProfile } from '../hooks/useProfile';
 import { useTheme } from '../hooks/useTheme';
 import { useChat } from '../context/ChatContext';
+import { NotificationBell } from './NotificationBell';
 
 const NAV_LINKS: { label: string; to: string }[] = [
   { label: 'Beranda', to: '/' },
@@ -229,6 +230,9 @@ export default function Nav() {
             </>
           ) : (
             <>
+              {/* Notification Bell Icon */}
+              <NotificationBell align="right" />
+
               {/* Message Icon Button - Bulat */}
               <button
                 onClick={toggleChat}
@@ -284,11 +288,13 @@ export default function Nav() {
             {isDark ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-neutral-600" />}
           </button>
 
-          {/* Mobile Message Button - Bulat */}
+          {/* Mobile Notification & Message Buttons */}
           {session && (
-            <button
-              onClick={toggleChat}
-              className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${
+            <>
+              <NotificationBell align="right" />
+              <button
+                onClick={toggleChat}
+                className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${
                 isDark
                   ? 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
                   : 'bg-white hover:bg-neutral-50 border border-neutral-200 shadow-sm text-neutral-800'
@@ -302,6 +308,7 @@ export default function Nav() {
                 </span>
               )}
             </button>
+            </>
           )}
 
           <button

@@ -8,6 +8,7 @@ import { isCarAvailable } from '../services/availability.service';
 import { hitungRincianHarga } from '../services/pricing.service';
 import { createPakasirPayment, isPakasirConfigured, getPakasirPaymentUrl, getPakasirPaymentStatus, simulatePakasirPayment } from '../services/pakasir.service';
 import { handlePakasirPaymentPaid, handlePakasirPaymentExpired } from './webhooks.routes';
+import { notifyUser, notifyInstansi } from '../services/notification.service';
 
 export const bookingsRouter = Router();
 
@@ -174,6 +175,23 @@ bookingsRouter.post('/', async (req, res) => {
 
     if (!booking) {
       throw lastError ?? new Error('GAGAL_SETELAH_RETRY');
+    }
+
+    // Dispatch notifikasi non-blocking (Customer & Admin Instansi)
+    void notifyUser(req.user!.id, {
+      type: 'payment',
+      title: 'Menunggu Pembayaran',
+      message: `Silakan selesaikan pembayaran untuk pesanan #${booking.id.slice(0, 8)} (${booking.car.nama}).`,
+      data: { actionUrl: `/akun/pesanan/${booking.id}`, bookingId: booking.id },
+    });
+
+    if (booking.car?.instansiId) {
+      void notifyInstansi(booking.car.instansiId, {
+        type: 'booking',
+        title: 'Pesanan Baru Masuk',
+        message: `Pesanan #${booking.id.slice(0, 8)} dibuat untuk unit ${booking.car.nama} (Menunggu Pembayaran).`,
+        data: { actionUrl: `/admin/pesanan/${booking.id}`, bookingId: booking.id },
+      });
     }
 
     res.status(201).json({ data: booking });

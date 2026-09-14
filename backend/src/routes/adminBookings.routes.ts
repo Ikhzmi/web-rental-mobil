@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireAdmin } from '../middleware/verifySupabaseToken';
 import { sendBookingConfirmedEmail, sendBookingCancelledEmail } from '../services/email.service';
+import { notifyUser, notifyInstansi } from '../services/notification.service';
 
 export const adminBookingsRouter = Router();
 
@@ -156,10 +157,7 @@ adminBookingsRouter.patch('/:id/status', async (req, res) => {
     return b;
   });
 
-  // Kirim email notifikasi ke customer — sengaja TIDAK di-await sebelum
-  // respons dikirim (fire-and-forget) supaya request admin tidak ikut
-  // lambat/gagal kalau pengiriman email lambat/error. Kalau belum
-  // dikonfigurasi (RESEND_API_KEY kosong), fungsi ini no-op.
+  // Kirim email notifikasi ke customer (fire-and-forget)
   const emailPayload = {
     to: booking.profile.email,
     namaPenyewa: booking.profile.nama,
@@ -170,8 +168,40 @@ adminBookingsRouter.patch('/:id/status', async (req, res) => {
   };
   if (parsed.data.status === 'dikonfirmasi') {
     void sendBookingConfirmedEmail(emailPayload);
+    void notifyUser(booking.userId, {
+      type: 'booking',
+      title: 'Pesanan Dikonfirmasi Admin',
+      message: `Pesanan #${booking.id.slice(0, 8)} untuk ${booking.car.nama} telah dikonfirmasi oleh rental.`,
+      data: { actionUrl: `/akun/pesanan/${booking.id}`, bookingId: booking.id },
+    });
+  } else if (parsed.data.status === 'berjalan') {
+    void notifyUser(booking.userId, {
+      type: 'booking',
+      title: 'Masa Sewa Dimulai',
+      message: `Unit ${booking.car.nama} telah diserahkan. Selamat menikmati perjalanan Anda!`,
+      data: { actionUrl: `/akun/pesanan/${booking.id}`, bookingId: booking.id },
+    });
+  } else if (parsed.data.status === 'selesai') {
+    void notifyUser(booking.userId, {
+      type: 'review',
+      title: 'Sewa Selesai - Beri Ulasan',
+      message: `Terima kasih telah menyewa ${booking.car.nama}. Bagikan ulasan pengalaman rental Anda!`,
+      data: { actionUrl: `/akun/pesanan/${booking.id}#ulasan`, bookingId: booking.id },
+    });
+    void notifyInstansi(instansiId, {
+      type: 'booking',
+      title: 'Sewa Selesai',
+      message: `Pesanan #${booking.id.slice(0, 8)} untuk ${booking.car.nama} telah selesai dan unit dikembalikan.`,
+      data: { actionUrl: `/admin/pesanan/${booking.id}`, bookingId: booking.id },
+    });
   } else if (parsed.data.status === 'dibatalkan') {
     void sendBookingCancelledEmail(emailPayload, 'ditolak_admin');
+    void notifyUser(booking.userId, {
+      type: 'booking',
+      title: 'Pesanan Dibatalkan Rental',
+      message: `Pesanan #${booking.id.slice(0, 8)} untuk ${booking.car.nama} telah dibatalkan oleh pihak rental.`,
+      data: { actionUrl: `/akun/pesanan/${booking.id}`, bookingId: booking.id },
+    });
   }
 
   res.json({ data: updated });

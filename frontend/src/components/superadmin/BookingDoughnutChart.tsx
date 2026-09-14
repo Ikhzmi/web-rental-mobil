@@ -4,8 +4,6 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
-import { useMockDataContext } from '../../contexts/MockDataContext';
-import { MOCK_BOOKING_STATUS_DATA } from '../../lib/mockData';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -28,14 +26,12 @@ const STATUS_LABELS: Record<string, string> = {
 export function BookingDoughnutChart() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const { useMockData } = useMockDataContext();
 
   // Ambil data dari dashboard endpoint (sudah kumulatif semua waktu)
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ['superadmin-dashboard'],
     queryFn: api.getSuperAdminDashboard,
     staleTime: 5 * 60 * 1000,
-    enabled: !useMockData,
   });
 
   // Transform bookingStats dari backend ke format chart
@@ -49,18 +45,6 @@ export function BookingDoughnutChart() {
     }));
 
   const totalBookings = chartData.reduce((sum, d) => sum + d.value, 0);
-
-  // Use mock data when needed
-  const mockChartData = MOCK_BOOKING_STATUS_DATA?.map((item) => ({
-    name: item.status,
-    value: item.count,
-    color: STATUS_COLORS[item.status] || '#94a3b8',
-  })) ?? [];
-  const mockTotal = mockChartData.reduce((sum, d) => sum + d.value, 0);
-
-  const displayChartData = useMockData ? mockChartData : chartData;
-  const displayTotal = useMockData ? mockTotal : totalBookings;
-  const isDataLoading = useMockData ? false : isLoading;
 
   return (
     <motion.div
@@ -86,17 +70,17 @@ export function BookingDoughnutChart() {
         {/* Left: Pie Chart */}
         <div className="w-2/5 flex items-center justify-center">
           <div className="relative w-36 h-36">
-            {isDataLoading ? (
+            {isLoading ? (
               <div className="w-full h-full flex items-center justify-center">
-                <div className={`w-10 h-10 border-2 rounded-full animate-spin ${
-                  isDark ? 'border-white/20 border-t-blue-400' : 'border-slate-200 border-t-blue-500'
+                <div className={`w-28 h-28 rounded-full border-8 animate-pulse ${
+                  isDark ? 'border-white/10' : 'border-slate-200'
                 }`} />
               </div>
-            ) : displayChartData.length > 0 ? (
+            ) : chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={displayChartData}
+                    data={chartData}
                     cx="50%"
                     cy="50%"
                     innerRadius={28}
@@ -105,7 +89,7 @@ export function BookingDoughnutChart() {
                     dataKey="value"
                     stroke="none"
                   >
-                    {displayChartData.map((entry, index) => (
+                    {chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -116,9 +100,9 @@ export function BookingDoughnutChart() {
                 <span className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>No data</span>
               </div>
             )}
-            {!isDataLoading && displayChartData.length > 0 && (
+            {!isLoading && chartData.length > 0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{displayTotal}</p>
+                <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{totalBookings}</p>
                 <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>Total</p>
               </div>
             )}
@@ -127,7 +111,7 @@ export function BookingDoughnutChart() {
 
         {/* Right: Legend */}
         <div className="flex-1 flex flex-col justify-center pl-4">
-          {isDataLoading ? (
+          {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="flex items-center justify-between">
@@ -136,11 +120,11 @@ export function BookingDoughnutChart() {
                 </div>
               ))}
             </div>
-          ) : displayChartData.length === 0 ? (
+          ) : chartData.length === 0 ? (
             <p className={`text-sm text-center ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Belum ada data booking</p>
           ) : (
             <div className="space-y-1.5">
-              {displayChartData.map((item) => (
+              {chartData.map((item) => (
                 <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-white/5 dark:bg-white/5">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
