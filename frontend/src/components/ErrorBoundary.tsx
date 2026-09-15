@@ -37,13 +37,13 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+        <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4 transition-colors duration-300">
           <div className="max-w-md w-full text-center">
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-red-500/20 flex items-center justify-center">
               <AlertTriangle size={32} className="text-red-400" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Terjadi Kesalahan</h2>
-            <p className="text-white/60 mb-6">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Terjadi Kesalahan</h2>
+            <p className="text-slate-500 dark:text-white/60 mb-6">
               {this.state.error?.message || 'Terjadi kesalahan yang tidak terduga.'}
             </p>
             <button

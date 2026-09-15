@@ -5,6 +5,7 @@ import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { MapPin, Phone, Mail, Clock, Globe } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
+import { BUSINESS_EMAIL, BUSINESS_PHONE_DISPLAY } from '../lib/businessConfig';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -141,11 +142,11 @@ export default function ModernFooter() {
               </div>
               <div className={`flex items-center gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
                 <Phone className={`w-5 h-5 shrink-0 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
-                <span className="text-sm">+62 812 3456 7890</span>
+                <span className="text-sm">{BUSINESS_PHONE_DISPLAY}</span>
               </div>
               <div className={`flex items-center gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
                 <Mail className={`w-5 h-5 shrink-0 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
-                <span className="text-sm">info@kerentalkita.id</span>
+                <span className="text-sm">{BUSINESS_EMAIL}</span>
               </div>
               <div className={`flex items-center gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
                 <Clock className={`w-5 h-5 shrink-0 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />

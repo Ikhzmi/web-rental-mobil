@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -12,6 +12,44 @@ import ComingSoonPage from './components/ComingSoonPage';
 import RequireAdmin from './components/RequireAdmin';
 import RequireSuperAdmin from './components/RequireSuperAdmin';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useProfile } from './hooks/useProfile';
+
+/**
+ * Preload chunk halaman lazy saat browser idle supaya klik PERTAMA ke
+ * halaman berat (detail pesanan, booking, konfirmasi) tidak menampilkan
+ * layar loading lama / hitam. Chunk customer selalu dipreload; chunk
+ * admin/superadmin hanya jika role cocok.
+ */
+function RoutePreloader() {
+  const { profile } = useProfile();
+
+  useEffect(() => {
+    const preload = () => {
+      void import('./pages/BookingPage');
+      void import('./pages/BookingConfirmationPage');
+      void import('./pages/PaymentPage');
+      void import('./pages/AkunPesananPage');
+      void import('./pages/AkunPesananDetailPage');
+      void import('./pages/AkunProfilPage');
+      if (profile?.role === 'admin' || profile?.role === 'super_admin') {
+        void import('./pages/admin/AdminPesananDetailPage');
+        void import('./pages/admin/AdminMessagesPage');
+      }
+      if (profile?.role === 'super_admin') {
+        void import('./pages/superadmin/SuperAdminBookingsPage');
+        void import('./pages/superadmin/SuperAdminRefundsPage');
+      }
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const id = (window as any).requestIdleCallback(preload, { timeout: 4000 });
+      return () => (window as any).cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(preload, 2500);
+    return () => clearTimeout(t);
+  }, [profile?.role]);
+
+  return null;
+}
 
 import HomePage from './pages/HomePage';
 import ArmadaPage from './pages/ArmadaPage';
@@ -31,6 +69,8 @@ const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 const AkunPesananPage = lazy(() => import('./pages/AkunPesananPage'));
 const AkunPesananDetailPage = lazy(() => import('./pages/AkunPesananDetailPage'));
 const AkunProfilPage = lazy(() => import('./pages/AkunProfilPage'));
+const SyaratPage = lazy(() => import('./pages/SyaratPage'));
+const PrivasiPage = lazy(() => import('./pages/PrivasiPage'));
 
 // Admin Pages - Lazy loaded (only loaded when admin visits)
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
@@ -82,6 +122,7 @@ function App() {
             <BrowserRouter>
               <SessionExpiredProvider>
                 <ChatProvider>
+                  <RoutePreloader />
                   <Suspense fallback={<RouteFallback />}>
                   <Routes>
                     {/* Admin — layout sendiri, OUTSIDE Layout untuk smooth navigation */}
@@ -102,7 +143,7 @@ function App() {
                         <Route path="admin/pesanan" element={<AdminPesananPage />} />
                         <Route path="admin/pesanan/:id" element={<AdminPesananDetailPage />} />
                         <Route path="admin/keuangan" element={<AdminKeuanganPage />} />
-                        <Route path="admin/refunds" element={<Navigate to="/admin/keuangan" replace />} />
+                        <Route path="admin/refunds" element={<Navigate to="/admin/keuangan?tab=refunds" replace />} />
                         <Route path="admin/messages" element={<AdminMessagesPage />} />
                         <Route path="admin/calendar" element={<AdminCalendarPage />} />
                         <Route path="admin/settings" element={<AdminSettingsPage />} />
@@ -134,6 +175,8 @@ function App() {
                       <Route path="tentang" element={<TentangPage />} />
                       <Route path="kontak" element={<KontakPage />} />
                       <Route path="faq" element={<FaqPage />} />
+                      <Route path="syarat" element={<SyaratPage />} />
+                      <Route path="privasi" element={<PrivasiPage />} />
                       <Route path="login" element={<LoginPage />} />
                       <Route path="daftar" element={<DaftarPage />} />
                       <Route path="auth/callback" element={<AuthCallbackPage />} />

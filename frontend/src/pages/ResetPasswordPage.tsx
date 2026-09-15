@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../hooks/useTheme';
 import LoginBackgroundV4 from '../components/background/LoginBackgroundV4';
+import { SkeletonAuthCard } from '../components/Skeleton';
 
 /**
  * Halaman reset password yang menerima token_hash dari URL
@@ -89,8 +90,8 @@ export default function ResetPasswordPage() {
   if (tokenStatus === 'pending') {
     return (
       <LoginBackgroundV4>
-        <div className="flex items-center justify-center p-8">
-          <Loader2 className={`w-8 h-8 animate-spin ${isDark ? 'text-white' : 'text-stone-800'}`} />
+        <div className="flex items-center justify-center p-8 w-full">
+          <SkeletonAuthCard />
         </div>
       </LoginBackgroundV4>
     );

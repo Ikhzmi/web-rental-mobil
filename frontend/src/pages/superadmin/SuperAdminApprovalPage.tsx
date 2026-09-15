@@ -28,7 +28,7 @@ import {
 import { api } from '../../lib/api';
 import type { SuperAdminCar } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
-import { SkeletonList } from '../../components/Skeleton';
+import { Skeleton, SkeletonWideCard } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../../contexts/ToastContext';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
@@ -1056,7 +1056,7 @@ export default function SuperAdminApprovalPage() {
     queryFn: () => api.listTakedownCars(),
   });
 
-  const { data: instansiList } = useQuery({
+  const { data: instansiList, isLoading: isInstansiLoading } = useQuery({
     queryKey: ['superadmin-instansi-filter-list'],
     queryFn: () => api.listInstansi(),
   });
@@ -1163,7 +1163,11 @@ export default function SuperAdminApprovalPage() {
             isDark ? 'bg-white/5 text-white/80 border-white/10' : 'bg-white text-slate-700 border-slate-200'
           }`}>
             <Layers size={14} className="text-amber-400" />
-            <span>Total: {pendingCount + publishedCount + takedownCount} armada</span>
+            {isApprovalLoading || isPublishedLoading || isTakedownLoading ? (
+              <Skeleton className="h-4 w-28" />
+            ) : (
+              <span>Total: {pendingCount + publishedCount + takedownCount} armada</span>
+            )}
           </div>
         </div>
       </motion.div>
@@ -1243,8 +1247,13 @@ export default function SuperAdminApprovalPage() {
           </button>
         </div>
 
-        {/* Instansi Filter Selector */}
-        {instansiList && instansiList.length > 0 && (
+        {/* Instansi Filter Selector — skeleton agar tidak pop-in */}
+        {isInstansiLoading ? (
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-9 w-48 rounded-xl" />
+          </div>
+        ) : (
+        instansiList && instansiList.length > 0 && (
           <div className="flex items-center gap-2">
             <Building2 size={16} className={isDark ? 'text-white/40' : 'text-slate-400'} />
             <select
@@ -1264,7 +1273,7 @@ export default function SuperAdminApprovalPage() {
               ))}
             </select>
           </div>
-        )}
+        ))}
       </div>
 
       {/* Search Bar Filter */}
@@ -1287,7 +1296,10 @@ export default function SuperAdminApprovalPage() {
       {activeTab === 'approval' && (
         <>
           {isApprovalLoading ? (
-            <SkeletonList count={3} isDark={isDark} />
+            <div className="space-y-5">
+              <SkeletonWideCard isDark={isDark} />
+              <SkeletonWideCard isDark={isDark} />
+            </div>
           ) : !pendingList.length ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -1331,7 +1343,10 @@ export default function SuperAdminApprovalPage() {
       {activeTab === 'published' && (
         <>
           {isPublishedLoading ? (
-            <SkeletonList count={3} isDark={isDark} />
+            <div className="space-y-5">
+              <SkeletonWideCard isDark={isDark} />
+              <SkeletonWideCard isDark={isDark} />
+            </div>
           ) : !activePublishedList.length ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -1373,7 +1388,10 @@ export default function SuperAdminApprovalPage() {
       {activeTab === 'takedown' && (
         <>
           {isTakedownLoading ? (
-            <SkeletonList count={3} isDark={isDark} />
+            <div className="space-y-5">
+              <SkeletonWideCard isDark={isDark} />
+              <SkeletonWideCard isDark={isDark} />
+            </div>
           ) : !inactiveTakedownList.length ? (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}

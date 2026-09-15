@@ -5,6 +5,7 @@ import { api, type SuperAdminTransactionItem } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 interface Transaction {
   id: string;
@@ -126,12 +127,12 @@ export function RecentTransactions() {
       <div className="space-y-3">
         {isLoading ? (
           <>
-            {[1, 2, 3].map((i) => (
+            {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className={`flex items-center gap-3 p-3 rounded-xl ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
-                <div className={`w-8 h-8 rounded-lg animate-pulse ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                <Skeleton className="w-8 h-8 rounded-lg" />
                 <div className="flex-1">
-                  <div className={`h-3 w-3/4 rounded animate-pulse mb-1 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                  <div className={`h-2 w-1/2 rounded animate-pulse ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <Skeleton className="h-3 w-3/4 mb-1" />
+                  <Skeleton className="h-2 w-1/2" />
                 </div>
               </div>
             ))}

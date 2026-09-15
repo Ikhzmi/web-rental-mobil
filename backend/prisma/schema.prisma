@@ -282,6 +282,12 @@ model Booking {
   hargaDasar     Decimal       @map("harga_dasar") @db.Decimal(12, 2)
   totalAddon     Decimal       @default(0) @map("total_addon") @db.Decimal(12, 2)
   totalHarga     Decimal       @map("total_harga") @db.Decimal(12, 2)
+  /// Snapshot % komisi platform yang berlaku SAAT booking dibuat.
+  /// Agregat historis (dashboard, laporan, disbursement) WAJIB memakai ini,
+  /// bukan rate live instansi — supaya perubahan rate tidak mengubah masa
+  /// lalu secara retroaktif. Diisi backend saat create; backfill untuk data
+  /// lama di prisma/sql/007_komisi_snapshot.sql.
+  komisiPersenSnapshot Decimal? @map("komisi_persen_snapshot") @db.Decimal(5, 2)
   /// Default 'menunggu_pembayaran' karena menunggu konfirmasi dari payment gateway
   status         StatusBooking @default(menunggu_pembayaran)
   alasanPembatalan String?       @map("alasan_pembatalan")
@@ -468,6 +474,9 @@ model DisbursementItem {
   bookingId      String    @map("booking_id") @db.Uuid
   /// Kontribusi harga booking ini ke total disbursement
   jumlahKotor   Decimal   @map("jumlah_kotor") @db.Decimal(12, 2)
+  /// Snapshot % komisi saat batch dibuat (audit trail; batch header sudah
+  /// menyimpan angka final komisiPlatform/jumlahBersih).
+  komisiPersenSnapshot Decimal? @map("komisi_persen_snapshot") @db.Decimal(5, 2)
 
   disbursement Disbursement @relation(fields: [disbursementId], references: [id])
   booking     Booking     @relation(fields: [bookingId], references: [id])

@@ -143,7 +143,7 @@ adminCarsRouter.post('/', asyncHandler(async (req, res) => {
     type: 'approval',
     title: 'Pengajuan Mobil Baru',
     message: `Mobil baru ${car.nama} (${car.nomorPlat ?? 'Tanpa plat'}) diajukan oleh instansi dan menunggu persetujuan.`,
-    data: { actionUrl: '/superadmin/approval', carId: car.id },
+    data: { actionUrl: '/superadmin/armada?tab=approval', carId: car.id },
   });
 
   void logAdminActivity({

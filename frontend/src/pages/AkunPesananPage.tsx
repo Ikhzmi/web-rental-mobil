@@ -6,6 +6,7 @@ import { api, type StatusBooking } from '../lib/api';
 import { formatRupiah } from '../lib/pricing';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { useTheme } from '../hooks/useTheme';
+import { formatRentangTanggal } from '../lib/dates';
 
 const STATUS_LABEL: Record<StatusBooking, string> = {
   menunggu_pembayaran: 'Menunggu Pembayaran',
@@ -30,10 +31,6 @@ const STATUS_BADGE_LIGHT: Record<StatusBooking, string> = {
   selesai: 'bg-emerald-100 text-emerald-700',
   dibatalkan: 'bg-slate-100 text-slate-500',
 };
-
-function formatTanggal(iso: string): string {
-  return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 
 export default function AkunPesananPage() {
   const { theme } = useTheme();
@@ -141,7 +138,9 @@ export default function AkunPesananPage() {
                       </span>
                     </div>
                     <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
-                      {formatTanggal(booking.tanggalMulai)} — {formatTanggal(booking.tanggalSelesai)}
+                      {formatRentangTanggal(booking.tanggalMulai, booking.tanggalSelesai, (d) =>
+                        d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }),
+                      )}
                     </p>
                   </div>
 

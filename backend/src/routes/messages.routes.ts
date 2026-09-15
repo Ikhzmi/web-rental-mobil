@@ -333,7 +333,10 @@ customerMessagesRouter.post('/conversations/:id/messages', async (req, res) => {
       title: 'Pesan Baru dari Pelanggan',
       message: pesan.length > 50 ? `${pesan.slice(0, 50)}...` : pesan,
       data: {
-        actionUrl: `/admin/chat?conversationId=${id}`,
+        // Rute valid: /admin/messages (dengan ?conversationId= untuk
+        // membuka langsung percakapan ini). Sebelumnya /admin/chat yang
+        // tidak ada rutenya → 404.
+        actionUrl: `/admin/messages?conversationId=${id}`,
         conversationId: id,
       },
     }).catch(() => {/* fire-and-forget */});
@@ -552,6 +555,10 @@ adminMessagesRouter.post('/conversations/:id/messages', async (req, res) => {
       title: 'Pesan Baru dari Rental',
       message: pesan.length > 50 ? `${pesan.slice(0, 50)}...` : pesan,
       data: {
+        // Deep-link VIRTUAL (tidak ada rute /user/chat): frontend
+        // mengintersepnya untuk membuka ChatWidget pada percakapan ini
+        // tanpa navigasi. Jangan ubah bentuknya tanpa update
+        // NotificationBell.
         actionUrl: `/user/chat?conversationId=${id}`,
         conversationId: id,
       },

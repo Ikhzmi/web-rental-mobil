@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { verifySupabaseToken } from '../middleware/verifySupabaseToken';
 import { notifySuperAdmins } from '../services/notification.service';
 import { logAdminActivity } from '../services/activity.service';
+import { komisiUntukBooking, nettUntukBooking } from '../services/commission.service';
 
 // Schema untuk pendaftaran instansi baru (public)
 import { z } from 'zod';
@@ -58,7 +59,7 @@ instansiRouter.post('/daftar', async (req, res) => {
       type: 'approval',
       title: 'Pendaftaran Instansi Baru',
       message: `Instansi baru ${instansi.namaInstansi} mendaftar dan menunggu verifikasi legalitas dokumen.`,
-      data: { actionUrl: '/superadmin/approval', instansiId: instansi.id },
+      data: { actionUrl: '/superadmin/instansi', instansiId: instansi.id },
     });
 
     res.status(201).json({
@@ -204,6 +205,7 @@ instansiRouter.get('/dashboard', async (req, res) => {
         select: {
           id: true,
           totalHarga: true,
+          komisiPersenSnapshot: true,
           disbursementItems: { select: { id: true } },
         },
       }),
@@ -249,13 +251,17 @@ instansiRouter.get('/dashboard', async (req, res) => {
       return acc;
     }, {} as Record<string, number>);
 
-    // Hitung saldo tertunda (booking selesai tapi belum dicairkan)
-    const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
-    const saldoTertundaKotor = completedBookings
-      .filter(b => b.disbursementItems.length === 0)
+    // Hitung saldo tertunda (booking selesai tapi belum dicairkan).
+    // Nett dihitung PER BOOKING dengan snapshot rate saat booking dibuat
+    // (fallback rate live) — bukan sekali potong dari total kotor.
+    const liveRate = Number(instansi?.komisiPlatformPersen ?? 10);
+    const liveRateMap = new Map([[instansiId, liveRate]]);
+    const pendingSelesai = completedBookings.filter(b => b.disbursementItems.length === 0);
+    const saldoTertundaKotor = pendingSelesai
       .reduce((sum, b) => sum + Number(b.totalHarga), 0);
     // Saldo tertunda dihitung BERSIH setelah komisi platform
-    const saldoTertunda = saldoTertundaKotor * (1 - komisiRate);
+    const saldoTertunda = pendingSelesai
+      .reduce((sum, b) => sum + nettUntukBooking(b.totalHarga, b.komisiPersenSnapshot, instansiId, liveRateMap), 0);
 
     // Total sudah dicairkan
     const totalSudahDicairkan = disbursements
@@ -314,12 +320,13 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
     const sevenDaysAgo = new Date(startOfToday);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // termasuk hari ini = 7 hari
 
-    // Ambil rate komisi instansi
+    // Ambil rate komisi instansi (LIVE — hanya fallback & proyeksi;
+    // histori memakai snapshot per booking)
     const instansi = await prisma.instansi.findUnique({
       where: { id: instansiId },
       select: { komisiPlatformPersen: true },
     });
-    const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
+    const liveRateMap = new Map([[instansiId, Number(instansi?.komisiPlatformPersen ?? 10)]]);
 
     const STATUS_PESANAN_AKTIF = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'] as const;
 
@@ -328,17 +335,17 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
       // Booking bulan ini
       prisma.booking.findMany({
         where: { car: { instansiId }, createdAt: { gte: startOfThisMonth } },
-        select: { totalHarga: true, status: true, createdAt: true },
+        select: { totalHarga: true, komisiPersenSnapshot: true, status: true, createdAt: true },
       }),
       // Booking bulan lalu
       prisma.booking.findMany({
         where: { car: { instansiId }, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
-        select: { totalHarga: true, status: true, createdAt: true },
+        select: { totalHarga: true, komisiPersenSnapshot: true, status: true, createdAt: true },
       }),
       // Booking 7 hari terakhir (untuk sparkline)
       prisma.booking.findMany({
         where: { car: { instansiId }, createdAt: { gte: sevenDaysAgo } },
-        select: { totalHarga: true, status: true, createdAt: true },
+        select: { totalHarga: true, komisiPersenSnapshot: true, status: true, createdAt: true },
       }),
       prisma.car.count({ where: { instansiId, status: 'tersedia' } }),
       prisma.booking.findMany({
@@ -347,11 +354,11 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
           status: 'selesai',
           disbursementItems: { none: {} },
         },
-        select: { totalHarga: true, updatedAt: true, createdAt: true },
+        select: { totalHarga: true, komisiPersenSnapshot: true, updatedAt: true, createdAt: true },
       }),
     ]);
 
-    // --- Kalkulasi bulanan ---
+    // --- Kalkulasi bulanan (nett per booking via snapshot) ---
     const calcMonthly = (bookings: typeof thisMonthBookings) => {
       let revenue = 0;
       let activeCount = 0;
@@ -360,8 +367,7 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
           activeCount++;
         }
         if ((STATUS_DIHITUNG_PENDAPATAN as readonly string[]).includes(b.status)) {
-          const gross = Number(b.totalHarga);
-          revenue += Math.round(gross * (1 - komisiRate));
+          revenue += nettUntukBooking(b.totalHarga, b.komisiPersenSnapshot, instansiId, liveRateMap);
         }
       }
       return { revenue, activeCount };
@@ -375,19 +381,17 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
       return Math.round(((current - previous) / previous) * 100);
     };
 
-    // Saldo tertunda bulan ini vs bulan lalu
-    const saldoTertundaBulanIni = Math.round(
-      completedPendingBookings
-        .filter(b => new Date(b.updatedAt || b.createdAt) >= startOfThisMonth)
-        .reduce((sum, b) => sum + Number(b.totalHarga), 0) * (1 - komisiRate)
+    // Saldo tertunda bulan ini vs bulan lalu (nett per booking via snapshot)
+    const nettPending = (list: typeof completedPendingBookings) =>
+      list.reduce((sum, b) => sum + nettUntukBooking(b.totalHarga, b.komisiPersenSnapshot, instansiId, liveRateMap), 0);
+    const saldoTertundaBulanIni = nettPending(
+      completedPendingBookings.filter(b => new Date(b.updatedAt || b.createdAt) >= startOfThisMonth)
     );
-    const saldoTertundaBulanLalu = Math.round(
-      completedPendingBookings
-        .filter(b => {
-          const d = new Date(b.updatedAt || b.createdAt);
-          return d >= startOfLastMonth && d <= endOfLastMonth;
-        })
-        .reduce((sum, b) => sum + Number(b.totalHarga), 0) * (1 - komisiRate)
+    const saldoTertundaBulanLalu = nettPending(
+      completedPendingBookings.filter(b => {
+        const d = new Date(b.updatedAt || b.createdAt);
+        return d >= startOfLastMonth && d <= endOfLastMonth;
+      })
     );
 
     // --- Sparkline 7 hari terakhir (tetap untuk visual graph) ---
@@ -402,8 +406,7 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
         activeBookingCountByDay[key] = (activeBookingCountByDay[key] ?? 0) + 1;
       }
       if ((STATUS_DIHITUNG_PENDAPATAN as readonly string[]).includes(b.status)) {
-        const gross = Number(b.totalHarga);
-        const nett = Math.round(gross * (1 - komisiRate));
+        const nett = nettUntukBooking(b.totalHarga, b.komisiPersenSnapshot, instansiId, liveRateMap);
         revenueByDay[key] = (revenueByDay[key] ?? 0) + nett;
       }
     }
@@ -421,17 +424,17 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
       sparklinePendapatan.push(revenueByDay[key] ?? 0);
       sparklineBookingAktif.push(activeBookingCountByDay[key] ?? 0);
 
-      const activeOnDay = activeBookingCountByDay[key] ?? 0;
-      const calcAvailable = Math.max(0, availableCars - (activeOnDay > 0 ? (activeOnDay % 3) : 0));
-      sparklineArmadaTersedia.push(calcAvailable);
+      // Armada tersedia adalah snapshot saat ini (tidak ada histori harian
+      // di DB). Garis datar = jujur; JANGAN sintesis variasi palsu
+      // (sebelumnya memakai rumus derived dari activeBookingCount).
+      sparklineArmadaTersedia.push(availableCars);
 
       const dayEnd = new Date(d);
       dayEnd.setHours(23, 59, 59, 999);
-      const pendingUpToDayKotor = completedPendingBookings
+      const pendingUpToDayNett = completedPendingBookings
         .filter(b => new Date(b.updatedAt || b.createdAt) <= dayEnd)
-        .reduce((sum, b) => sum + Number(b.totalHarga), 0);
-      const pendingUpToDayNett = pendingUpToDayKotor * (1 - komisiRate);
-      sparklineSaldoTertunda.push(Math.round(pendingUpToDayNett));
+        .reduce((sum, b) => sum + nettUntukBooking(b.totalHarga, b.komisiPersenSnapshot, instansiId, liveRateMap), 0);
+      sparklineSaldoTertunda.push(pendingUpToDayNett);
     }
 
     res.json({
@@ -485,7 +488,7 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
       where: { id: instansiId },
       select: { komisiPlatformPersen: true },
     });
-    const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
+    const liveRateMap = new Map([[instansiId, Number(instansi?.komisiPlatformPersen ?? 10)]]);
 
     const bookings = await prisma.booking.findMany({
       where: {
@@ -493,14 +496,15 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
         createdAt: { gte: rangeStart },
         status: { in: [...STATUS_DIHITUNG_PENDAPATAN] },
       },
-      select: { totalHarga: true, createdAt: true },
+      select: { totalHarga: true, komisiPersenSnapshot: true, createdAt: true },
     });
 
     let labels: string[] = [];
     let values: number[] = [];
 
-    // Helper untuk pendapatan bersih
-    const getNett = (gross: number) => Math.round(gross * (1 - komisiRate));
+    // Helper untuk pendapatan bersih (snapshot per booking)
+    const getNett = (b: { totalHarga: unknown; komisiPersenSnapshot: unknown }) =>
+      nettUntukBooking(b.totalHarga as number, b.komisiPersenSnapshot as number | null, instansiId, liveRateMap);
 
     if (period === 'today') {
       // Bucket per 4 jam
@@ -508,7 +512,7 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
       values = new Array(6).fill(0);
       for (const b of bookings) {
         const hour = new Date(b.createdAt).getHours();
-        values[Math.floor(hour / 4)] += getNett(Number(b.totalHarga));
+        values[Math.floor(hour / 4)] += getNett(b);
       }
     } else if (period === '7days') {
       const days: string[] = [];
@@ -523,7 +527,7 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
       for (const b of bookings) {
         const key = new Date(b.createdAt).toISOString().split('T')[0];
         const idx = keys.indexOf(key);
-        if (idx !== -1) values[idx] += getNett(Number(b.totalHarga));
+        if (idx !== -1) values[idx] += getNett(b);
       }
     } else if (period === 'month') {
       const weeksInMonth = Math.ceil(
@@ -534,7 +538,7 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
       for (const b of bookings) {
         const dayOfMonth = new Date(b.createdAt).getDate();
         const weekIdx = Math.min(Math.floor((dayOfMonth - 1) / 7), weeksInMonth - 1);
-        values[weekIdx] += getNett(Number(b.totalHarga));
+        values[weekIdx] += getNett(b);
       }
     } else {
       // year — 12 bulan terakhir
@@ -549,7 +553,7 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
         const d = new Date(b.createdAt);
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         const idx = monthKeys.indexOf(key);
-        if (idx !== -1) values[idx] += getNett(Number(b.totalHarga));
+        if (idx !== -1) values[idx] += getNett(b);
       }
     }
 
@@ -595,11 +599,16 @@ instansiRouter.get('/saldo', async (req, res) => {
 
     const eligibleBookings = pendingBookings.filter(b => b.disbursementItems.length === 0);
 
+    // Komisi & nett per booking via snapshot (fallback rate live)
+    const liveRateMap = new Map([[instansiId, Number(instansi.komisiPlatformPersen)]]);
     const jumlahKotor = eligibleBookings.reduce(
       (sum, b) => sum + Number(b.totalHarga),
       0
     );
-    const komisi = jumlahKotor * (Number(instansi.komisiPlatformPersen) / 100);
+    const komisi = eligibleBookings.reduce(
+      (sum, b) => sum + komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, instansiId, liveRateMap),
+      0
+    );
     const jumlahBersih = jumlahKotor - komisi;
 
     // Estimasi disbursement berikutnya
@@ -936,7 +945,7 @@ instansiRouter.get('/financials', async (req, res) => {
       },
     });
 
-    const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
+    const liveRateMap = new Map([[instansiId, Number(instansi?.komisiPlatformPersen ?? 10)]]);
 
     // Fetch ALL bookings for this instansi (including active, completed, cancelled, and refunded)
     const bookings = await prisma.booking.findMany({
@@ -946,6 +955,7 @@ instansiRouter.get('/financials', async (req, res) => {
       select: {
         id: true,
         totalHarga: true,
+        komisiPersenSnapshot: true,
         status: true,
         createdAt: true,
         tanggalMulai: true,
@@ -1022,7 +1032,7 @@ instansiRouter.get('/financials', async (req, res) => {
 
     const formattedBookings = bookings.map((b) => {
       const gross = Number(b.totalHarga);
-      const komisi = Math.round(gross * komisiRate);
+      const komisi = komisiUntukBooking(gross, b.komisiPersenSnapshot, instansiId, liveRateMap);
       const nett = gross - komisi;
 
       if (['dikonfirmasi', 'berjalan', 'selesai'].includes(b.status)) {

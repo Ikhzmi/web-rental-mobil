@@ -3,6 +3,7 @@ import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 function HealthIndicator({ label, status, value, isDark }: { label: string; status: string; value: string; isDark: boolean }) {
   const isOnline = status === 'online' || status === 'healthy';
@@ -51,8 +52,8 @@ export function SystemHealth() {
           <>
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center justify-between py-2">
-                <div className={`h-3 w-16 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
-                <div className={`h-3 w-12 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-3 w-12" />
               </div>
             ))}
           </>

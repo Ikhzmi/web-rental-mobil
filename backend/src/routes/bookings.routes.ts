@@ -110,7 +110,10 @@ bookingsRouter.post('/', async (req, res) => {
     let lastError: unknown;
 
     async function createBookingTx(tx: Prisma.TransactionClient) {
-      const car = await tx.car.findUnique({ where: { id: carId } });
+      const car = await tx.car.findUnique({
+        where: { id: carId },
+        include: { instansi: { select: { komisiPlatformPersen: true } } },
+      });
       // PENTING: sebelumnya hanya cek car.status, TIDAK PERNAH cek
       // statusApproval — ini lapisan pertahanan terakhir (endpoint katalog
       // & detail sudah diperbaiki juga di cars.routes.ts) supaya mobil yang
@@ -138,6 +141,9 @@ bookingsRouter.post('/', async (req, res) => {
           hargaDasar: rincian.hargaDasar,
           totalAddon: rincian.totalAddon,
           totalHarga: rincian.totalHarga,
+          // Snapshot % komisi saat booking dibuat — agregat historis
+          // memakai ini agar perubahan rate tidak retroaktif.
+          komisiPersenSnapshot: car.instansi?.komisiPlatformPersen ?? 10,
           // v2: Status changed from 'pending' to 'menunggu_pembayaran'
           // because now waiting for payment gateway confirmation, not manual admin verification
           status: 'menunggu_pembayaran',
@@ -372,7 +378,16 @@ bookingsRouter.patch('/:id/cancel', async (req, res) => {
       type: 'booking',
       title: 'Pengajuan Refund Baru',
       message: `Pesanan #${booking.id.slice(0, 8)} (${booking.car.nama}) dibatalkan dan membutuhkan pengembalian dana 100%.`,
-      data: { actionUrl: `/admin/refunds`, bookingId: booking.id },
+      data: { actionUrl: `/admin/keuangan?tab=refunds`, bookingId: booking.id },
+    });
+  } else {
+    // Batal tanpa refund (belum ada dana masuk) tetap perlu diketahui rental
+    // agar dashboard/aktivitas mereka mencatat pembatalan ini.
+    void notifyInstansi(booking.car.instansiId, {
+      type: 'booking',
+      title: 'Pesanan Dibatalkan Pelanggan',
+      message: `Pesanan #${booking.id.slice(0, 8)} (${booking.car.nama}) dibatalkan pelanggan (belum ada pembayaran, tanpa refund).`,
+      data: { actionUrl: `/admin/pesanan/${booking.id}`, bookingId: booking.id },
     });
   }
 

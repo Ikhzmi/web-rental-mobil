@@ -12,28 +12,28 @@ gsap.registerPlugin(ScrollTrigger, useGSAP);
 const faqs = [
   {
     id: 1,
-    question: 'Apa saja syarat untuk menyewa mobil?',
-    answer: 'Syarat umum meliputi: KTP asli yang masih berlaku, SIM A yang masih aktif, usia minimal 21 tahun, dan deposit sesuai tipe mobil.',
+    question: 'Dokumen apa saja yang diperlukan untuk menyewa mobil?',
+    answer: 'Untuk sewa Lepas Kunci, siapkan KTP asli dan SIM A aktif yang diunggah melalui halaman Profil Anda. Untuk sewa Dengan Sopir, verifikasi dokumen dilakukan saat penjemputan.',
   },
   {
     id: 2,
-    question: 'Bagaimana cara booking mobil?',
-    answer: 'Booking sangat mudah: pilih mobil, pilih tanggal, isi data penyewa, lakukan pembayaran, dan mobil siap diambil.',
+    question: 'Bagaimana sistem pembayaran di KerenTal Kita?',
+    answer: 'Pembayaran dilakukan secara otomatis & instan melalui QRIS (dapat discan dari seluruh e-wallet & m-banking), Virtual Account Bank, dan E-Wallet tanpa perlu verifikasi manual.',
   },
   {
     id: 3,
-    question: 'Apakah harga sudah termasuk asuransi?',
-    answer: 'Ya, semua armada sudah dilengkapi asuransi komprehensif dan pihak ketiga. Tersedia paket all-risk dengan biaya tambahan Rp75.000/hari.',
+    question: 'Apakah bisa mengubah jadwal sewa (Reschedule)?',
+    answer: 'Ya! Anda dapat mengajukan Reschedule tanggal sewa secara mandiri melalui menu Detail Pesanan di akun Anda selama armada tersedia pada jadwal baru.',
   },
   {
     id: 4,
-    question: 'Bisakah sewa mobil dengan sopir?',
-    answer: 'Tentu! Kami menyediakan layanan sewa mobil lengkap dengan sopir profesional. Biaya sopir Rp150.000/hari sudah termasuk makan sopir.',
+    question: 'Bisakah menyewa mobil dengan sopir?',
+    answer: 'Tentu! Kami menyediakan opsi sewa Lepas Kunci maupun Dengan Sopir profesional. Anda juga dapat menambahkan add-on asuransi dan layanan antar-jemput.',
   },
   {
     id: 5,
-    question: 'Metode pembayaran apa saja?',
-    answer: 'Kami menerima: Transfer Bank (BCA, Mandiri, BNI, BRI), E-wallet (GoPay, OVO, Dana), QRIS, dan kartu kredit/debit.',
+    question: 'Bagaimana jika saya perlu membatalkan pesanan?',
+    answer: 'Anda dapat mengajukan pembatalan pesanan beserta refund melalui menu Detail Pesanan. Dana refund akan ditransfer kembali ke rekening bank Anda setelah disetujui.',
   },
 ];
 

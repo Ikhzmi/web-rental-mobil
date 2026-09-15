@@ -9,7 +9,6 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
   Gauge,
   Users,
-  Loader2,
   ArrowLeft,
   CheckCircle,
   Building2,
@@ -29,6 +28,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api, type Kategori, type TipeSewa } from '../lib/api';
+import { Skeleton, SkeletonCalendarGrid } from '../components/Skeleton';
 import { useTheme } from '../hooks/useTheme';
 import { useSession } from '../hooks/useSession';
 import { useProfile } from '../hooks/useProfile';
@@ -261,9 +261,35 @@ export default function ArmadaDetailPage() {
 
   if (carQuery.isLoading) {
     return (
-      <main className={`min-h-screen flex items-center justify-center gap-3 transition-colors duration-300 bg-[var(--bg-primary)] pt-28 pb-20`}>
-        <Loader2 size={20} className={`animate-spin ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
-        <span className={`text-sm font-medium ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Memuat detail armada...</span>
+      <main className="min-h-screen pt-24 pb-24 px-4 sm:px-6 lg:px-10 transition-colors duration-500 bg-[var(--bg-primary)]">
+        <div className="relative max-w-6xl mx-auto space-y-6">
+          <Skeleton className="h-4 w-40 rounded-full" />
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <div className="lg:col-span-3 space-y-6">
+              <Skeleton className="w-full h-64 sm:h-80 lg:h-96 rounded-3xl" />
+              <div className="flex gap-3">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl shrink-0" />
+                ))}
+              </div>
+              <Skeleton className="h-10 w-2/3 rounded-2xl" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-24 rounded-2xl" />
+                ))}
+              </div>
+              <Skeleton className="h-40 w-full rounded-2xl" />
+            </div>
+            <div className="lg:col-span-2">
+              <div className="lg:sticky lg:top-24 rounded-3xl p-6 space-y-4 border border-white/10 dark:border-white/10">
+                <Skeleton className="h-10 w-1/2 rounded-2xl mx-auto" />
+                <Skeleton className="h-64 w-full rounded-2xl" />
+                <Skeleton className="h-12 w-full rounded-2xl" />
+                <Skeleton className="h-12 w-full rounded-2xl" />
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
     );
   }
@@ -588,10 +614,13 @@ export default function ArmadaDetailPage() {
                   <span>Ulasan Pelanggan {reviews.length > 0 && `(${reviews.length})`}</span>
                 </h3>
                 {reviewsQuery.isLoading ? (
-                  <div className="space-y-2">
-                    {[1, 2].map((i) => (
-                      <div key={i} className={`h-14 rounded-xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
-                    ))}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="w-7 h-7 rounded-full shrink-0" />
+                      <Skeleton className="h-3 w-28 rounded" />
+                    </div>
+                    <Skeleton className="h-3 w-full rounded" />
+                    <Skeleton className="h-3 w-5/6 rounded" />
                   </div>
                 ) : reviews.length === 0 ? (
                   <div className="text-center py-6">
@@ -672,12 +701,7 @@ export default function ArmadaDetailPage() {
                 </div>
 
                 {availabilityQuery.isLoading ? (
-                  <div className={`flex items-center justify-center py-8 text-xs gap-2 ${
-                    isDark ? 'text-white/40' : 'text-slate-400'
-                  }`}>
-                    <Loader2 size={16} className="animate-spin" />
-                    Memuat kalender...
-                  </div>
+                  <SkeletonCalendarGrid />
                 ) : (
                   <div className="kerental-daypicker">
                     <DayPicker

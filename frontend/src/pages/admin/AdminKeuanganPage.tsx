@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Wallet,
@@ -18,12 +19,15 @@ import { api, type InstansiFinancialData } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { SkeletonPanel, SkeletonStatsGrid, SkeletonTable } from '../../components/Skeleton';
 
 export default function AdminKeuanganPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const [activeTab, setActiveTab] = useState<'transactions' | 'disbursements' | 'refunds'>('transactions');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'refunds' ? 'refunds' as const : 'transactions' as const;
+  const [activeTab, setActiveTab] = useState<'transactions' | 'disbursements' | 'refunds'>(initialTab);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'belum_dicairkan' | 'diproses' | 'selesai' | 'refunded' | 'dibatalkan'>('all');
 
@@ -153,15 +157,9 @@ export default function AdminKeuanganPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className={`p-8 rounded-2xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-white/60'}`}>
-          <div className="h-6 w-48 bg-white/20 rounded mb-3" />
-          <div className="h-4 w-96 bg-white/10 rounded" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className={`h-32 rounded-2xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-white/60'}`} />
-          ))}
-        </div>
+        <SkeletonPanel isDark={isDark} rows={2} titleWidth="w-56" />
+        <SkeletonStatsGrid isDark={isDark} count={4} />
+        <SkeletonTable rows={5} cols={5} isDark={isDark} />
       </div>
     );
   }

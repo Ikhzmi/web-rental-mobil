@@ -5,6 +5,7 @@ import { api, type AnalyticsPeriod } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 const TIME_FILTERS = [
   { id: 'today', label: 'Hari Ini' },
@@ -71,7 +72,9 @@ export function RevenueChart() {
       }
     }),
     values: data!.revenueData.map((d: { revenue: number; commission?: number }) =>
-      d.commission !== undefined ? d.commission : Math.round(d.revenue * 0.1)
+      // JANGAN fallback 10% bila commission hilang — tampilkan 0 agar
+      // ketidakhadiran data terlihat, bukan ditutupi angka palsu.
+      d.commission !== undefined ? d.commission : 0
     ),
   } : null;
 
@@ -165,6 +168,15 @@ export function RevenueChart() {
         </div>
       </div>
       <div className="p-4 flex flex-col h-full">
+        {isLoading && !data ? (
+          /* Skeleton saat fetch awal — jangan render garis datar Rp0 */
+          <div className="space-y-3">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-7 w-40" />
+            <Skeleton className="w-full h-[150px] rounded-2xl" />
+          </div>
+        ) : (
+        <>
         <div className="flex items-center gap-3 mb-3">
           <div>
             <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>
@@ -325,6 +337,8 @@ export function RevenueChart() {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
     </motion.div>
   );

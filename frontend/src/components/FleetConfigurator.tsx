@@ -8,6 +8,7 @@ import { api, type Kategori } from '../lib/api';
 import { formatRupiah } from '../lib/pricing';
 import FleetGrid from './FleetGrid';
 import { useTheme } from '../hooks/useTheme';
+import { Skeleton } from './Skeleton';
 
 gsap.registerPlugin(useGSAP);
 
@@ -167,25 +168,21 @@ export default function FleetConfigurator() {
           {/* Skeleton top bar */}
           <div className="flex items-start justify-between mb-10">
             <div className="space-y-2">
-              <div className={`h-3 w-28 rounded-full animate-pulse ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
-              <div className={`h-10 w-56 rounded-2xl animate-pulse ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
-              <div className={`h-3 w-20 rounded-full animate-pulse ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
+              <Skeleton className="h-3 w-28 rounded-full" />
+              <Skeleton className="h-10 w-56 rounded-2xl" />
+              <Skeleton className="h-3 w-20 rounded-full" />
             </div>
             <div className="space-y-2 text-right">
-              <div className={`h-8 w-36 rounded-2xl animate-pulse ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
-              <div className={`h-3 w-16 rounded-full animate-pulse ml-auto ${isDark ? 'bg-white/10' : 'bg-zinc-200'}`} />
+              <Skeleton className="h-8 w-36 rounded-2xl ml-auto" />
+              <Skeleton className="h-3 w-16 rounded-full ml-auto" />
             </div>
           </div>
           {/* Skeleton car stage */}
-          <div className={`h-[38vh] sm:h-[46vh] md:h-[52vh] rounded-3xl animate-pulse ${isDark ? 'bg-white/[0.04]' : 'bg-zinc-200'}`} />
+          <Skeleton className="h-[38vh] sm:h-[46vh] md:h-[52vh] w-full rounded-3xl" />
           {/* Skeleton controls */}
           <div className="flex justify-center gap-3 mt-6">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className={`h-1.5 rounded-full animate-pulse ${
-                i === 2
-                  ? isDark ? 'w-5 bg-white/20' : 'w-5 bg-zinc-400'
-                  : isDark ? 'w-1.5 bg-white/10' : 'w-1.5 bg-zinc-300'
-              }`} />
+              <Skeleton key={i} className={i === 2 ? 'h-1.5 w-5 rounded-full' : 'h-1.5 w-1.5 rounded-full'} />
             ))}
           </div>
         </div>

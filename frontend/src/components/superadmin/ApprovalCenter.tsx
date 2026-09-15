@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 export function ApprovalCenter() {
   const { theme } = useTheme();
@@ -51,8 +52,8 @@ export function ApprovalCenter() {
             <>
               {[1, 2, 3].map((i) => (
                 <div key={i} className={`p-4 rounded-xl text-center ${isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'}`}>
-                  <div className={`h-8 w-12 mx-auto rounded animate-pulse mb-2 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                  <div className={`h-3 w-16 mx-auto rounded animate-pulse ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <Skeleton className="h-8 w-12 mx-auto mb-2" />
+                  <Skeleton className="h-3 w-16 mx-auto" />
                 </div>
               ))}
             </>
@@ -72,7 +73,7 @@ export function ApprovalCenter() {
 
         {/* Total pending */}
         {isLoading ? (
-          <div className={`h-10 rounded-xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'}`} />
+          <Skeleton className="h-10 rounded-xl" />
         ) : (
           <div className={`p-3 rounded-xl text-center ${isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'}`}>
             <p className={`text-xs ${isDark ? 'text-white/60' : 'text-slate-500'}`}>

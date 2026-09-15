@@ -17,6 +17,7 @@ import { motion } from 'framer-motion';
 import { api, ApiError } from '../lib/api';
 import { formatRupiah } from '../lib/pricing';
 import { useTheme } from '../hooks/useTheme';
+import { formatWibTanggal } from '../lib/dates';
 
 const STATUS_LABEL: Record<string, string> = {
   menunggu_pembayaran: 'Menunggu Pembayaran',
@@ -282,13 +283,7 @@ const PAYMENT_METHODS: PaymentMethodOption[] = [
   },
 ];
 
-function formatTanggal(iso: string): string {
-  return new Date(iso).toLocaleDateString('id-ID', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
-}
+const formatTanggal = formatWibTanggal;
 
 function formatCountdown(isoString: string): string {
   const deadline = new Date(isoString);
@@ -324,6 +319,11 @@ export default function BookingConfirmationPage() {
   const [paymentNumber, setPaymentNumber] = useState<string | null>(null);
   const [qrisString, setQrisString] = useState<string | null>(null);
   const [showPaymentLink, setShowPaymentLink] = useState(false);
+  // Nominal RESMI dari server (base + fee gateway). Selama invoice belum
+  // dibuat, pakai estimasi lokal; setelah invoice ada, angka server yang
+  // menang agar nominal transfer selalu sama dengan tagihan gateway.
+  const [serverFee, setServerFee] = useState<number | null>(null);
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [countdown, setCountdown] = useState<string>('');
 
@@ -341,6 +341,8 @@ export default function BookingConfirmationPage() {
       setPaymentUrl(data.paymentUrl);
       if (data.paymentNumber) setPaymentNumber(data.paymentNumber);
       if (data.qrisString) setQrisString(data.qrisString);
+      if (typeof data.totalPayment === 'number') setServerTotal(data.totalPayment);
+      if (typeof data.fee === 'number') setServerFee(data.fee);
       setShowPaymentLink(true);
       paymentStatusQuery.refetch();
     },
@@ -455,8 +457,11 @@ export default function BookingConfirmationPage() {
   const isConfirmed = booking.status === 'dikonfirmasi' || booking.status === 'berjalan' || booking.status === 'selesai';
   const activeUrl = paymentUrl || paymentStatusQuery.data?.paymentUrl;
   const basePrice = Number(booking.totalHarga);
-  const currentFee = getPakasirFee(basePrice, selectedMethod);
-  const finalPrice = basePrice + currentFee;
+  // Estimasi fee lokal (sebelum invoice dibuat)
+  const estimatedFee = getPakasirFee(basePrice, selectedMethod);
+  // Setelah invoice dibuat, nominal RESMI server menang atas estimasi
+  const currentFee = serverFee ?? estimatedFee;
+  const finalPrice = serverTotal ?? (basePrice + currentFee);
 
   const currentMethodObj = PAYMENT_METHODS.find((m) => m.id === selectedMethod);
   const isVirtualAccount = selectedMethod.includes('va');
@@ -967,7 +972,13 @@ export default function BookingConfirmationPage() {
 
                 <div className="flex items-center gap-2 pt-1">
                   <button
-                    onClick={() => setShowPaymentLink(false)}
+                    onClick={() => {
+                      // Kembali ke estimasi lokal: nominal server milik
+                      // metode sebelumnya tidak boleh dipakai lagi.
+                      setShowPaymentLink(false);
+                      setServerFee(null);
+                      setServerTotal(null);
+                    }}
                     className={`flex-1 py-2.5 rounded-full text-xs font-medium transition-colors ${
                       isDark
                         ? 'bg-white/10 hover:bg-white/15 text-white/80'

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 function getActivityIcon(type: string, isDark: boolean) {
   const iconMap: Record<string, { emoji: string; color: string }> = {
@@ -76,12 +77,12 @@ export function ActivitiesTimeline() {
       <div className="space-y-3 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         {isLoading ? (
           <>
-            {[1, 2, 3, 4].map((i) => (
+            {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-start gap-3">
-                <div className={`w-8 h-8 rounded-lg ${isDark ? 'bg-white/10' : 'bg-slate-100'} animate-pulse`} />
+                <Skeleton className="w-8 h-8 rounded-lg" />
                 <div className="flex-1">
-                  <div className={`h-3 w-3/4 rounded mb-1 ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
-                  <div className={`h-2 w-1/2 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                  <Skeleton className="h-3 w-3/4 rounded mb-1" />
+                  <Skeleton className="h-2 w-1/2 rounded" />
                 </div>
               </div>
             ))}

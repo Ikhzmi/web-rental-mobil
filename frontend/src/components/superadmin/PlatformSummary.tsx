@@ -3,6 +3,7 @@ import { api } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 export function PlatformSummary() {
   const { theme } = useTheme();
@@ -23,10 +24,10 @@ export function PlatformSummary() {
       <div className="space-y-2">
         {isLoading ? (
           <>
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
               <div key={i} className="flex items-center justify-between">
-                <div className={`h-3 w-20 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
-                <div className={`h-3 w-12 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-12" />
               </div>
             ))}
           </>

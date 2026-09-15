@@ -5,7 +5,7 @@ import { Wallet, Search, CheckCircle, Clock, XCircle, RefreshCw, Plus, X, Buildi
 import { api } from '../../lib/api';
 import type { Disbursement, StatusDisbursement, SaldoTertundaInstansi } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
-import { SkeletonList } from '../../components/Skeleton';
+import { SkeletonList, SkeletonPanel, SkeletonStatsGrid } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../../contexts/ToastContext';
 import { getDisbursementStatusConfig } from '../../lib/statusConfig';
@@ -38,8 +38,12 @@ function CreateDisbursementModal({ onClose, isDark }: { onClose: () => void; isD
 
   const eligible = (saldoList ?? []).filter((s) => s.saldoTertunda > 0);
   const selected = eligible.find((s) => s.id === selectedId) ?? null;
-  const komisi = selected ? Math.round(selected.saldoTertunda * (selected.komisiPlatformPersen / 100)) : 0;
-  const bersih = selected ? selected.saldoTertunda - komisi : 0;
+  // Basis preview WAJIB saldo kotor: backend mengirim saldoTertunda yang
+  // SUDAH NETT (kotor × (1-rate)). Memotong komisi dari nilai nett = komisi
+  // ganda dan bersih kurang dari yang sebenarnya dicairkan.
+  const kotor = selected ? selected.saldoTertundaKotor : 0;
+  const komisi = selected ? Math.round(kotor * (selected.komisiPlatformPersen / 100)) : 0;
+  const bersih = selected ? kotor - komisi : 0;
 
   const createMutation = useMutation({
     mutationFn: () => api.createDisbursement({ instansiId: selectedId!, bankTransferId: bankTransferId || undefined }),
@@ -174,7 +178,7 @@ function CreateDisbursementModal({ onClose, isDark }: { onClose: () => void; isD
                 <div className="p-4 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Jumlah Kotor</span>
-                    <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatRupiah(selected.saldoTertunda)}</span>
+                    <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatRupiah(kotor)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Komisi Platform ({selected.komisiPlatformPersen}%)</span>
@@ -349,13 +353,17 @@ export default function SuperAdminPencairanPage() {
     }),
   });
 
+  // Total uang HANYA dari batch berhasil + diproses. Batch gagal tidak
+  // jadi uang keluar (bookingnya kembali ke saldo) sehingga ikut
+  // menjumlahkannya membesarkan "Total Dana Kotor" secara fiktif.
+  const validMoney = (disbursements ?? []).filter((d) => d.status !== 'gagal');
   const stats = {
     total: disbursements?.length ?? 0,
     berhasil: disbursements?.filter(d => d.status === 'berhasil').length ?? 0,
     diproses: disbursements?.filter(d => d.status === 'diproses').length ?? 0,
     gagal: disbursements?.filter(d => d.status === 'gagal').length ?? 0,
-    totalKotor: disbursements?.reduce((sum, d) => sum + Number(d.jumlahKotor), 0) ?? 0,
-    totalKomisi: disbursements?.reduce((sum, d) => sum + Number(d.komisiPlatform), 0) ?? 0,
+    totalKotor: validMoney.reduce((sum, d) => sum + Number(d.jumlahKotor), 0),
+    totalKomisi: validMoney.reduce((sum, d) => sum + Number(d.komisiPlatform), 0),
   };
 
   const filteredDisbursements = search
@@ -405,7 +413,10 @@ export default function SuperAdminPencairanPage() {
         </div>
       </motion.div>
 
-      {/* Stats */}
+      {/* Stats — skeleton saat loading agar tidak flash 0 */}
+      {isLoading ? (
+        <SkeletonStatsGrid isDark={isDark} count={4} />
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { key: '', label: 'Total', value: stats.total, activeBg: 'bg-white/[0.03]' },
@@ -427,8 +438,12 @@ export default function SuperAdminPencairanPage() {
           </motion.button>
         ))}
       </div>
+      )}
 
-      {/* Summary */}
+      {/* Summary — skeleton saat loading agar tidak flash Rp0 */}
+      {isLoading ? (
+        <SkeletonPanel isDark={isDark} rows={2} titleWidth="w-48" />
+      ) : (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -447,6 +462,7 @@ export default function SuperAdminPencairanPage() {
           </div>
         </div>
       </motion.div>
+      )}
 
       {/* Search */}
       <motion.div

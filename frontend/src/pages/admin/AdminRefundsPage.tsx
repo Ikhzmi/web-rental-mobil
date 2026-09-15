@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Clock,
   RefreshCw,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -16,6 +15,7 @@ import {
 import { api, type StatusRefund, type RefundData } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
+import { SkeletonStatsGrid, SkeletonTable } from '../../components/Skeleton';
 
 const STATUS_TABS: Array<{ id: StatusRefund | 'semua'; label: string }> = [
   { id: 'semua', label: 'Semua Status' },
@@ -79,7 +79,7 @@ export default function AdminRefundsPage() {
 
   const cardClass = isDark
     ? 'bg-white/[0.03] border-white/10'
-    : 'bg-white/80 border-slate-200/80 shadow-sm';
+    : 'bg-white/40 border-white/60 shadow-sm';
 
   return (
     <div className="space-y-6">
@@ -112,7 +112,10 @@ export default function AdminRefundsPage() {
         </div>
       </div>
 
-      {/* Stat Cards */}
+      {/* Stat Cards — skeleton saat loading agar tidak flash 0/Rp0 */}
+      {isLoading ? (
+        <SkeletonStatsGrid isDark={isDark} count={4} />
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`p-5 rounded-2xl border ${cardClass}`}>
           <div className="flex items-center justify-between gap-2">
@@ -174,6 +177,7 @@ export default function AdminRefundsPage() {
           </p>
         </div>
       </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className={`p-4 rounded-2xl border ${cardClass} space-y-4`}>
@@ -223,10 +227,7 @@ export default function AdminRefundsPage() {
       {/* Refunds Table */}
       <div className={`rounded-2xl border overflow-hidden ${cardClass}`}>
         {isLoading ? (
-          <div className="py-20 flex items-center justify-center gap-2">
-            <Loader2 size={20} className="animate-spin text-emerald-500" />
-            <span className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Memuat data refund...</span>
-          </div>
+          <SkeletonTable rows={5} cols={6} isDark={isDark} />
         ) : refunds.length === 0 ? (
           <div className="py-20 text-center">
             <div className={`w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>

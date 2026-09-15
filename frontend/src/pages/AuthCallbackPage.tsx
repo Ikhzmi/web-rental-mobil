@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { SkeletonAuthCard } from '../components/Skeleton';
 
 /**
  * Halaman callback untuk:
@@ -208,38 +209,34 @@ export default function AuthCallbackPage() {
   }, [searchParams, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black">
-      <div className="text-center p-8 max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] transition-colors duration-300 px-5">
+      <div className="w-full max-w-md flex justify-center">
         {status === 'loading' && (
-          <>
-            <div className="w-16 h-16 mx-auto mb-6 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-            <h2 className="text-xl font-semibold text-white mb-2">Memproses...</h2>
-            <p className="text-white/60">Mohon tunggu sebentar</p>
-          </>
+          <SkeletonAuthCard />
         )}
 
         {status === 'success' && (
-          <>
+          <div className="text-center p-8 max-w-md">
             <div className="w-16 h-16 mx-auto mb-6 bg-green-500/20 rounded-full flex items-center justify-center">
               <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Berhasil!</h2>
-            <p className="text-white/60">Mengalihkan ke halaman utama...</p>
-          </>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Berhasil!</h2>
+            <p className="text-slate-500 dark:text-white/60">Mengalihkan ke halaman utama...</p>
+          </div>
         )}
 
         {status === 'error' && (
-          <>
+          <div className="text-center p-8 max-w-md">
             <div className="w-16 h-16 mx-auto mb-6 bg-red-500/20 rounded-full flex items-center justify-center">
               <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Gagal</h2>
-            <p className="text-white/60">{errorMessage}</p>
-          </>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">Gagal</h2>
+            <p className="text-slate-500 dark:text-white/60">{errorMessage}</p>
+          </div>
         )}
       </div>
     </div>

@@ -709,6 +709,64 @@ html {
   animation: shimmer 3s infinite;
 }
 
+/* Kalender ketersediaan (DayPicker v10): header SELALU bulan di kiri,
+   tombol navigasi di kanan, sejajar satu baris. DayPicker default
+   memposisikan .rdp-nav absolut terhadap container months sehingga
+   sejajarnya rapuh — kunci lewat CSS terpusat ini (berlaku untuk
+   semua .kerental-daypicker: detail armada, admin, dsb). */
+.kerental-daypicker {
+  --rdp-accent-color: #b45309;
+}
+.dark .kerental-daypicker {
+  --rdp-accent-color: #fbbf24;
+}
+.kerental-daypicker .rdp-month {
+  position: relative;
+}
+.kerental-daypicker .rdp-month_caption {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 2.25rem;
+  margin: 0 0 0.75rem;
+  padding-right: 5rem;
+}
+.kerental-daypicker .rdp-nav {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.kerental-daypicker .rdp-button_previous,
+.kerental-daypicker .rdp-button_next {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.06);
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.kerental-daypicker .rdp-button_previous:hover:not(:disabled):not([aria-disabled="true"]),
+.kerental-daypicker .rdp-button_next:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: rgba(15, 23, 42, 0.12);
+  transform: scale(1.05);
+}
+.dark .kerental-daypicker .rdp-button_previous,
+.dark .kerental-daypicker .rdp-button_next {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.dark .kerental-daypicker .rdp-button_previous:hover:not(:disabled):not([aria-disabled="true"]),
+.dark .kerental-daypicker .rdp-button_next:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 /* Gradient text */
 .gradient-text {
   background: linear-gradient(135deg, #8b7355, #6b5545);

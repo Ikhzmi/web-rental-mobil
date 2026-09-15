@@ -5,6 +5,7 @@ import { Clock } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 export function TodayBookings() {
   const { theme } = useTheme();
@@ -16,12 +17,15 @@ export function TodayBookings() {
     staleTime: 2 * 60 * 1000,
   });
 
-  // Calculate confirmed: total - (pending + running + completed + cancelled)
-  const confirmed = Math.max(0, (bookings?.total ?? 0) - ((bookings?.pending ?? 0) + (bookings?.running ?? 0) + (bookings?.completed ?? 0) + (bookings?.cancelled ?? 0)));
+  // Backend mengirim menungguPembayaran & dikonfirmasi terpisah.
+  // JANGAN derivasi dikonfirmasi sebagai residu total-(lainnya) karena
+  // `pending` backend = menunggu+ dikonfirmasi sehingga hasilnya selalu 0.
+  const menunggu = bookings?.menungguPembayaran ?? bookings?.pending ?? 0;
+  const confirmed = bookings?.dikonfirmasi ?? 0;
 
   // 5 statuses with unified colors
   const stats = [
-    { label: 'Menunggu Bayar', value: bookings?.pending ?? 0, color: '#f59e0b', dotClass: 'bg-amber-400' },
+    { label: 'Menunggu Bayar', value: menunggu, color: '#f59e0b', dotClass: 'bg-amber-400' },
     { label: 'Dikonfirmasi', value: confirmed, color: '#3b82f6', dotClass: 'bg-blue-400' },
     { label: 'Berjalan', value: bookings?.running ?? 0, color: '#8b5cf6', dotClass: 'bg-purple-400' },
     { label: 'Selesai', value: bookings?.completed ?? 0, color: '#10b981', dotClass: 'bg-emerald-400' },
@@ -105,8 +109,8 @@ export function TodayBookings() {
             <div className="space-y-2">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="flex items-center justify-between">
-                  <div className={`h-3 w-24 rounded animate-pulse ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                  <div className={`h-3 w-6 rounded animate-pulse ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-6" />
                 </div>
               ))}
             </div>

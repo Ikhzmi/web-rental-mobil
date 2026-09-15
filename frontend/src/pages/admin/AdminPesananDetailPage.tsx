@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, ArrowLeft, FileText, ExternalLink, CheckCircle, Car, User, Calendar, MapPin, ShieldCheck, Clock, AlertTriangle, X, RefreshCw, CheckCircle2, Ban } from 'lucide-react';
+import { Loader2, ArrowLeft, FileText, ExternalLink, CheckCircle, Car, User, Calendar, MapPin, ShieldCheck, Clock, AlertTriangle, X, RefreshCw, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, ApiError, type StatusBooking, type Booking } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getBookingStatusWithIcon } from '../../lib/statusConfig';
+import { BackButtonSkeleton, SkeletonDetail } from '../../components/Skeleton';
+import { formatWibTanggal } from '../../lib/dates';
 
 const STATUS_LABEL: Record<StatusBooking, string> = {
   menunggu_pembayaran: 'Menunggu Konfirmasi / Bayar',
@@ -24,15 +26,7 @@ const NEXT_STATUS: Record<StatusBooking, StatusBooking[]> = {
   dibatalkan: [],
 };
 
-function formatTanggal(iso: string): string {
-  return new Date(iso).toLocaleString('id-ID', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+const formatTanggal = formatWibTanggal;
 
 function DokumenButton({
   userId,
@@ -225,9 +219,10 @@ export default function AdminPesananDetailPage() {
 
   const [confirmTargetStatus, setConfirmTargetStatus] = useState<StatusBooking | null>(null);
 
-  // Refund states & mutations
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [alasanTolak, setAlasanTolak] = useState('');
+  // Refund: read-only untuk admin rental. Persetujuan/transfer/penolakan
+  // refund hanya bisa dilakukan SuperAdmin (dana di rekening SuperAdmin) —
+  // endpoint admin sebelumnya mengembalikan 403 sehingga tombol aksi di
+  // sini tidak pernah bisa berhasil dan dihapus.
 
   const { data: booking, isLoading, isError } = useQuery({
     queryKey: ['admin-booking', id],
@@ -242,41 +237,6 @@ export default function AdminPesananDetailPage() {
   });
 
   const refund = refundResponse?.refund ?? (booking as any)?.refund;
-
-  const approveRefundMutation = useMutation({
-    mutationFn: (refundId: string) => api.approveAdminRefund(refundId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-refund-booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['admin-booking', id] });
-    },
-  });
-
-  const processRefundMutation = useMutation({
-    mutationFn: (refundId: string) => api.processAdminRefund(refundId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-refund-booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['admin-booking', id] });
-    },
-  });
-
-  const completeRefundMutation = useMutation({
-    mutationFn: (refundId: string) => api.completeAdminRefund(refundId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-refund-booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['admin-booking', id] });
-    },
-  });
-
-  const rejectRefundMutation = useMutation({
-    mutationFn: ({ refundId, alasan }: { refundId: string; alasan: string }) =>
-      api.rejectAdminRefund(refundId, alasan),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-refund-booking', id] });
-      queryClient.invalidateQueries({ queryKey: ['admin-booking', id] });
-      setShowRejectModal(false);
-      setAlasanTolak('');
-    },
-  });
 
   const statusMutation = useMutation({
     mutationFn: (status: StatusBooking) => api.updateBookingStatus(id!, status),
@@ -302,20 +262,8 @@ export default function AdminPesananDetailPage() {
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className={`p-6 rounded-3xl animate-pulse space-y-4 ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-slate-200'}`}>
-          <div className="h-6 w-48 rounded bg-white/10" />
-          <div className="h-4 w-32 rounded bg-white/10" />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className={`lg:col-span-7 p-6 rounded-3xl animate-pulse space-y-4 ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-slate-200'}`}>
-            <div className="h-5 w-40 rounded bg-white/10" />
-            <div className="h-24 w-full rounded-xl bg-white/10" />
-          </div>
-          <div className={`lg:col-span-5 p-6 rounded-3xl animate-pulse space-y-4 ${isDark ? 'bg-white/5 border border-white/10' : 'bg-white border border-slate-200'}`}>
-            <div className="h-5 w-36 rounded bg-white/10" />
-            <div className="h-32 w-full rounded-xl bg-white/10" />
-          </div>
-        </div>
+        <BackButtonSkeleton />
+        <SkeletonDetail isDark={isDark} />
       </div>
     );
   }
@@ -567,47 +515,18 @@ export default function AdminPesananDetailPage() {
                 )}
               </div>
 
-              {/* Action Buttons for Admin */}
-              {refund && refund.status === 'menunggu_persetujuan' && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => approveRefundMutation.mutate(refund.id)}
-                    disabled={approveRefundMutation.isPending}
-                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-                  >
-                    {approveRefundMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-                    Setujui Refund
-                  </button>
-                  <button
-                    onClick={() => setShowRejectModal(true)}
-                    className="py-2.5 px-3 rounded-xl text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <Ban size={13} />
-                    Tolak
-                  </button>
+              {/* Status refund diproses SuperAdmin — admin rental hanya memantau */}
+              {refund && ['menunggu_persetujuan', 'disetujui', 'diproses'].includes(refund.status) && (
+                <div className={`flex gap-2.5 items-start p-3.5 rounded-2xl border text-xs leading-relaxed ${
+                  isDark ? 'bg-blue-500/10 border-blue-500/20 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-800'
+                }`}>
+                  <Info size={15} className="shrink-0 mt-0.5 text-blue-400" />
+                  <p>
+                    <strong>Menunggu diproses SuperAdmin.</strong> Dana pelanggan berada di rekening
+                    SuperAdmin, sehingga persetujuan & transfer refund dilakukan oleh SuperAdmin.
+                    Anda akan menerima notifikasi saat status berubah.
+                  </p>
                 </div>
-              )}
-
-              {refund && refund.status === 'disetujui' && (
-                <button
-                  onClick={() => processRefundMutation.mutate(refund.id)}
-                  disabled={processRefundMutation.isPending}
-                  className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-                >
-                  {processRefundMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                  Tandai Sedang Ditransfer
-                </button>
-              )}
-
-              {refund && refund.status === 'diproses' && (
-                <button
-                  onClick={() => completeRefundMutation.mutate(refund.id)}
-                  disabled={completeRefundMutation.isPending}
-                  className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-                >
-                  {completeRefundMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                  Tandai Selesai (Dana Sudah Ditransfer)
-                </button>
               )}
 
               {refund && refund.status === 'berhasil' && (
@@ -707,62 +626,6 @@ export default function AdminPesananDetailPage() {
           />
         )}
 
-        {/* Reject Refund Modal */}
-        {showRejectModal && refund && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowRejectModal(false)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className={`relative z-10 w-full max-w-sm rounded-3xl p-6 shadow-2xl border ${
-                isDark ? 'bg-[#141414] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-base">Tolak Pengajuan Refund</h3>
-                <button onClick={() => setShowRejectModal(false)} className={isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-slate-700'}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              <p className={`text-xs mb-3 ${textMutedClass}`}>
-                Silakan tuliskan alasan penolakan yang jelas agar pelanggan memahami mengapa pengajuan refund tidak dapat disetujui:
-              </p>
-
-              <textarea
-                value={alasanTolak}
-                onChange={(e) => setAlasanTolak(e.target.value)}
-                rows={3}
-                placeholder="Contoh: Unit sudah diserahterimakan dan masa sewa telah dimulai..."
-                className={`w-full text-xs rounded-xl p-3 outline-none resize-none mb-4 border ${
-                  isDark
-                    ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-white/30'
-                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
-                }`}
-              />
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => rejectRefundMutation.mutate({ refundId: refund.id, alasan: alasanTolak.trim() })}
-                  disabled={rejectRefundMutation.isPending || !alasanTolak.trim()}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
-                >
-                  {rejectRefundMutation.isPending && <Loader2 size={13} className="animate-spin" />}
-                  Tolak Refund
-                </button>
-                <button
-                  onClick={() => setShowRejectModal(false)}
-                  className={`py-2.5 px-4 rounded-xl text-xs font-medium transition-colors ${
-                    isDark ? 'text-white/60 hover:text-white' : 'text-slate-600 hover:text-slate-800'
-                  }`}
-                >
-                  Batal
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
       </AnimatePresence>
     </div>
   );

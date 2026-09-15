@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Instansi, StatusInstansi } from '../../lib/api';
-import { SkeletonList } from '../../components/Skeleton';
+import { SkeletonList, SkeletonStatsGrid } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { getInstansiStatusConfig } from '../../lib/statusConfig';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
@@ -849,7 +849,10 @@ export default function SuperAdminInstansiPage() {
         </button>
       </motion.div>
 
-      {/* Stats Cards - Glass Card Style */}
+      {/* Stats Cards - skeleton saat loading agar tidak flash 0 */}
+      {isLoading ? (
+        <SkeletonStatsGrid isDark={isDark} count={3} />
+      ) : (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           {
@@ -897,6 +900,7 @@ export default function SuperAdminInstansiPage() {
           );
         })}
       </div>
+      )}
 
       {/* Search - Glass Card Style */}
       <motion.div

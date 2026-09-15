@@ -2,7 +2,9 @@ import { Car, JenisAddon } from '@prisma/client';
 
 export interface AddonSelection {
   jenis: JenisAddon;
-  /** Dipakai untuk asuransi/antar_jemput, harga flat per pemesanan (bukan per hari). */
+  /** Diabaikan untuk antar_jemput (gratis) dan asuransi (tanpa tarif).
+   *  Hanya sopir yang relevan, itupun dihitung server-side. Field ini
+   *  dipertahankan demi kompatibilitas. */
   harga?: number;
 }
 
@@ -17,10 +19,9 @@ export interface PriceBreakdown {
 /**
  * Konversi ke tanggal kalender WIB (UTC+7) dalam bentuk UTC-midnight key.
  * Frontend mengirim jadwal 01:00–23:00 WIB untuk sewa 1 hari pada tanggal
- * yang sama. Kalau durasi dihitung dengan `setHours(0,0,0,0)` memakai
- * timezone server (UTC di production), 01:00 WIB (= 18:00 UTC hari
- * sebelumnya) dan 23:00 WIB (= 16:00 UTC hari yang sama) jatuh di dua
- * tanggal UTC yang berbeda → sewa 1 hari terhitung 2 hari (harga ×2).
+ * yang sama. Durasi WAJIB dihitung dari kalender WIB, bukan `setHours`
+ * timezone server (UTC di production) — kalau tidak, sewa 1 hari bisa
+ * terhitung 2 hari (harga ×2).
  * Dengan patokan kalender WIB, tanggal yang sama di WIB selalu = 1 hari.
  */
 function toWibDayKey(d: Date): number {
@@ -51,7 +52,7 @@ function hitungDurasiHari(tanggalMulai: Date, tanggalSelesai: Date): number {
  * lewat request yang mencoba melewatinya.
  */
 export function hitungRincianHarga(
-  car: Pick<Car, 'hargaPerHari' | 'tipeSewa' | 'hargaSopirPerHari'>,
+  car: Pick<Car, 'hargaPerHari' | 'tipeSewa' | 'hargaSopirPerHari' | 'hargaAntarJemput'>,
   tanggalMulai: Date,
   tanggalSelesai: Date,
   requestedAddons: AddonSelection[]
@@ -93,14 +94,18 @@ export function hitungRincianHarga(
     throw new Error('Mobil ini hanya tersedia lepas kunci (tanpa sopir)');
   }
 
-  // Add-on lain (asuransi, antar_jemput) — flat, ambil harga apa adanya
-  // dari request untuk skeleton ini; di implementasi penuh sebaiknya
-  // harga add-on non-sopir juga divalidasi dari tabel referensi harga
-  // resmi (bukan dipercaya mentah dari klien), bukan cuma dari `harga`
-  // yang dikirim frontend.
+  // Add-on lain — harga RESMI dihitung server-side, angka `harga` dari
+  // klien DIABAIKAN agar total tidak bisa dimanipulasi dari request:
+  //  - antar_jemput (jemput ke rumah): GRATIS, tidak dihitung & tidak
+  //    masuk ringkasan biaya (kebijakan bisnis)
+  //  - asuransi: tidak ada tarif resmi di data mobil → 0 (tidak ditagih)
   for (const addon of requestedAddons) {
     if (addon.jenis === 'sopir') continue; // sudah ditangani di atas
-    addons.push({ jenis: addon.jenis, harga: addon.harga ?? 0 });
+    if (addon.jenis === 'antar_jemput') {
+      addons.push({ jenis: addon.jenis, harga: 0 });
+    } else if (addon.jenis === 'asuransi') {
+      addons.push({ jenis: addon.jenis, harga: 0 });
+    }
   }
 
   const totalAddon = addons.reduce((sum, a) => sum + a.harga, 0);

@@ -7,6 +7,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useToast } from '../../contexts/ToastContext';
 import { supabase } from '../../lib/supabase';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 import { useNavigate } from 'react-router-dom';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -142,8 +143,12 @@ export default function AdminSettingsPage() {
 
             {isLoading ? (
               <div className="space-y-3">
-                <div className={`h-10 rounded-xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
-                <div className={`h-10 rounded-xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                <Skeleton className="h-10 rounded-xl" />
+                <Skeleton className="h-10 rounded-xl" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Skeleton className="h-10 rounded-xl" />
+                  <Skeleton className="h-10 rounded-xl" />
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -222,7 +227,13 @@ export default function AdminSettingsPage() {
             </div>
 
             {!instansiProfile ? (
-              <div className={`h-16 rounded-xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+              <div className="space-y-3">
+                <Skeleton className="h-16 rounded-xl" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Skeleton className="h-10 rounded-xl" />
+                  <Skeleton className="h-10 rounded-xl" />
+                </div>
+              </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

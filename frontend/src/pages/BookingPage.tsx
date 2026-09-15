@@ -24,15 +24,12 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, ApiError, type JenisAddon } from '../lib/api';
 import { estimasiHarga, formatRupiah } from '../lib/pricing';
+import { formatRentangTanggal, isSameWibDay, toWibDayKey } from '../lib/dates';
 import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
 import { useTheme } from '../hooks/useTheme';
 
 import { lookupKodepos, type KodeposResult } from '../lib/kodepos';
-
-const ADDON_HARGA_DEFAULT: Record<'antar_jemput', number> = {
-  antar_jemput: 50_000,
-};
 
 type LokasiPengambilan = 'ambil_ditempat' | 'jemput_kerumah';
 
@@ -126,8 +123,9 @@ export default function BookingPage() {
   const [kodeposSuggestions, setKodeposSuggestions] = useState<KodeposResult[]>([]);
 
   // ── Jenis Sewa & Layanan ─────────────────────────────
+  // Jemput ke rumah GRATIS (tanpa charge) — tidak ada state/biaya
+  // antar-jemput. Satu-satunya add-on berbayar adalah sopir.
   const [sopirDipilih, setSopirDipilih] = useState(false);
-  const [antarJemputDipilih, setAntarJemputDipilih] = useState(false);
 
   // ── Data Diri ───────────────────────────────────────
   const [nama, setNama] = useState('');
@@ -144,6 +142,7 @@ export default function BookingPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
 
   // ── Queries ───────────────────────────────────────────
   const carQuery = useQuery({
@@ -227,15 +226,6 @@ export default function BookingPage() {
     setAlamatLengkap(parts.join(', '));
   }, [alamatJalan, kelurahan, kecamatan, kota, provinsi, kodePos]);
 
-  // Antar-Jemput otomatis ON jika Jemput ke Rumah, OFF jika Ambil di Tempat
-  useEffect(() => {
-    if (lokasiPengambilan === 'jemput_kerumah') {
-      setAntarJemputDipilih(true);
-    } else {
-      setAntarJemputDipilih(false);
-    }
-  }, [lokasiPengambilan]);
-
   // Jika bukan sopir → tidak bisa jemput ke rumah
   const car = carQuery.data;
   const isWithDriver = car?.tipeSewa === 'dengan_sopir' || sopirDipilih;
@@ -243,7 +233,6 @@ export default function BookingPage() {
   useEffect(() => {
     if (!isWithDriver && lokasiPengambilan === 'jemput_kerumah') {
       setLokasiPengambilan('ambil_ditempat');
-      setAntarJemputDipilih(false);
     }
   }, [isWithDriver, lokasiPengambilan]);
 
@@ -275,7 +264,8 @@ export default function BookingPage() {
     noHp.trim() &&
     noKtp.trim() &&
     hasKtpDoc &&
-    (!isSimRequired || (noSim.trim() && hasSimDoc))
+    (!isSimRequired || (noSim.trim() && hasSimDoc)) &&
+    agreeTerms
   );
 
   // ── Handlers ──────────────────────────────────────────
@@ -309,12 +299,9 @@ export default function BookingPage() {
     setSimFile(file);
   };
 
-  // Biaya antar jemput diset oleh admin di kendaraan, atau fallback ke default
-  const hargaAntarJemput = car?.hargaAntarJemput ? Number(car.hargaAntarJemput) : ADDON_HARGA_DEFAULT.antar_jemput;
-
-  const addonLain = [
-    ...(antarJemputDipilih ? [{ jenis: 'antar_jemput' as const, harga: hargaAntarJemput }] : []),
-  ];
+  // Jemput ke rumah GRATIS — tidak masuk add-on & ringkasan biaya.
+  // Satu-satunya add-on berbayar adalah sopir (dihitung di estimasiHarga).
+  const addonLain: { jenis: JenisAddon; harga: number }[] = [];
 
   const estimasi = car ? estimasiHarga(car, range?.from, range?.to, sopirDipilih, addonLain) : null;
 
@@ -348,6 +335,10 @@ export default function BookingPage() {
         setFormError('Dokumen fisik SIM A wajib diunggah untuk sewa lepas kunci (self-drive)');
         return;
       }
+    }
+    if (!agreeTerms) {
+      setFormError('Anda wajib membaca dan menyetujui Syarat & Ketentuan serta Kebijakan Privasi KerenTal Kita terlebih dahulu.');
+      return;
     }
 
     setShowConfirmModal(true);
@@ -391,7 +382,9 @@ export default function BookingPage() {
         ? 'Ambil di Tempat (Kantor Rental)'
         : `Jemput ke Rumah: ${alamatLengkap.trim()}`;
 
-      // Jadwal booking sewa mobil: dimulai jam 01.00 dan selesai jam 23.00
+      // Jadwal booking sewa mobil: dimulai jam 01.00 dan selesai jam 23.00 WIB.
+      // Durasi & harga dihitung dari KALENDER WIB (toWibDayKey) di frontend
+      // dan backend, sehingga 1 tanggal yang sama selalu = sewa 1 hari.
       const startD = new Date(range!.from!);
       startD.setHours(1, 0, 0, 0);
       const endD = new Date(range!.to || range!.from!);
@@ -479,7 +472,7 @@ export default function BookingPage() {
             <div>
               <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-0.5 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>Tanggal Sewa</p>
               <p className={`text-xs sm:text-sm font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>
-                {range.from.toDateString() === range.to.toDateString() ? (
+                {isSameWibDay(range.from, range.to) ? (
                   <>{formatDate(range.from)} <span className="text-[11px] sm:text-xs opacity-75 font-normal">(Jam 01.00 – 23.00 WIB)</span></>
                 ) : (
                   <>{formatDate(range.from)} — {formatDate(range.to)}</>
@@ -490,11 +483,9 @@ export default function BookingPage() {
               <p className="text-[10px] sm:text-xs font-semibold">Durasi</p>
               <p className="text-xs sm:text-sm font-bold">
                 {(() => {
-                  const s = new Date(range.from);
-                  s.setHours(0, 0, 0, 0);
-                  const e = new Date(range.to);
-                  e.setHours(0, 0, 0, 0);
-                  const d = Math.max(1, Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                  // Patokan kalender WIB — SAMA dengan estimasiHarga &
+                  // hitungan backend agar angka hari tidak pernah beda.
+                  const d = Math.max(1, Math.round((toWibDayKey(new Date(range.to)) - toWibDayKey(new Date(range.from))) / (1000 * 60 * 60 * 24)) + 1);
                   return `${d} hari`;
                 })()}
               </p>
@@ -598,7 +589,6 @@ export default function BookingPage() {
                       setSopirDipilih(false);
                       if (lokasiPengambilan === 'jemput_kerumah') {
                         setLokasiPengambilan('ambil_ditempat');
-                        setAntarJemputDipilih(false);
                       }
                     }}
                     className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200 ${
@@ -663,17 +653,17 @@ export default function BookingPage() {
                 )}
               </div>
 
-              {/* Information / Himbauan Charge Jemput ke Rumah */}
+              {/* Informasi: Jemput ke Rumah GRATIS tanpa charge */}
               {lokasiPengambilan === 'jemput_kerumah' && (
                 <div className={`p-4 rounded-xl border flex items-start gap-3 mt-3 ${
-                  isDark ? 'bg-blue-500/10 border-blue-500/20 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-800'
+                  isDark ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                 }`}>
-                  <Truck size={18} className="shrink-0 mt-0.5 text-blue-500" />
+                  <Truck size={18} className="shrink-0 mt-0.5 text-emerald-500" />
                   <div className="text-xs leading-relaxed">
-                    <p className="font-bold mb-0.5">Layanan Antar-Jemput Otomatis Aktif</p>
+                    <p className="font-bold mb-0.5">Layanan Jemput ke Rumah — GRATIS</p>
                     <p>
-                      Karena Anda memilih <strong>Jemput ke Rumah</strong>, dikenakan biaya charge pengantaran sebesar{' '}
-                      <strong className="underline">{formatRupiah(hargaAntarJemput)}</strong> yang ditambahkan otomatis ke ringkasan biaya.
+                      Karena Anda memilih <strong>Jemput ke Rumah</strong>, unit diantar ke alamat Anda{' '}
+                      <strong>tanpa biaya tambahan</strong> dan tidak dihitung dalam ringkasan biaya.
                     </p>
                   </div>
                 </div>
@@ -703,7 +693,6 @@ export default function BookingPage() {
                   type="button"
                   onClick={() => {
                     setLokasiPengambilan('ambil_ditempat');
-                    setAntarJemputDipilih(false);
                   }}
                   className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200 ${
                     lokasiPengambilan === 'ambil_ditempat'
@@ -741,7 +730,6 @@ export default function BookingPage() {
                       return;
                     }
                     setLokasiPengambilan('jemput_kerumah');
-                    setAntarJemputDipilih(true);
                   }}
                   disabled={car.tipeSewa === 'lepas_kunci'}
                   className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all duration-200 ${
@@ -1228,6 +1216,54 @@ export default function BookingPage() {
                 </div>
               </div>
 
+              {/* Checkbox Persetujuan Syarat & Ketentuan & Kebijakan Privasi */}
+              <div className={`mt-5 pt-4 border-t border-dashed ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
+                <label className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  agreeTerms
+                    ? isDark ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-emerald-50 border-emerald-300'
+                    : submitted && !agreeTerms
+                    ? 'bg-red-500/10 border-red-500/40'
+                    : isDark ? 'bg-white/5 border-white/10 hover:bg-white/[0.08]' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={agreeTerms}
+                    onChange={(e) => setAgreeTerms(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <div className="text-xs leading-relaxed">
+                    <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      Saya telah membaca, memahami, dan menyetujui{' '}
+                    </span>
+                    <Link
+                      to="/syarat"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-500 font-bold underline hover:opacity-80 inline-flex items-center gap-0.5"
+                    >
+                      Syarat & Ketentuan <ExternalLink size={10} />
+                    </Link>
+                    <span className={isDark ? 'text-white/80' : 'text-slate-700'}> serta </span>
+                    <Link
+                      to="/privasi"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-500 font-bold underline hover:opacity-80 inline-flex items-center gap-0.5"
+                    >
+                      Kebijakan Privasi <ExternalLink size={10} />
+                    </Link>
+                    <span className={isDark ? 'text-white/80' : 'text-slate-700'}>
+                      {' '}KerenTal Kita untuk pemesanan ini. <span className="text-red-500 font-bold">*</span>
+                    </span>
+                  </div>
+                </label>
+                {submitted && !agreeTerms && (
+                  <p className="text-xs text-red-500 font-medium mt-1.5 ml-1">
+                    * Anda harus mencentang persetujuan Syarat & Privasi sebelum melanjutkan.
+                  </p>
+                )}
+              </div>
+
               <p className={`text-[11px] mt-4 flex items-center gap-1.5 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                 <ShieldCheck size={14} className="text-emerald-500 shrink-0" />
                 Data dan dokumen Anda tersimpan aman dan terenkripsi, serta dapat dikelola di menu Profil.
@@ -1280,8 +1316,9 @@ export default function BookingPage() {
                 }`}>
                   <p className="font-bold mb-1 uppercase tracking-wider text-[10px]">Periode Sewa Terpilih</p>
                   <p className="font-semibold text-sm">
-                    {range.from.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} —{' '}
-                    {range.to.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {formatRentangTanggal(range.from, range.to, (d) =>
+                      d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+                    )}
                   </p>
                 </div>
               )}
@@ -1464,7 +1501,9 @@ export default function BookingPage() {
                     <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tanggal</p>
                     <p className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       {range?.from && range?.to
-                        ? `${range.from.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} — ${range.to.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                        ? formatRentangTanggal(range.from, range.to, (d) =>
+                            d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }),
+                          )
                         : '-'}
                     </p>
                   </div>
@@ -1533,6 +1572,10 @@ export default function BookingPage() {
                       <span><strong>Lepas kunci:</strong> SIM A wajib berlaku. Pastikan SIM tidak kedaluwarsa.</span>
                     </li>
                   )}
+                  <li className="flex items-start gap-1.5">
+                    <FileCheck size={11} className="shrink-0 mt-0.5 text-emerald-500" />
+                    <span><strong>Persetujuan Aturan:</strong> Anda telah menyetujui <Link to="/syarat" target="_blank" className="underline font-bold text-blue-500">Syarat & Ketentuan</Link> dan <Link to="/privasi" target="_blank" className="underline font-bold text-emerald-500">Kebijakan Privasi</Link>.</span>
+                  </li>
                 </ul>
               </div>
 
@@ -1550,7 +1593,7 @@ export default function BookingPage() {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={isProcessingBooking}
+                  disabled={isProcessingBooking || !agreeTerms}
                   className={`flex-1 py-3.5 rounded-2xl font-bold text-sm transition-all shadow-xl disabled:opacity-60 flex items-center justify-center gap-2 ${
                     isDark
                       ? 'bg-white text-neutral-950 hover:bg-neutral-100'

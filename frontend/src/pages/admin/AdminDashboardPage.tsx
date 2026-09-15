@@ -17,7 +17,7 @@ import {
   type InstansiActivity,
 } from '../../lib/api';
 import { formatRupiah, formatCompactRupiah } from '../../lib/pricing';
-import { SkeletonStatsGrid, SkeletonList } from '../../components/Skeleton';
+import { Skeleton, SkeletonStatsGrid, SkeletonChart, SkeletonPanel } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { Sparklines, SparklinesLine } from 'react-sparklines';
 
@@ -247,7 +247,7 @@ function RevenueChart({ isDark, trendPendapatan }: { isDark: boolean; trendPenda
         {/* Line Chart Container */}
         <div className="relative w-full min-h-[150px] flex-1">
           {isSeriesLoading ? (
-            <div className={`absolute inset-0 rounded-xl animate-pulse ${isDark ? 'bg-white/[0.03]' : 'bg-slate-100'}`} />
+            <Skeleton className="absolute inset-0 rounded-xl" />
           ) : (
           <>
           <svg
@@ -564,10 +564,10 @@ function TodayBookingsCard({ isDark }: { isDark: boolean }) {
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 p-4">
-              <div className={`w-16 sm:w-20 aspect-[16/9] rounded-xl ${isDark ? 'bg-white/5 animate-pulse' : 'bg-[#F5F0E8] animate-pulse'}`} />
+              <Skeleton className="w-16 sm:w-20 aspect-[16/9] rounded-xl" />
               <div className="flex-1">
-                <div className={`h-3 w-20 rounded mb-2 ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-200 animate-pulse'}`} />
-                <div className={`h-3 w-32 rounded ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-200 animate-pulse'}`} />
+                <Skeleton className="h-3 w-20 rounded mb-2" />
+                <Skeleton className="h-3 w-32 rounded" />
               </div>
             </div>
           ))
@@ -662,10 +662,10 @@ function RentedVehiclesCard({ isDark }: { isDark: boolean }) {
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 p-4">
-              <div className={`w-14 h-10 rounded-lg ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-100 animate-pulse'}`} />
+              <Skeleton className="w-14 h-10 rounded-lg" />
               <div className="flex-1">
-                <div className={`h-3 w-24 rounded mb-1 ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-200 animate-pulse'}`} />
-                <div className={`h-3 w-32 rounded ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-200 animate-pulse'}`} />
+                <Skeleton className="h-3 w-24 rounded mb-1" />
+                <Skeleton className="h-3 w-32 rounded" />
               </div>
             </div>
           ))
@@ -1035,10 +1035,10 @@ function RecentActivitiesCard({
           {isActivitiesLoading && activities.length === 0 ? (
             Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 p-2">
-                <div className={`w-8 h-8 rounded-lg animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                <Skeleton className="w-8 h-8 rounded-lg" />
                 <div className="flex-1 space-y-1">
-                  <div className={`h-3 w-28 rounded animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
-                  <div className={`h-2.5 w-40 rounded animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
+                  <Skeleton className="h-3 w-28 rounded" />
+                  <Skeleton className="h-2.5 w-40 rounded" />
                 </div>
               </div>
             ))
@@ -1182,13 +1182,13 @@ function TodayReturnsCard({ isDark }: { isDark: boolean }) {
       <div className="divide-y divide-white/5">
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 p-4">
-              <div className={`w-12 h-12 rounded-xl ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-100 animate-pulse'}`} />
-              <div className="flex-1">
-                <div className={`h-3 w-24 rounded mb-1 ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-200 animate-pulse'}`} />
-                <div className={`h-3 w-32 rounded ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-200 animate-pulse'}`} />
+              <div key={i} className="flex items-center gap-3 p-4">
+                <Skeleton className="w-12 h-12 rounded-xl" />
+                <div className="flex-1">
+                  <Skeleton className="h-3 w-24 rounded mb-1" />
+                  <Skeleton className="h-3 w-32 rounded" />
+                </div>
               </div>
-            </div>
           ))
         ) : returnsToday.length === 0 ? (
           <div className="p-8 text-center">
@@ -1263,7 +1263,7 @@ function PaymentsCard({
     { label: 'Menunggu', value: stats.menunggu_pembayaran ?? 0, color: 'amber', to: '/admin/pesanan' },
     { label: 'Dikonfirmasi', value: (stats.dikonfirmasi ?? 0) + (stats.berjalan ?? 0), color: 'blue', to: '/admin/pesanan' },
     { label: 'Selesai', value: stats.selesai ?? 0, color: 'emerald', to: '/admin/pesanan' },
-    { label: 'Refund', value: refundStats?.pending ?? 0, color: 'rose', to: '/admin/refunds' },
+    { label: 'Refund', value: refundStats?.pending ?? 0, color: 'rose', to: '/admin/keuangan?tab=refunds' },
   ];
 
   const colorMap: Record<string, string> = {
@@ -1319,18 +1319,24 @@ export default function AdminDashboardPage() {
 
   // Tren nyata (bulan ini vs bulan lalu), dihitung dari booking asli — dipakai
   // untuk badge persentase di StatCard, bukan angka statis lagi.
-  const { data: trends } = useQuery<InstansiDashboardTrends>({
+  const { data: trends, isLoading: isTrendsLoading } = useQuery<InstansiDashboardTrends>({
     queryKey: ['instansi-dashboard-trends'],
     queryFn: () => api.getInstansiDashboardTrends(),
     retry: 1,
     throwOnError: false,
   });
 
-  if (isLoading) {
+  // Skeleton awal menunggu SEMUA data utama (dashboard + tren) supaya tidak
+  // ada angka 0 / badge hilang yang pop-in setelah skeleton lenyap.
+  if (isLoading || isTrendsLoading) {
     return (
       <div className="space-y-6">
         <SkeletonStatsGrid isDark={isDark} />
-        <SkeletonList count={4} isDark={isDark} />
+        <SkeletonChart isDark={isDark} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SkeletonPanel isDark={isDark} rows={3} />
+          <SkeletonPanel isDark={isDark} rows={3} />
+        </div>
       </div>
     );
   }
@@ -1380,7 +1386,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <Link
-            to="/admin/refunds"
+            to="/admin/keuangan?tab=refunds"
             className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 border ${
               isDark
                 ? 'bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20'

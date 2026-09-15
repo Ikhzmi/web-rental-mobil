@@ -6,24 +6,25 @@ import { useProfile } from '../hooks/useProfile';
 
 function GuardFallback() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col items-center justify-center gap-3 transition-colors duration-300">
+      <div className="w-8 h-8 border-2 border-slate-300 dark:border-white/20 border-t-slate-900 dark:border-t-white rounded-full animate-spin" />
+      <p className="text-xs font-medium text-slate-500 dark:text-white/50">Memeriksa akses admin...</p>
     </div>
   );
 }
 
 function ForbiddenPage() {
   return (
-    <main className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-5">
+    <main className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center px-5 transition-colors duration-300">
       <div className="text-center max-w-sm">
         <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
           <ShieldAlert size={22} className="text-red-400" />
         </div>
-        <h1 className="font-playfair italic text-white text-2xl mb-2">Akses Ditolak</h1>
-        <p className="text-white/50 text-sm mb-6">
+        <h1 className="font-playfair italic text-slate-900 dark:text-white text-2xl mb-2">Akses Ditolak</h1>
+        <p className="text-slate-500 dark:text-white/50 text-sm mb-6">
           Halaman ini khusus admin. Akun kamu tidak punya akses ke sini.
         </p>
-        <Link to="/" className="text-white/70 text-sm hover:underline">
+        <Link to="/" className="text-slate-600 dark:text-white/70 text-sm hover:underline">
           Kembali ke Beranda
         </Link>
       </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { api, type ChatMessage, type Conversation } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
+import { Skeleton } from '../../components/Skeleton';
 
 function formatTime(dateString: string) {
   const date = new Date(dateString);
@@ -64,6 +66,20 @@ export default function AdminMessagesPage() {
     const carName = (c.car?.nama ?? '').toLowerCase();
     return custName.includes(q) || custEmail.includes(q) || carName.includes(q);
   });
+
+  // Deep-link dari notifikasi: ?conversationId= langsung membuka chat tsb
+  // (termasuk di mobile). Diabaikan jika id tidak ada di daftar.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const target = searchParams.get('conversationId');
+    if (target) {
+      setSelectedConversationId(target);
+      setShowMobileChat(true);
+      // Bersihkan query agar refresh tidak terkunci di percakapan lama
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Pilih percakapan pertama secara otomatis jika belum ada yang dipilih dan daftar sudah ada
   useEffect(() => {
@@ -183,11 +199,11 @@ export default function AdminMessagesPage() {
             {isLoadingList ? (
               <div className="p-3 space-y-3">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-xl animate-pulse">
-                    <div className={`w-10 h-10 rounded-xl shrink-0 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <div key={i} className="flex items-center gap-3 p-2 rounded-xl">
+                    <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
                     <div className="flex-1 space-y-1.5">
-                      <div className={`h-3 w-2/3 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                      <div className={`h-2.5 w-1/2 rounded ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                      <Skeleton className="h-3 w-2/3 rounded" />
+                      <Skeleton className="h-2.5 w-1/2 rounded" />
                     </div>
                   </div>
                 ))}
@@ -391,11 +407,11 @@ export default function AdminMessagesPage() {
                   <div className="space-y-3.5 p-2">
                     {Array.from({ length: 3 }).map((_, i) => (
                       <div key={i} className={`flex items-start gap-3 ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
-                        <div className={`max-w-[70%] p-3.5 rounded-2xl animate-pulse space-y-1.5 ${
-                          isDark ? 'bg-white/5 border border-white/10' : 'bg-slate-100 border border-slate-200'
+                        <div className={`max-w-[70%] rounded-2xl space-y-1.5 ${
+                          isDark ? 'border border-white/10 p-0' : 'border border-white/60 p-0'
                         }`}>
-                          <div className={`h-3 w-36 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                          <div className={`h-2.5 w-24 rounded ${isDark ? 'bg-white/5' : 'bg-slate-200'}`} />
+                          <Skeleton className="h-3 w-36 rounded" />
+                          <Skeleton className="h-2.5 w-24 rounded" />
                         </div>
                       </div>
                     ))}
@@ -536,6 +552,34 @@ export default function AdminMessagesPage() {
                 </button>
               </form>
             </>
+          ) : selectedConversationId && isLoadingDetail ? (
+            /* Skeleton panel penuh saat seleksi pertama: percakapan aktif
+               belum ada sehingga guard di atas tidak terpenuhi. Tanpa ini
+               user melihat flash "Pilih Percakapan" saat reload. */
+            <div className="flex-1 flex flex-col min-w-0">
+              <div className={`p-4 border-b flex items-center gap-3 ${
+                isDark ? 'border-white/10 bg-white/[0.02]' : 'border-white/60 bg-white/40 backdrop-blur-xl'
+              }`}>
+                <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-2.5 w-48" />
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
+                    <div className="max-w-[70%] w-64 space-y-1.5">
+                      <Skeleton className="h-10 w-full rounded-2xl" />
+                      <Skeleton className="h-2.5 w-24 rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className={`p-3.5 px-4 border-t ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
+                <Skeleton className="h-10 w-full rounded-xl" />
+              </div>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center px-6">
               <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${

@@ -7,6 +7,7 @@ import { api, type AdminBooking } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
 import { getBookingStatusWithIcon } from '../../lib/statusConfig';
+import { Skeleton } from '../../components/Skeleton';
 
 const MONTHS_ID = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -47,16 +48,21 @@ export default function AdminCalendarPage() {
 
   // Kelompokkan booking asli ke tiap tanggal: 'mulai' (hari pengambilan)
   // dan 'selesai' (hari pengembalian) — supaya kalender menampilkan
-  // jadwal nyata, bukan data rekaan.
+  // jadwal nyata, bukan data rekaan. Tandai juga hari yang memuat
+  // booking DIBATALKAN (titik merah).
   const byDay = useMemo(() => {
-    const map = new Map<string, { starts: AdminBooking[]; ends: AdminBooking[] }>();
+    const map = new Map<string, { starts: AdminBooking[]; ends: AdminBooking[]; hasCancelled: boolean }>();
     for (const b of bookings) {
       const startKey = toKey(new Date(b.tanggalMulai));
       const endKey = toKey(new Date(b.tanggalSelesai));
-      if (!map.has(startKey)) map.set(startKey, { starts: [], ends: [] });
-      if (!map.has(endKey)) map.set(endKey, { starts: [], ends: [] });
+      if (!map.has(startKey)) map.set(startKey, { starts: [], ends: [], hasCancelled: false });
+      if (!map.has(endKey)) map.set(endKey, { starts: [], ends: [], hasCancelled: false });
       map.get(startKey)!.starts.push(b);
       map.get(endKey)!.ends.push(b);
+      if (b.status === 'dibatalkan') {
+        map.get(startKey)!.hasCancelled = true;
+        map.get(endKey)!.hasCancelled = true;
+      }
     }
     return map;
   }, [bookings]);
@@ -119,8 +125,9 @@ export default function AdminCalendarPage() {
 
           {isLoading ? (
             <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: 35 }).map((_, i) => (
-                <div key={i} className={`aspect-square rounded-lg animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+              {/* 42 sel = ukuran grid asli (6 minggu) agar tidak lompat saat data tiba */}
+              {Array.from({ length: 42 }).map((_, i) => (
+                <Skeleton key={i} className="aspect-square rounded-lg" />
               ))}
             </div>
           ) : (
@@ -131,6 +138,7 @@ export default function AdminCalendarPage() {
                 const entry = byDay.get(key);
                 const hasStart = (entry?.starts.length ?? 0) > 0;
                 const hasEnd = (entry?.ends.length ?? 0) > 0;
+                const hasCancelled = entry?.hasCancelled ?? false;
                 const isToday = key === todayKey;
                 const isSelected = key === selectedDay;
 
@@ -158,6 +166,7 @@ export default function AdminCalendarPage() {
                       <div className="flex items-center gap-0.5">
                         {hasStart && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
                         {hasEnd && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                        {hasCancelled && <span className="w-1.5 h-1.5 rounded-full bg-red-500" />}
                       </div>
                     )}
                   </button>
@@ -166,14 +175,23 @@ export default function AdminCalendarPage() {
             </div>
           )}
 
-          <div className={`flex items-center gap-4 mt-4 pt-4 border-t text-xs ${isDark ? 'border-white/10 text-white/50' : 'border-slate-100 text-slate-500'}`}>
+          <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-4 pt-4 border-t text-xs ${isDark ? 'border-white/10 text-white/50' : 'border-slate-100 text-slate-500'}`}>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Pengambilan</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400" /> Pengembalian</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Dibatalkan</span>
           </div>
         </div>
 
         {/* Panel detail hari terpilih */}
         <div className={`p-4 sm:p-5 rounded-2xl ${glassCard}`}>
+          {isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-16 w-full rounded-2xl" />
+              <Skeleton className="h-16 w-full rounded-2xl" />
+            </div>
+          ) : (
+          <>
           <h2 className={`text-sm font-semibold mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`}>
             {selectedDay
               ? new Date(selectedDay).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -266,6 +284,8 @@ export default function AdminCalendarPage() {
                 })}
               </div>
             </AnimatePresence>
+          )}
+          </>
           )}
         </div>
       </div>

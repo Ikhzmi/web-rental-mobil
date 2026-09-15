@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 const STATUS_COLORS: Record<string, string> = {
   'Menunggu Bayar': '#f59e0b',
@@ -72,9 +73,7 @@ export function BookingDoughnutChart() {
           <div className="relative w-32 h-32">
             {isLoading ? (
               <div className="w-full h-full flex items-center justify-center">
-                <div className={`w-28 h-28 rounded-full border-8 animate-pulse ${
-                  isDark ? 'border-white/10' : 'border-slate-200'
-                }`} />
+                <Skeleton className="w-28 h-28 rounded-full" />
               </div>
             ) : chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -115,8 +114,8 @@ export function BookingDoughnutChart() {
             <div className="space-y-2">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="flex items-center justify-between">
-                  <div className={`h-3 w-24 rounded animate-pulse ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                  <div className={`h-3 w-6 rounded animate-pulse ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-6" />
                 </div>
               ))}
             </div>

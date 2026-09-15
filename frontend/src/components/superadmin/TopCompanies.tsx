@@ -4,6 +4,7 @@ import { api } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 export function TopCompanies() {
   const { theme } = useTheme();
@@ -35,12 +36,12 @@ export function TopCompanies() {
           <>
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="flex items-center gap-3">
-                <div className={`w-7 h-7 rounded-lg ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse shrink-0`} />
+                <Skeleton className="w-7 h-7 shrink-0" />
                 <div className="flex-1 space-y-1.5">
-                  <div className={`h-3.5 w-3/4 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
-                  <div className={`h-2.5 w-1/3 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-2.5 w-1/3" />
                 </div>
-                <div className={`w-12 h-5 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                <Skeleton className="w-12 h-5 rounded-full" />
               </div>
             ))}
           </>

@@ -389,6 +389,7 @@ export interface SaldoTertundaInstansi {
   rekeningBank: string | null;
   komisiPlatformPersen: number;
   saldoTertunda: number;
+  saldoTertundaKotor: number;
   jumlahBookingTertunda: number;
 }
 
@@ -606,6 +607,8 @@ export interface TodayBookings {
   completed: number;
   running: number;
   pending: number;
+  menungguPembayaran: number;
+  dikonfirmasi: number;
   cancelled: number;
 }
 
@@ -655,6 +658,7 @@ export interface SuperAdminReportsData {
   booking: {
     total: number;
     active: number;
+    completed: number;
     completionRate: number;
   };
   customer: {
@@ -1472,6 +1476,13 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
     }),
 
+  updateRefundRekening: (refundId: string, rekeningTujuan: string) =>
+    apiFetch<RefundData>(`/api/refunds/${refundId}/rekening`, {
+      method: 'PATCH',
+      body: JSON.stringify({ rekeningTujuan }),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
   listAdminRefunds: (params?: { page?: number; limit?: number; status?: StatusRefund; cari?: string; dari?: string; sampai?: string }) => {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.set('page', String(params.page));
@@ -1481,7 +1492,11 @@ export const api = {
     if (params?.dari) searchParams.set('dari', params.dari);
     if (params?.sampai) searchParams.set('sampai', params.sampai);
     const qs = searchParams.toString();
-    return apiFetch<{ data: RefundData[]; stats: RefundStats; meta: { page: number; limit: number; total: number; totalPages: number } }>(
+    // WAJIB apiFetchFull: backend mengembalikan { data, stats, meta }.
+    // Dengan apiFetch, body.data (array refund) disalahartikan sebagai
+    // seluruh respons sehingga data?.data/stats/meta selalu undefined
+    // dan daftar refund selalu terlihat kosong.
+    return apiFetchFull<{ data: RefundData[]; stats: RefundStats; meta: { page: number; limit: number; total: number; totalPages: number } }>(
       `/api/refunds/admin${qs ? `?${qs}` : ''}`
     );
   },
@@ -1524,7 +1539,8 @@ export const api = {
     if (params?.dari) searchParams.set('dari', params.dari);
     if (params?.sampai) searchParams.set('sampai', params.sampai);
     const qs = searchParams.toString();
-    return apiFetch<{ data: RefundData[]; stats: RefundStats; meta: { page: number; limit: number; total: number; totalPages: number } }>(
+    // WAJIB apiFetchFull (lihat komentar di listAdminRefunds).
+    return apiFetchFull<{ data: RefundData[]; stats: RefundStats; meta: { page: number; limit: number; total: number; totalPages: number } }>(
       `/api/refunds/superadmin${qs ? `?${qs}` : ''}`
     );
   },

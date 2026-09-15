@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
 import { useTheme } from '../hooks/useTheme';
 import { lookupKodepos, type KodeposResult } from '../lib/kodepos';
+import { formatWibTanggalShort } from '../lib/dates';
 
 const STATUS_LABEL: Record<StatusBooking, string> = {
   menunggu_pembayaran: 'Menunggu Bayar',
@@ -34,9 +35,7 @@ const STATUS_BADGE_LIGHT: Record<StatusBooking, string> = {
   dibatalkan: 'bg-slate-100 text-slate-500 border border-slate-200',
 };
 
-function formatTanggal(iso: string): string {
-  return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+const formatTanggal = formatWibTanggalShort;
 
 // Cocok persis dengan limit yang dipasang di level bucket Supabase
 // Storage (dokumen-penyewa) — sebelumnya bucket ini TIDAK punya batas

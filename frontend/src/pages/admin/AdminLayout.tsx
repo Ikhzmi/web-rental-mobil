@@ -52,7 +52,7 @@ export default function AdminLayout() {
   const isHeaderHidden = useRef(false);
 
   // Fetch instansi profile to display Instansi Name in header & brand
-  const { data: instansiProfile } = useQuery({
+  const { data: instansiProfile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['my-instansi-profile'],
     queryFn: () => api.getInstansiProfile(),
     staleTime: 5 * 60 * 1000,
@@ -117,15 +117,19 @@ export default function AdminLayout() {
   const borderClass = isDark ? 'border-white/10' : 'border-slate-200/60';
 
   return (
-    <div className="min-h-screen">
-      {/* Fixed Background — never scrolls */}
+    <div className="min-h-screen bg-[var(--bg-primary)]">
+      {/* Fixed Background — GPU-promoted agar menetap menutupi seluruh
+          viewport walau scroll cepat di mobile (tanpa background-attachment:
+          fixed yang patah di browser mobile) */}
       <div
-        className="fixed inset-0 transition-all duration-500"
+        aria-hidden
+        className="fixed inset-0"
         style={{
           backgroundImage: `url(${isDark ? bgDashboardDark : bgDashboardLight})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
+          transform: 'translate3d(0,0,0)',
         }}
       />
 
@@ -379,7 +383,7 @@ export default function AdminLayout() {
         initial={{ y: -100 }}
         animate={{ y: showTopNav ? 0 : -100 }}
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-        className={`lg:hidden fixed top-0 left-0 right-0 z-30 overflow-hidden sa-header ${
+        className={`lg:hidden fixed top-0 left-0 right-0 z-50 overflow-hidden sa-header ${
           isDark ? 'sa-glass-dark' : 'sa-glass-light'
         }`}
       >
@@ -396,18 +400,24 @@ export default function AdminLayout() {
 
               {/* Header Center Title: Nama Instansi */}
               <h1 className={`text-base font-extrabold tracking-wider truncate max-w-[200px] ${textClass}`}>
-                {instansiName}
+                {isLoadingProfile && !instansiProfile ? (
+                  <span className="inline-block h-4 w-28 rounded bg-slate-900/10 dark:bg-white/10 overflow-hidden relative align-middle">
+                    <span className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/15" />
+                  </span>
+                ) : (
+                  instansiName
+                )}
               </h1>
 
               {/* Header Right Icons */}
               <div className="flex items-center gap-1.5">
-                {/* Theme Toggle */}
+                {/* Theme Toggle — gaya disamakan dengan CTA notif (NotificationBell) */}
                 <button
                   onClick={toggleTheme}
-                  className={`p-2 rounded-xl transition-all duration-300 ${
+                  className={`p-2 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0 ${
                     isDark
-                      ? 'glass-daftar-btn-dark'
-                      : 'glass-daftar-btn-light'
+                      ? 'glass-daftar-btn-dark text-white/70 hover:text-white'
+                      : 'glass-daftar-btn-light text-slate-500 hover:text-slate-900'
                   }`}
                   aria-label="Toggle theme"
                 >
@@ -456,7 +466,7 @@ export default function AdminLayout() {
       {/* Desktop Header - Full Width with rounded bottom corners, SAME as SuperAdmin */}
       <div
         ref={headerRef}
-        className={`hidden lg:block fixed top-0 left-0 right-0 z-30 sa-header transition-[left] duration-300 ease-in-out ${
+        className={`hidden lg:block fixed top-0 left-0 right-0 z-50 sa-header transition-[left] duration-300 ease-in-out ${
           isDark ? 'sa-glass-dark sa-header-dark' : 'sa-glass-light sa-header-light'
         }`}
       >
@@ -473,7 +483,13 @@ export default function AdminLayout() {
 
             {/* Header Center Title: Nama Instansi */}
             <h1 className={`text-xl font-extrabold tracking-wider ${textClass}`}>
-              {instansiName}
+              {isLoadingProfile && !instansiProfile ? (
+                <span className="inline-block h-5 w-36 rounded bg-slate-900/10 dark:bg-white/10 overflow-hidden relative align-middle">
+                  <span className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/15" />
+                </span>
+              ) : (
+                instansiName
+              )}
             </h1>
 
             {/* Header Right Icons */}
@@ -481,13 +497,13 @@ export default function AdminLayout() {
               {/* Notification Bell */}
               <NotificationBell align="right" />
 
-              {/* Theme Toggle */}
+              {/* Theme Toggle — gaya disamakan dengan CTA notif (NotificationBell) */}
               <button
                 onClick={toggleTheme}
-                className={`p-2.5 rounded-xl transition-all duration-300 ${
+                className={`p-2.5 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0 ${
                   isDark
-                    ? 'glass-daftar-btn-dark'
-                    : 'glass-daftar-btn-light'
+                    ? 'glass-daftar-btn-dark text-white/70 hover:text-white'
+                    : 'glass-daftar-btn-light text-slate-500 hover:text-slate-900'
                 }`}
                 aria-label="Toggle theme"
               >

@@ -23,6 +23,7 @@ import { supabase } from '../../lib/supabase';
 
 import { useTheme } from '../../hooks/useTheme';
 import { NotificationBell } from '../../components/NotificationBell';
+import { Skeleton, SkeletonStatsGrid, SkeletonChart, SkeletonPanel } from '../../components/Skeleton';
 import bgDashboardDark from '../../assets/bg-dashboard-dark.jpg';
 import bgDashboardLight from '../../assets/bg-dashboard-light.png';
 
@@ -41,59 +42,29 @@ const navItemsSlide2 = [
   { to: '/superadmin/reports', label: 'Laporan', icon: BarChart3, end: false },
 ];
 
-// Loading fallback for content with skeleton shimmer matching card sizes
+// Loading fallback untuk transisi code-split antar halaman.
+// Memakai Skeleton terpusat (shimmer + glass bening di kedua mode).
 function ContentFallback() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
   return (
-    <div className="space-y-6 animate-pulse">
+    <div className="space-y-6">
       {/* Header Skeleton */}
       <div className="space-y-2">
-        <div className={`h-8 w-64 rounded-xl ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-        <div className={`h-4 w-96 rounded-lg ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+        <Skeleton className="h-8 w-64 rounded-xl" />
+        <Skeleton className="h-4 w-96 rounded-lg" />
       </div>
 
       {/* Metric Cards Skeleton Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className={`h-32 rounded-2xl p-5 flex flex-col justify-between ${
-              isDark ? 'bg-white/[0.04] border border-white/5' : 'bg-white border border-slate-200 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className={`h-4 w-24 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-              <div className={`w-10 h-10 rounded-xl ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-            </div>
-            <div className={`h-7 w-32 rounded ${isDark ? 'bg-white/15' : 'bg-slate-300'}`} />
-          </div>
-        ))}
-      </div>
+      <SkeletonStatsGrid isDark={isDark} count={4} />
 
       {/* Main Content Area Skeleton */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div
-          className={`lg:col-span-2 h-80 rounded-3xl p-6 ${
-            isDark ? 'bg-white/[0.04] border border-white/5' : 'bg-white border border-slate-200 shadow-sm'
-          }`}
-        >
-          <div className={`h-5 w-48 rounded mb-6 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-          <div className="space-y-4">
-            {[1, 2, 3].map((j) => (
-              <div key={j} className={`h-16 rounded-xl ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
-            ))}
-          </div>
+        <div className="lg:col-span-2">
+          <SkeletonChart isDark={isDark} />
         </div>
-        <div
-          className={`h-80 rounded-3xl p-6 ${
-            isDark ? 'bg-white/[0.04] border border-white/5' : 'bg-white border border-slate-200 shadow-sm'
-          }`}
-        >
-          <div className={`h-5 w-36 rounded mb-6 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-          <div className={`w-40 h-40 mx-auto rounded-full ${isDark ? 'bg-white/5 border-8 border-white/10' : 'bg-slate-100 border-8 border-slate-200'}`} />
-        </div>
+        <SkeletonPanel isDark={isDark} rows={4} />
       </div>
     </div>
   );
@@ -173,15 +144,24 @@ export default function SuperAdminLayout() {
 
   return (
     <div
-      className="min-h-screen transition-colors duration-300"
-      style={{
-        backgroundImage: `url(${isDark ? bgDashboardDark : bgDashboardLight})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'fixed',
-      }}
+      className="min-h-screen bg-[var(--bg-primary)] transition-colors duration-300"
     >
-      {/* Desktop Glassmorphic Sidebar - Rounded corners, below header */}
+      {/* Fixed Background — GPU-promoted agar menetap menutupi seluruh
+          viewport walau scroll cepat di mobile. Jangan pakai
+          background-attachment: fixed di sini (patah di browser mobile:
+          background terpotong saat scroll cepat). */}
+      <div
+        aria-hidden
+        className="fixed inset-0"
+        style={{
+          backgroundImage: `url(${isDark ? bgDashboardDark : bgDashboardLight})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          transform: 'translate3d(0,0,0)',
+        }}
+      />
+      <div className="relative" style={{ zIndex: 1 }}>      {/* Desktop Glassmorphic Sidebar - Rounded corners, below header */}
       <motion.aside
         ref={sidebarRef}
         initial={false}
@@ -497,7 +477,7 @@ export default function SuperAdminLayout() {
         initial={{ y: -100 }}
         animate={{ y: showTopNav ? 0 : -100 }}
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-        className={`lg:hidden fixed top-0 left-0 right-0 z-30 overflow-hidden sa-header ${
+        className={`lg:hidden fixed top-0 left-0 right-0 z-50 overflow-hidden sa-header ${
           isDark ? 'sa-glass-dark' : 'sa-glass-light'
         }`}
       >
@@ -519,13 +499,13 @@ export default function SuperAdminLayout() {
 
               {/* Header Right Icons */}
               <div className="flex items-center gap-1.5">
-                {/* Theme Toggle */}
+                {/* Theme Toggle — gaya disamakan dengan CTA notif (NotificationBell) */}
                 <button
                   onClick={toggleTheme}
-                  className={`p-2 rounded-xl transition-all duration-300 ${
+                  className={`p-2 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0 ${
                     isDark
-                      ? 'glass-daftar-btn-dark'
-                      : 'glass-daftar-btn-light'
+                      ? 'glass-daftar-btn-dark text-white/70 hover:text-white'
+                      : 'glass-daftar-btn-light text-slate-500 hover:text-slate-900'
                   }`}
                   aria-label="Toggle theme"
                 >
@@ -574,7 +554,7 @@ export default function SuperAdminLayout() {
       {/* Desktop Header - Full Width with inverted left corner, ABOVE sidebar */}
       <div
         ref={headerRef}
-        className={`hidden lg:block fixed top-0 left-0 right-0 z-30 sa-header transition-[left] duration-300 ease-in-out ${
+        className={`hidden lg:block fixed top-0 left-0 right-0 z-50 sa-header transition-[left] duration-300 ease-in-out ${
           isDark ? 'sa-glass-dark sa-header-dark' : 'sa-glass-light sa-header-light'
         }`}
       >
@@ -599,13 +579,13 @@ export default function SuperAdminLayout() {
               {/* Notification Bell */}
               <NotificationBell align="right" />
 
-              {/* Theme Toggle */}
+              {/* Theme Toggle — gaya disamakan dengan CTA notif (NotificationBell) */}
               <button
                 onClick={toggleTheme}
-                className={`p-2.5 rounded-xl transition-all duration-300 ${
+                className={`p-2.5 rounded-xl flex items-center justify-center transition-all duration-300 shrink-0 ${
                   isDark
-                    ? 'glass-daftar-btn-dark'
-                    : 'glass-daftar-btn-light'
+                    ? 'glass-daftar-btn-dark text-white/70 hover:text-white'
+                    : 'glass-daftar-btn-light text-slate-500 hover:text-slate-900'
                 }`}
                 aria-label="Toggle theme"
               >
@@ -633,6 +613,7 @@ export default function SuperAdminLayout() {
                   )}
                 </AnimatePresence>
               </button>
+            </div>
             </div>
           </div>
         </div>

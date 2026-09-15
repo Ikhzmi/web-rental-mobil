@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Search, CheckCircle, XCircle, UserPlus, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import type { Role, Instansi } from '../../lib/api';
-import { SkeletonList } from '../../components/Skeleton';
+import { SkeletonList, SkeletonStatsGrid } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
 import { useToast } from '../../contexts/ToastContext';
@@ -42,7 +42,7 @@ function CreateAdminModal({ onClose, onSuccess, isDark }: { onClose: () => void;
   const [error, setError] = useState('');
   const { showToast } = useToast();
 
-  const { data: instansiList } = useQuery<Instansi[]>({
+  const { data: instansiList, isLoading: isLoadingInstansi } = useQuery<Instansi[]>({
     queryKey: ['superadmin-instansi-all'],
     queryFn: () => api.listInstansi(), // tampilkan semua instansi, bukan hanya 'aktif'
   });
@@ -181,13 +181,13 @@ function CreateAdminModal({ onClose, onSuccess, isDark }: { onClose: () => void;
               onChange={(e) => setForm({ ...form, instansiId: e.target.value })}
               className={`w-full px-4 py-3 rounded-xl focus:outline-none transition-all ${inputClass}`}
             >
-              <option value="" className={isDark ? 'bg-[#1a1a1a]' : 'bg-[#F9EFE8]'}>-- Pilih Instansi --</option>
+              <option value="" className={isDark ? 'bg-[#1a1a1a]' : 'bg-[#F9EFE8]'}>{isLoadingInstansi ? 'Memuat instansi...' : '-- Pilih Instansi --'}</option>
               {instansiList?.map((inst) => (
                 <option key={inst.id} value={inst.id} className={isDark ? 'bg-[#1a1a1a]' : 'bg-[#F9EFE8]'}>
                   {inst.namaInstansi}{inst.status !== 'aktif' ? ` (${inst.status === 'menunggu_verifikasi' ? 'Menunggu' : inst.status})` : ''}
                 </option>
               ))}
-              {(!instansiList || instansiList.length === 0) && (
+              {(!isLoadingInstansi && (!instansiList || instansiList.length === 0)) && (
                 <option disabled value="">Tidak ada instansi tersedia</option>
               )}
             </select>
@@ -293,7 +293,12 @@ export default function SuperAdminAdminPage() {
         </button>
       </motion.div>
 
-      {/* Stats */}
+      {/* Stats — skeleton saat loading agar tidak flash 0 */}
+      {isLoading ? (
+        <div className="mb-6">
+          <SkeletonStatsGrid isDark={isDark} count={3} />
+        </div>
+      ) : (
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
           { key: 'all', label: 'Total Aktif', value: stats.total, activeBg: 'bg-white/[0.03]' },
@@ -315,6 +320,7 @@ export default function SuperAdminAdminPage() {
           </motion.button>
         ))}
       </div>
+      )}
 
       {/* Search */}
       <motion.div
@@ -339,7 +345,7 @@ export default function SuperAdminAdminPage() {
 
       {/* List */}
       {isLoading ? (
-        <SkeletonList count={5} isDark={isDark} />
+        <SkeletonList count={6} isDark={isDark} />
       ) : !users?.length ? (
         <motion.div
           initial={{ opacity: 0 }}

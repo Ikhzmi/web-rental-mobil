@@ -155,10 +155,69 @@ refundRouter.post('/', verifySupabaseToken, async (req: Request, res: Response) 
     type: 'booking',
     title: 'Pengajuan Refund Baru',
     message: `Permintaan refund untuk pesanan #${booking.id.slice(0, 8)} (${booking.car.nama}) menunggu persetujuan.`,
-    data: { actionUrl: `/admin/refunds`, bookingId: booking.id },
+    data: { actionUrl: `/admin/keuangan?tab=refunds`, bookingId: booking.id },
   });
 
   res.status(201).json({ data: refund });
+});
+
+/**
+ * PATCH /api/refunds/:id/rekening
+ * Pelanggan melengkapi/memperbarui rekening tujuan untuk refund yang masih
+ * `menunggu_persetujuan` dan belum memiliki rekening. Menutup jalan buntu:
+ * sebelumnya refund yang terbuat TANPA rekening (batal dari status
+ * menunggu_pembayaran yang sudah dibayar) tidak bisa dilengkapi karena
+ * POST /api/refunds menolak dengan 409 "sudah pernah diajukan".
+ */
+refundRouter.patch('/:id/rekening', verifySupabaseToken, async (req: Request, res: Response) => {
+  const idParse = uuidSchema.safeParse(req.params.id);
+  if (!idParse.success) {
+    res.status(400).json({ error: 'Format ID refund tidak valid' });
+    return;
+  }
+
+  const bodySchema = z.object({
+    rekeningTujuan: z.string().trim().min(5, 'Format rekening tidak valid (e.g. BCA-1234567890 a.n. John)'),
+  });
+  const parsed = bodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
+    return;
+  }
+
+  const refund = await prisma.refund.findUnique({
+    where: { id: idParse.data },
+    include: { booking: { include: { car: { select: { id: true, nama: true, instansiId: true } } } } },
+  });
+
+  if (!refund) {
+    res.status(404).json({ error: 'Refund tidak ditemukan' });
+    return;
+  }
+
+  if (refund.booking.userId !== req.user!.id) {
+    res.status(403).json({ error: 'Anda bukan pemilik refund ini' });
+    return;
+  }
+
+  if (refund.status !== 'menunggu_persetujuan') {
+    res.status(409).json({ error: 'Rekening hanya bisa diubah selagi refund menunggu persetujuan' });
+    return;
+  }
+
+  const updated = await prisma.refund.update({
+    where: { id: refund.id },
+    data: { rekeningTujuan: parsed.data.rekeningTujuan },
+  });
+
+  void notifyInstansi(refund.booking.car.instansiId, {
+    type: 'booking',
+    title: 'Rekening Refund Dilengkapi',
+    message: `Pelanggan melengkapi rekening refund untuk pesanan #${refund.bookingId.slice(0, 8)} (${refund.booking.car.nama}).`,
+    data: { actionUrl: `/admin/keuangan?tab=refunds`, bookingId: refund.bookingId },
+  });
+
+  res.json({ data: updated });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -6,8 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { DayPicker, type DateRange } from 'react-day-picker';
 import { api, ApiError, type StatusBooking, type RefundData, type Booking } from '../lib/api';
 import { formatRupiah } from '../lib/pricing';
+import { BackButtonSkeleton, SkeletonDetail } from '../components/Skeleton';
 import { useTheme } from '../hooks/useTheme';
 import { buildWhatsAppLink } from '../lib/businessConfig';
+import { formatWibTanggal, formatRentangTanggal } from '../lib/dates';
 
 const STATUS_LABEL: Record<StatusBooking, string> = {
   menunggu_pembayaran: 'Menunggu Pembayaran',
@@ -33,17 +35,8 @@ const STATUS_BADGE_LIGHT: Record<StatusBooking, string> = {
   dibatalkan: 'bg-slate-100 text-slate-500',
 };
 
-function formatTanggal(iso: string): string {
-  return new Date(iso).toLocaleString('id-ID', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
-}
-
-function formatTanggalShort(iso: string): string {
-  return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+// Menggunakan helper WIB agar tanggal yang ditampilkan = tanggal kalender WIB yang dipilih user
+const formatTanggal = formatWibTanggal;
 
 /**
  * Form ulasan — cuma dirender kalau booking.status === 'selesai'
@@ -330,6 +323,15 @@ function RefundTrackerCard({
             {refund.rekeningTujuan || booking.rekeningRefund || '-'}
           </span>
         </div>
+        {!refund.rekeningTujuan && !booking.rekeningRefund && refund.status === 'menunggu_persetujuan' && (
+          <button
+            onClick={onOpenRefundForm}
+            className="w-full mt-1 inline-flex items-center justify-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+          >
+            <Send size={13} />
+            Lengkapi Rekening Tujuan Refund
+          </button>
+        )}
         {refund.catatan && refund.status !== 'ditolak' && (
           <div className="flex justify-between border-t pt-2 border-white/10">
             <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Catatan Rental:</span>
@@ -379,6 +381,15 @@ export default function AkunPesananDetailPage() {
 
   const refundData = refundResponse?.refund ?? (booking as any)?.refund;
 
+  // Rekening wajib diisi saat pembatalan MEMBUAT baris refund, yaitu saat
+  // booking dikonfirmasi ATAU sudah ada pembayaran lunas (payment paid)
+  // walau status masih menunggu_pembayaran. Sebelumnya field ini hanya
+  // muncul untuk dikonfirmasi sehingga refund dari booking berbayar tapi
+  // belum terkonfirmasi terbuat tanpa rekening dan tak bisa dilengkapi.
+  const perluRekeningRefund = Boolean(
+    booking && (booking.status === 'dikonfirmasi' || booking.payment?.status === 'paid')
+  );
+
   const canCancelDikonfirmasi = useMemo(() => {
     if (!booking) return false;
     if (booking.status === 'menunggu_pembayaran') return true;
@@ -395,10 +406,15 @@ export default function AkunPesananDetailPage() {
   }, [booking]);
 
   const requestRefundMutation = useMutation({
-    mutationFn: () => api.createRefund({
-      bookingId: id!,
-      rekeningTujuan: inputRekening.trim(),
-    }),
+    // Jika baris refund sudah ada (mis. terbuat tanpa rekening saat batal
+    // dari menunggu_pembayaran yang sudah dibayar), lengkapi rekeningnya
+    // via PATCH — bukan POST yang akan ditolak 409.
+    mutationFn: () => refundData
+      ? api.updateRefundRekening(refundData.id, inputRekening.trim())
+      : api.createRefund({
+        bookingId: id!,
+        rekeningTujuan: inputRekening.trim(),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-booking', id] });
       queryClient.invalidateQueries({ queryKey: ['refund-booking', id] });
@@ -455,11 +471,13 @@ export default function AkunPesananDetailPage() {
 
   if (isLoading) {
     return (
-      <main className={`min-h-screen flex items-center justify-center gap-2 transition-colors duration-300 ${
+      <main className={`min-h-screen pt-24 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
         isDark ? 'bg-[#0a0a0a]' : 'bg-gradient-to-b from-slate-50 via-white to-slate-100'
       }`}>
-        <Loader2 size={18} className="animate-spin" />
-        <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Memuat pesanan...</span>
+        <div className="max-w-lg mx-auto space-y-6">
+          <BackButtonSkeleton />
+          <SkeletonDetail isDark={isDark} />
+        </div>
       </main>
     );
   }
@@ -638,7 +656,7 @@ export default function AkunPesananDetailPage() {
                 >
                   Batalkan Pesanan
                 </button>
-                {booking.status === 'dikonfirmasi' && (
+                {perluRekeningRefund && (
                   <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
                     Pembatalan pesanan H-1 mendapatkan refund dana 100% penuh tanpa potongan admin.
                   </p>
@@ -682,7 +700,7 @@ export default function AkunPesananDetailPage() {
               </div>
 
               <p className={`text-xs mb-4 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                Tanggal saat ini: <strong>{formatTanggalShort(booking.tanggalMulai)} — {formatTanggalShort(booking.tanggalSelesai)}</strong>
+                Tanggal saat ini: <strong>{formatRentangTanggal(booking.tanggalMulai, booking.tanggalSelesai, (d) => d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }))}</strong>
               </p>
 
               <div className={`rounded-2xl overflow-hidden mb-4 ${isDark ? 'bg-white/5' : 'bg-slate-50'}`}>
@@ -697,7 +715,7 @@ export default function AkunPesananDetailPage() {
 
               {rescheduleRange?.from && rescheduleRange?.to && (
                 <p className={`text-xs mb-3 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
-                  Tanggal baru: <strong>{formatTanggalShort(rescheduleRange.from.toISOString())} — {formatTanggalShort(rescheduleRange.to.toISOString())}</strong>
+                  Tanggal baru: <strong>{formatRentangTanggal(rescheduleRange.from, rescheduleRange.to, (d) => d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }))}</strong>
                 </p>
               )}
 
@@ -747,8 +765,8 @@ export default function AkunPesananDetailPage() {
                 </button>
               </div>
 
-              {/* Info refund jika status dikonfirmasi */}
-              {booking.status === 'dikonfirmasi' && (
+              {/* Info refund jika pembatalan membuat baris refund */}
+              {perluRekeningRefund && (
                 <div className={`flex gap-3 p-3.5 rounded-2xl mb-4 ${isDark ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
                   <ShieldCheck size={18} className="text-emerald-500 shrink-0 mt-0.5" />
                   <div>
@@ -780,7 +798,7 @@ export default function AkunPesananDetailPage() {
                   />
                 </div>
 
-                {booking.status === 'dikonfirmasi' && (
+                {perluRekeningRefund && (
                   <div>
                     <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
                       Nomor Rekening Refund <span className="text-red-400">*</span>
@@ -811,7 +829,7 @@ export default function AkunPesananDetailPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => cancelMutation.mutate()}
-                  disabled={cancelMutation.isPending || (booking.status === 'dikonfirmasi' && !rekeningRefund.trim())}
+                  disabled={cancelMutation.isPending || (perluRekeningRefund && !rekeningRefund.trim())}
                   className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium px-4 py-2.5 rounded-full transition-colors disabled:opacity-60 ${
                     isDark
                       ? 'bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/20'

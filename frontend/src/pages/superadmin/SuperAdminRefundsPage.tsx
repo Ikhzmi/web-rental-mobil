@@ -17,6 +17,7 @@ import { api, type StatusRefund, type RefundData } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { SkeletonStatsGrid, SkeletonTable } from '../../components/Skeleton';
 
 const STATUS_TABS: Array<{ id: StatusRefund | 'semua'; label: string }> = [
   { id: 'semua', label: 'Semua Status' },
@@ -43,7 +44,7 @@ export default function SuperAdminRefundsPage() {
   const [catatan, setCatatan] = useState('');
 
   // Fetch instansi list for filter
-  const { data: instansiList } = useQuery({
+  const { data: instansiList, isLoading: isLoadingInstansi } = useQuery({
     queryKey: ['superadmin-instansi-list'],
     queryFn: () => api.listInstansi(),
   });
@@ -93,7 +94,10 @@ export default function SuperAdminRefundsPage() {
         </p>
       </div>
 
-      {/* Stat Cards */}
+      {/* Stat Cards — skeleton saat loading agar tidak flash Rp0/0 */}
+      {isLoading ? (
+        <SkeletonStatsGrid isDark={isDark} count={4} />
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className={`p-5 rounded-2xl border ${cardClass}`}>
           <div className="flex items-center justify-between gap-2">
@@ -155,6 +159,7 @@ export default function SuperAdminRefundsPage() {
           </p>
         </div>
       </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className={`p-4 rounded-2xl border ${cardClass} space-y-4`}>
@@ -189,13 +194,14 @@ export default function SuperAdminRefundsPage() {
                 setSelectedInstansi(e.target.value);
                 setPage(1);
               }}
-              className={`text-xs rounded-xl px-3 py-2.5 outline-none transition-all border ${
+              disabled={isLoadingInstansi}
+              className={`text-xs rounded-xl px-3 py-2.5 outline-none transition-all border disabled:opacity-60 ${
                 isDark
                   ? 'bg-[#1a1a1a] border-white/10 text-white'
                   : 'bg-white border-slate-200 text-slate-900'
               }`}
             >
-              <option value="">Semua Instansi Rental</option>
+              <option value="">{isLoadingInstansi ? 'Memuat instansi...' : 'Semua Instansi Rental'}</option>
               {instansiList?.map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.namaInstansi}
@@ -224,13 +230,10 @@ export default function SuperAdminRefundsPage() {
         </div>
       </div>
 
-      {/* Refunds Table */}
+      {/* Refunds Table — 7 kolom sesuai header asli */}
       <div className={`rounded-2xl border overflow-hidden ${cardClass}`}>
         {isLoading ? (
-          <div className="py-20 flex items-center justify-center gap-2">
-            <Loader2 size={20} className="animate-spin text-emerald-500" />
-            <span className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Memuat data refund lintas platform...</span>
-          </div>
+          <SkeletonTable rows={5} cols={7} isDark={isDark} />
         ) : refunds.length === 0 ? (
           <div className="py-20 text-center">
             <p className={`text-sm font-medium ${isDark ? 'text-white/50' : 'text-slate-500'}`}>

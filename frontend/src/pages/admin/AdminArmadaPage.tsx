@@ -9,7 +9,7 @@ import { DayPicker, type DateRange } from 'react-day-picker';
 import { api, type Car, type CarImage, type Kategori, type Transmisi, type BahanBakar, type StatusMobil, type TipeSewa } from '../../lib/api';
 import { formatRupiah, formatCompactRupiah } from '../../lib/pricing';
 import { supabase } from '../../lib/supabase';
-import { SkeletonList } from '../../components/Skeleton';
+import { Skeleton, SkeletonCarGrid } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
 import { compressImage, isImageFile } from '../../lib/imageCompression';
@@ -807,9 +807,10 @@ function EditCarModal({ car, onClose, isDark: propIsDark }: { car: Car; onClose:
               </div>
 
               {isLoadingBlocked ? (
-                <div className={`p-4 text-center text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                  <Loader2 size={16} className="animate-spin mx-auto mb-1" />
-                  Memuat data...
+                <div className="space-y-2">
+                  {[0, 1, 2].map((i) => (
+                    <Skeleton key={i} className="h-11 w-full rounded-xl" />
+                  ))}
                 </div>
               ) : blockedDates.length === 0 ? (
                 <div className={`py-6 text-center text-xs italic ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
@@ -1910,9 +1911,9 @@ export default function AdminArmadaPage() {
         />
       </div>
 
-      {/* List */}
+      {/* List — skeleton grid menyerupai kartu armada 16:9 */}
       {isLoading ? (
-        <SkeletonList count={4} />
+        <SkeletonCarGrid count={6} isDark={isDark} />
       ) : isError ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16 sm:py-20">
           <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center ${

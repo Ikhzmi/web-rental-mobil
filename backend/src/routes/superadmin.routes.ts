@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { Role } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { komisiUntukBooking } from '../services/commission.service';
 import { verifySupabaseToken, requireSuperAdmin } from '../middleware/verifySupabaseToken';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../lib/supabaseAdmin';
@@ -87,6 +88,7 @@ superadminRouter.get('/dashboard', async (_req, res) => {
         select: {
           status: true,
           totalHarga: true,
+          komisiPersenSnapshot: true,
           car: { select: { instansiId: true } },
         },
       }),
@@ -131,8 +133,8 @@ superadminRouter.get('/dashboard', async (_req, res) => {
       if (STATUS_DIHITUNG_PENDAPATAN.includes(booking.status)) {
         const harga = Number(booking.totalHarga);
         totalPendapatan += harga;
-        const rate = rateMap.get(booking.car.instansiId) ?? 10;
-        totalKomisi += (harga * rate) / 100;
+        // Pakai snapshot rate saat booking dibuat (fallback rate live)
+        totalKomisi += komisiUntukBooking(harga, booking.komisiPersenSnapshot, booking.car.instansiId, rateMap);
       }
     }
 
@@ -171,6 +173,8 @@ superadminRouter.get('/dashboard/trends', async (_req, res) => {
     const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    // Jendela 8 hari terakhir untuk sparkline harian (data nyata)
+    const startOfWindow = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
 
     // Data bulan ini
     const [
@@ -183,6 +187,10 @@ superadminRouter.get('/dashboard/trends', async (_req, res) => {
       lastMonthArmada,
       lastMonthBookings,
       instansiRates,
+      recentInstansi,
+      recentUsers,
+      recentCars,
+      recentBookings,
     ] = await Promise.all([
       // Instansi bulan ini
       prisma.instansi.count({
@@ -202,7 +210,7 @@ superadminRouter.get('/dashboard/trends', async (_req, res) => {
           createdAt: { gte: startOfThisMonth },
           status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
         },
-        select: { totalHarga: true, car: { select: { instansiId: true } } },
+        select: { totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
       }),
       // Instansi bulan lalu
       prisma.instansi.count({
@@ -231,25 +239,41 @@ superadminRouter.get('/dashboard/trends', async (_req, res) => {
           createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
           status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
         },
-        select: { totalHarga: true, car: { select: { instansiId: true } } },
+        select: { totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
       }),
       // Instansi rates
       prisma.instansi.findMany({
         where: { status: 'aktif' },
         select: { id: true, komisiPlatformPersen: true },
       }),
+      // Data mentah 8 hari terakhir untuk sparkline harian (nyata)
+      prisma.instansi.findMany({
+        where: { createdAt: { gte: startOfWindow } },
+        select: { createdAt: true },
+      }),
+      prisma.profile.findMany({
+        where: { role: { not: 'super_admin' }, createdAt: { gte: startOfWindow } },
+        select: { createdAt: true },
+      }),
+      prisma.car.findMany({
+        where: { statusApproval: 'disetujui', createdAt: { gte: startOfWindow } },
+        select: { createdAt: true },
+      }),
+      prisma.booking.findMany({
+        where: {
+          createdAt: { gte: startOfWindow },
+          status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
+        },
+        select: { createdAt: true, totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
+      }),
     ]);
 
-    // Hitung total komisi dinamis per-instansi
+    // Hitung total komisi dinamis per-instansi (pakai snapshot booking)
     const rateMap = new Map(instansiRates.map((i) => [i.id, Number(i.komisiPlatformPersen)]));
-    const thisMonthCommission = thisMonthBookings.reduce((sum, b) => {
-      const rate = rateMap.get(b.car.instansiId) ?? 10;
-      return sum + Number(b.totalHarga) * (rate / 100);
-    }, 0);
-    const lastMonthCommission = lastMonthBookings.reduce((sum, b) => {
-      const rate = rateMap.get(b.car.instansiId) ?? 10;
-      return sum + Number(b.totalHarga) * (rate / 100);
-    }, 0);
+    const thisMonthCommission = thisMonthBookings.reduce((sum, b) =>
+      sum + komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, b.car.instansiId, rateMap), 0);
+    const lastMonthCommission = lastMonthBookings.reduce((sum, b) =>
+      sum + komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, b.car.instansiId, rateMap), 0);
 
     // Hitung trend percentage
     const calcTrend = (current: number, previous: number): number => {
@@ -262,23 +286,30 @@ superadminRouter.get('/dashboard/trends', async (_req, res) => {
     const trendArmada = calcTrend(thisMonthArmada, lastMonthArmada);
     const trendKomisi = calcTrend(Math.round(thisMonthCommission), Math.round(lastMonthCommission));
 
-    // Generate sparkline data (7 data points representasi mingguan)
-    const generateSparkline = (baseValue: number): number[] => {
-      const result: number[] = [];
-      let current = Math.max(baseValue * 0.5, 1);
-      for (let i = 0; i < 8; i++) {
-        current = current + (baseValue - current) * 0.25 + Math.random() * (baseValue * 0.1);
-        result.push(Math.round(Math.max(current, 0)));
-      }
-      // Ensure last value is close to baseValue
-      result[result.length - 1] = baseValue;
-      return result;
-    };
+    // Sparkline harian 8 titik TERAKHIR dari data nyata (bukan acak):
+    // jumlah baru per hari untuk instansi/users/armada, dan komisi per hari
+    // untuk komisi. Titik yang sepi memang 0 — jujur, tidak difabrikasi.
+    const dayKeys: string[] = [];
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      dayKeys.push(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+    }
+    const dayKeyOf = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const bucketCount = (rows: { createdAt: Date }[]): number[] =>
+      dayKeys.map((k) => rows.filter((r) => dayKeyOf(new Date(r.createdAt)) === k).length);
+    const bucketCommission = (rows: { createdAt: Date; totalHarga: { toString(): string }; komisiPersenSnapshot: { toString(): string } | null; car: { instansiId: string } }[]): number[] =>
+      dayKeys.map((k) =>
+        Math.round(
+          rows
+            .filter((r) => dayKeyOf(new Date(r.createdAt)) === k)
+            .reduce((sum, b) => sum + komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, b.car.instansiId, rateMap), 0)
+        )
+      );
 
-    const sparklineInstansi = generateSparkline(thisMonthInstansi);
-    const sparklineUsers = generateSparkline(thisMonthUsers);
-    const sparklineArmada = generateSparkline(thisMonthArmada);
-    const sparklineKomisi = generateSparkline(Math.round(thisMonthCommission));
+    const sparklineInstansi = bucketCount(recentInstansi);
+    const sparklineUsers = bucketCount(recentUsers);
+    const sparklineArmada = bucketCount(recentCars);
+    const sparklineKomisi = bucketCommission(recentBookings);
 
     res.json({
       data: {
@@ -425,7 +456,7 @@ superadminRouter.patch('/instansi/:id/verifikasi', async (req, res) => {
         type: 'approval',
         title: 'Pendaftaran Instansi Ditolak',
         message: `Pendaftaran instansi Anda belum dapat disetujui.${alasan ? ' Alasan: ' + alasan : ''}`,
-        data: { actionUrl: '/admin/pengaturan' },
+        data: { actionUrl: '/admin/settings' },
       });
     }
 
@@ -1243,6 +1274,8 @@ superadminRouter.post('/disbursements', async (req, res) => {
           disbursementId: created.id,
           bookingId: b.id,
           jumlahKotor: b.totalHarga,
+          // Snapshot rate yang dipakai batch ini (audit trail)
+          komisiPersenSnapshot: komisiPersen,
         })),
       });
       return tx.disbursement.findUnique({
@@ -1260,7 +1293,7 @@ superadminRouter.post('/disbursements', async (req, res) => {
         title: 'Pencairan Dana Diproses',
         message: `Pencairan dana sebesar Rp ${Number(disbursement.jumlahBersih).toLocaleString('id-ID')} sedang diproses.`,
         data: {
-          actionUrl: '/admin/saldo',
+          actionUrl: '/admin/keuangan',
           disbursementId: disbursement.id,
         },
       }).catch(() => {/* fire-and-forget */});
@@ -1281,10 +1314,12 @@ const updateDisbursementStatusSchema = z.object({
 /**
  * PATCH /api/superadmin/disbursements/:id/status
  * Menandai hasil transfer manual. Hanya bisa dilakukan dari status
- * 'diproses' — sekali ditandai berhasil/gagal, batch dianggap final
- * (kalau gagal dan mau diulang, buat batch baru; booking yang sama tetap
- * bisa dipilih lagi karena disbursementItems dari batch gagal tidak
- * dihapus, jadi butuh keputusan eksplisit alih-alih auto-retry diam-diam).
+ * 'diproses'. Jika 'gagal', item batch DIHAPUS dalam transaksi yang sama
+ * sehingga booking-bookingnya kembali menjadi saldo tertunda dan bisa
+ * dipilih pada batch baru — sebelumnya item batch gagal dipertahankan
+ * sementara query saldo memfilter `disbursementItems: none`, yang membuat
+ * dana booking tersebut hilang dari semua laporan dan tak bisa dicairkan
+ * ulang.
  */
 superadminRouter.patch('/disbursements/:id/status', async (req, res) => {
   const parsed = updateDisbursementStatusSchema.safeParse(req.body);
@@ -1304,17 +1339,25 @@ superadminRouter.patch('/disbursements/:id/status', async (req, res) => {
       return;
     }
 
-    const updated = await prisma.disbursement.update({
-      where: { id: req.params.id },
-      data: {
-        status: parsed.data.status,
-        ...(parsed.data.bankTransferId && { bankTransferId: parsed.data.bankTransferId }),
-        ...(parsed.data.status === 'berhasil' && { dicairkanPada: new Date() }),
-      },
-      include: {
-        instansi: { select: { id: true, namaInstansi: true } },
-        items: { select: { id: true, bookingId: true, jumlahKotor: true } },
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      if (parsed.data.status === 'gagal') {
+        // Lepaskan booking dari batch gagal agar bisa dicairkan ulang
+        await tx.disbursementItem.deleteMany({
+          where: { disbursementId: req.params.id },
+        });
+      }
+      return tx.disbursement.update({
+        where: { id: req.params.id },
+        data: {
+          status: parsed.data.status,
+          ...(parsed.data.bankTransferId && { bankTransferId: parsed.data.bankTransferId }),
+          ...(parsed.data.status === 'berhasil' && { dicairkanPada: new Date() }),
+        },
+        include: {
+          instansi: { select: { id: true, namaInstansi: true } },
+          items: { select: { id: true, bookingId: true, jumlahKotor: true } },
+        },
+      });
     });
 
     if (parsed.data.status === 'berhasil') {
@@ -1322,14 +1365,14 @@ superadminRouter.patch('/disbursements/:id/status', async (req, res) => {
         type: 'disbursement',
         title: 'Dana Berhasil Dicairkan!',
         message: `Pencairan dana sebesar Rp ${Number(updated.jumlahBersih).toLocaleString('id-ID')} telah berhasil ditransfer.${updated.bankTransferId ? ' (Ref: ' + updated.bankTransferId + ')' : ''}`,
-        data: { actionUrl: '/admin/dashboard', disbursementId: updated.id },
+        data: { actionUrl: '/admin/keuangan', disbursementId: updated.id },
       });
     } else if (parsed.data.status === 'gagal') {
       void notifyInstansi(updated.instansiId, {
         type: 'disbursement',
         title: 'Pencairan Dana Gagal',
-        message: `Pencairan dana Rp ${Number(updated.jumlahBersih).toLocaleString('id-ID')} gagal diproses. Harap periksa nomor rekening instansi Anda.`,
-        data: { actionUrl: '/admin/pengaturan', disbursementId: updated.id },
+        message: `Pencairan dana Rp ${Number(updated.jumlahBersih).toLocaleString('id-ID')} gagal diproses. Booking terkait kembali menjadi saldo tertunda dan bisa dicairkan ulang. Harap periksa nomor rekening instansi Anda.`,
+        data: { actionUrl: '/admin/settings', disbursementId: updated.id },
       });
     }
 
@@ -1378,6 +1421,7 @@ superadminRouter.get('/dashboard/analytics', async (req, res) => {
         select: {
           id: true,
           totalHarga: true,
+          komisiPersenSnapshot: true,
           status: true,
           createdAt: true,
           car: { select: { instansiId: true } },
@@ -1414,8 +1458,7 @@ superadminRouter.get('/dashboard/analytics', async (req, res) => {
         else if (h >= 3) bucket = '03:00';
 
         const harga = Number(booking.totalHarga);
-        const rate = rateMap.get(booking.car.instansiId) ?? 10;
-        const komisi = (harga * rate) / 100;
+        const komisi = komisiUntukBooking(harga, booking.komisiPersenSnapshot, booking.car.instansiId, rateMap);
 
         seriesMap[bucket].revenue += harga;
         seriesMap[bucket].commission += komisi;
@@ -1434,8 +1477,7 @@ superadminRouter.get('/dashboard/analytics', async (req, res) => {
         const key = `${y}-${m}`;
         if (seriesMap[key]) {
           const harga = Number(booking.totalHarga);
-          const rate = rateMap.get(booking.car.instansiId) ?? 10;
-          const komisi = (harga * rate) / 100;
+          const komisi = komisiUntukBooking(harga, booking.komisiPersenSnapshot, booking.car.instansiId, rateMap);
 
           seriesMap[key].revenue += harga;
           seriesMap[key].commission += komisi;
@@ -1457,8 +1499,7 @@ superadminRouter.get('/dashboard/analytics', async (req, res) => {
         const dateStr = toLocalDateStr(booking.createdAt);
         if (seriesMap[dateStr]) {
           const harga = Number(booking.totalHarga);
-          const rate = rateMap.get(booking.car.instansiId) ?? 10;
-          const komisi = (harga * rate) / 100;
+          const komisi = komisiUntukBooking(harga, booking.komisiPersenSnapshot, booking.car.instansiId, rateMap);
 
           seriesMap[dateStr].revenue += harga;
           seriesMap[dateStr].commission += komisi;
@@ -1978,7 +2019,7 @@ superadminRouter.get('/dashboard/commission', async (_req, res) => {
         createdAt: { gte: startOfMonth },
         status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
       },
-      select: { totalHarga: true },
+      select: { totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
     });
 
     // Last month bookings (hanya yang sudah dibayar)
@@ -1987,14 +2028,25 @@ superadminRouter.get('/dashboard/commission', async (_req, res) => {
         createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] },
       },
-      select: { totalHarga: true },
+      select: { totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
     });
+
+    // Rate komisi per instansi — JANGAN hardcode 10%: tiap instansi bisa
+    // punya rate berbeda dan endpoint lain semuanya memakai rateMap.
+    const instansiRates = await prisma.instansi.findMany({
+      select: { id: true, komisiPlatformPersen: true },
+    });
+    const rateMap = new Map(instansiRates.map((i) => [i.id, Number(i.komisiPlatformPersen)]));
 
     const currentMonthRevenue = currentMonthBookings.reduce((sum, b) => sum + Number(b.totalHarga), 0);
     const lastMonthRevenue = lastMonthBookings.reduce((sum, b) => sum + Number(b.totalHarga), 0);
 
-    const commission = currentMonthRevenue * 0.1; // 10% platform commission
-    const lastMonthCommission = lastMonthRevenue * 0.1;
+    const calcCommission = (bookings: typeof currentMonthBookings) =>
+      bookings.reduce((sum, b) =>
+        sum + komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, b.car.instansiId, rateMap), 0);
+
+    const commission = calcCommission(currentMonthBookings);
+    const lastMonthCommission = calcCommission(lastMonthBookings);
 
     // Commission target based on last month performance (120% of last month)
     const targetCommission = lastMonthCommission * 1.2;
@@ -2163,7 +2215,7 @@ superadminRouter.get('/dashboard/platform-summary', async (_req, res) => {
     const [bookingsList, instansiRateList] = await Promise.all([
       prisma.booking.findMany({
         where: { status: { in: ['dikonfirmasi', 'berjalan', 'selesai'] } },
-        select: { totalHarga: true, car: { select: { instansiId: true } } },
+        select: { totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
       }),
       prisma.instansi.findMany({ select: { id: true, komisiPlatformPersen: true } }),
     ]);
@@ -2171,9 +2223,7 @@ superadminRouter.get('/dashboard/platform-summary', async (_req, res) => {
     const rateMap = new Map(instansiRateList.map((i) => [i.id, Number(i.komisiPlatformPersen)]));
     let platformCommission = 0;
     for (const b of bookingsList) {
-      const harga = Number(b.totalHarga);
-      const rate = rateMap.get(b.car.instansiId) ?? 10;
-      platformCommission += (harga * rate) / 100;
+      platformCommission += komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, b.car.instansiId, rateMap);
     }
 
     res.json({
@@ -2220,6 +2270,12 @@ superadminRouter.get('/dashboard/today-bookings', async (_req, res) => {
         total: todayBookings.length,
         completed: statusCounts['selesai'] || 0,
         running: statusCounts['berjalan'] || 0,
+        // Dipecah eksplisit: frontend sebelumnya mengira `pending` hanya
+        // menunggu_pembayaran lalu menghitung dikonfirmasi sebagai residu,
+        // yang selalu menghasilkan 0. `pending` dipertahankan untuk
+        // kompatibilitas.
+        menungguPembayaran: statusCounts['menunggu_pembayaran'] || 0,
+        dikonfirmasi: statusCounts['dikonfirmasi'] || 0,
         pending: (statusCounts['menunggu_pembayaran'] || 0) + (statusCounts['dikonfirmasi'] || 0),
         cancelled: statusCounts['dibatalkan'] || 0,
       },
@@ -2520,7 +2576,14 @@ superadminRouter.get('/transactions', async (req, res) => {
 
         for (const b of bookingsForCommission) {
           const harga = Number(b.totalHarga);
-          const rate = Number(b.car?.instansi?.komisiPlatformPersen ?? 10);
+          // Snapshot rate booking; fallback ke rate live instansi yang
+          // sudah di-include (untuk data sebelum backfill).
+          const snapshot = b.komisiPersenSnapshot !== null && b.komisiPersenSnapshot !== undefined
+            ? Number(b.komisiPersenSnapshot)
+            : NaN;
+          const rate = Number.isFinite(snapshot)
+            ? snapshot
+            : Number(b.car?.instansi?.komisiPlatformPersen ?? 10);
           const komisiAmount = Math.round((harga * rate) / 100);
 
           let txnStatus: 'success' | 'pending' | 'failed' = 'success';
@@ -2644,7 +2707,7 @@ superadminRouter.get('/transactions', async (req, res) => {
       }),
       prisma.booking.findMany({
         where: dateFilterBooking,
-        select: { totalHarga: true, car: { select: { instansiId: true } } },
+        select: { totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
       }),
       prisma.instansi.findMany({ select: { id: true, komisiPlatformPersen: true } }),
     ]);
@@ -2658,10 +2721,8 @@ superadminRouter.get('/transactions', async (req, res) => {
 
     const totalRefund = successfulRefunds.reduce((sum, r) => sum + Number(r.jumlahRefund), 0);
 
-    const totalKomisi = confirmedBookings.reduce((sum, b) => {
-      const rate = rateMap.get(b.car.instansiId) ?? 10;
-      return sum + (Number(b.totalHarga) * rate) / 100;
-    }, 0);
+    const totalKomisi = confirmedBookings.reduce((sum, b) =>
+      sum + komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, b.car.instansiId, rateMap), 0);
 
     const summary = {
       totalMasuk: Math.round(totalMasuk),
@@ -2772,7 +2833,7 @@ superadminRouter.get('/reports', async (req, res) => {
           createdAt: { gte: dari },
           status: { in: ['dikonfirmasi', 'berjalan', 'selesai'] },
         },
-        select: { totalHarga: true, car: { select: { instansiId: true } } },
+        select: { totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
       }),
       prisma.disbursement.findMany({
         where: { status: 'berhasil', createdAt: { gte: dari } },
@@ -2805,7 +2866,7 @@ superadminRouter.get('/reports', async (req, res) => {
       }),
       prisma.booking.findMany({
         where: { status: 'selesai', disbursementItems: { none: {} } },
-        select: { totalHarga: true, car: { select: { instansiId: true } } },
+        select: { totalHarga: true, komisiPersenSnapshot: true, car: { select: { instansiId: true } } },
       }),
       prisma.instansi.findMany({
         select: { id: true, komisiPlatformPersen: true },
@@ -2815,10 +2876,8 @@ superadminRouter.get('/reports', async (req, res) => {
     const rateByInstansi = new Map(instansiRates.map((i) => [i.id, Number(i.komisiPlatformPersen)]));
 
     const totalRevenue = bookingsInPeriod.reduce((sum, b) => sum + Number(b.totalHarga), 0);
-    const totalCommission = bookingsInPeriod.reduce((sum, b) => {
-      const rate = rateByInstansi.get(b.car.instansiId) ?? 10;
-      return sum + (Number(b.totalHarga) * rate) / 100;
-    }, 0);
+    const totalCommission = bookingsInPeriod.reduce((sum, b) =>
+      sum + komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, b.car.instansiId, rateByInstansi), 0);
     const komisiDicairkan = disbursementsInPeriod.reduce((sum, d) => sum + Number(d.komisiPlatform), 0);
 
     const completionRate = totalBookings > 0 ? (completedBookings / totalBookings) * 100 : 0;
@@ -2836,10 +2895,8 @@ superadminRouter.get('/reports', async (req, res) => {
       ? Math.round((retainedCount / userIdsSebelumnya.size) * 1000) / 10
       : 0;
 
-    const commissionPending = pendingBookings.reduce((sum, b) => {
-      const rate = rateByInstansi.get(b.car.instansiId) ?? 10;
-      return sum + Number(b.totalHarga) * (rate / 100);
-    }, 0);
+    const commissionPending = pendingBookings.reduce((sum, b) =>
+      sum + komisiUntukBooking(b.totalHarga, b.komisiPersenSnapshot, b.car.instansiId, rateByInstansi), 0);
 
     // Effective commission rate periode ini — dihitung dari data asli
     // (komisi aktual / revenue aktual), bukan angka flat. Ini jujur
@@ -2865,6 +2922,10 @@ superadminRouter.get('/reports', async (req, res) => {
       booking: {
         total: totalBookings,
         active: activeBookings,
+        // Jumlah selesai EKSPLISIT dari DB — jangan diderivasi di frontend
+        // sebagai total-active karena itu ikut menghitung menunggu_pembayaran
+        // dan dibatalkan sebagai "selesai".
+        completed: completedBookings,
         completionRate: Math.round(completionRate * 10) / 10,
       },
       customer: {

@@ -7,10 +7,10 @@ import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getBookingStatusWithIcon } from '../../lib/statusConfig';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
+import { formatWibTanggalShort } from '../../lib/dates';
 
-function formatTanggal(iso: string): string {
-  return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+const formatTanggal = formatWibTanggalShort;
 
 function formatTimeAgo(iso: string): string {
   const date = new Date(iso);
@@ -78,10 +78,17 @@ function BookingDetailModal({ bookingId, onClose, isDark }: { bookingId: string;
 
         <div className="p-6">
           {isLoading || !booking ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className={`h-14 rounded-xl animate-pulse ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
-              ))}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-16 h-16 rounded-xl shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+              <Skeleton className="h-14 w-full rounded-xl" />
+              <Skeleton className="h-14 w-full rounded-xl" />
+              <Skeleton className="h-10 w-full rounded-xl" />
             </div>
           ) : (
             <div className="space-y-5">
@@ -256,7 +263,14 @@ export default function SuperAdminBookingsPage() {
         </p>
       </motion.div>
 
-      {/* Stats Filter */}
+      {/* Stats Filter — skeleton pil saat loading agar count tidak flash 0 */}
+      {isLoading ? (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-9 w-[120px] rounded-xl" />
+          ))}
+        </div>
+      ) : (
       <div className="flex flex-wrap gap-2 mb-6">
         {[
           { key: '', label: 'Semua', count: displayBookings.length },
@@ -283,6 +297,7 @@ export default function SuperAdminBookingsPage() {
           </button>
         ))}
       </div>
+      )}
 
       {/* Search */}
       <div className="relative mb-6">
@@ -302,30 +317,34 @@ export default function SuperAdminBookingsPage() {
 
       {/* Results count */}
       <p className={`text-sm mb-4 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-        Menampilkan {totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}-{Math.min(currentPage * itemsPerPage, totalItems)} dari {totalItems} pesanan
+        {isLoading ? (
+          <Skeleton className="h-4 w-56" />
+        ) : (
+          <>Menampilkan {totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}-{Math.min(currentPage * itemsPerPage, totalItems)} dari {totalItems} pesanan</>
+        )}
       </p>
 
-      {/* List */}
+      {/* List — struktur skeleton menyerupai kartu (gambar + teks + harga) */}
       {isLoading ? (
         <div className="space-y-4">
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className={`rounded-2xl overflow-hidden p-4 sm:p-5 animate-pulse ${getGlassCardClass(isDark)}`}
+              className={`rounded-2xl overflow-hidden p-4 sm:p-5 ${getGlassCardClass(isDark)}`}
             >
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <div className={`w-full sm:w-20 h-24 sm:h-20 rounded-xl shrink-0 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                <Skeleton className="w-full sm:w-20 h-24 sm:h-20 rounded-xl shrink-0" />
                 <div className="flex-1 min-w-0 space-y-2.5">
                   <div className="flex items-center gap-2">
-                    <div className={`h-5 w-40 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                    <div className={`h-5 w-16 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                    <div className={`h-5 w-20 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                    <Skeleton className="h-5 w-40 rounded" />
+                    <Skeleton className="h-5 w-16 rounded" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
                   </div>
-                  <div className={`h-3.5 w-48 rounded ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
-                  <div className={`h-3.5 w-64 rounded ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+                  <Skeleton className="h-3.5 w-48 rounded" />
+                  <Skeleton className="h-3.5 w-64 rounded" />
                 </div>
                 <div className="sm:text-right shrink-0">
-                  <div className={`h-6 w-28 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <Skeleton className="h-6 w-28 rounded" />
                 </div>
               </div>
             </div>

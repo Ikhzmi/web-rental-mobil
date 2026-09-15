@@ -18,6 +18,7 @@ import { api, type SuperAdminReportsData } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { SkeletonStatsGrid, SkeletonPanel } from '../../components/Skeleton';
 
 export default function SuperAdminReportsPage() {
   const { theme } = useTheme();
@@ -145,7 +146,7 @@ export default function SuperAdminReportsPage() {
             <tr>
               <td>Pemesanan</td>
               <td>Pemesanan Selesai</td>
-              <td class="number">${data.booking.total - data.booking.active} transaksi</td>
+              <td class="number">${data.booking.completed} transaksi</td>
               <td style="text-align: center;">-</td>
             </tr>
             <tr>
@@ -301,31 +302,14 @@ export default function SuperAdminReportsPage() {
         </div>
       </motion.div>
 
-      {/* Loading Skeleton */}
+      {/* Loading Skeleton — susunan menyerupai isi: 4 kartu + 3 kolom ringkasan */}
       {isLoading ? (
         <div className="space-y-6">
-          {/* 4 Cards Skeleton */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className={`p-5 rounded-2xl border animate-pulse ${
-                  isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white border-slate-200'
-                }`}
-              >
-                <div className={`w-8 h-8 rounded-lg mb-3 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                <div className={`h-3 w-20 rounded mb-2 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-                <div className={`h-7 w-28 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-              </div>
-            ))}
-          </div>
-          {/* Table/Sections Skeleton */}
-          <div className={`p-6 rounded-2xl border animate-pulse space-y-4 ${
-            isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white border-slate-200'
-          }`}>
-            <div className={`h-5 w-48 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-            <div className={`h-24 w-full rounded-xl ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
-            <div className={`h-24 w-full rounded-xl ${isDark ? 'bg-white/5' : 'bg-slate-100'}`} />
+          <SkeletonStatsGrid isDark={isDark} count={4} />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <SkeletonPanel isDark={isDark} rows={5} />
+            <SkeletonPanel isDark={isDark} rows={5} />
+            <SkeletonPanel isDark={isDark} rows={5} />
           </div>
         </div>
       ) : isError || !data ? (
@@ -394,7 +378,7 @@ export default function SuperAdminReportsPage() {
                 {data.booking.total} <span className="text-sm font-normal text-slate-400">booking</span>
               </p>
               <div className="flex items-center gap-2 text-xs">
-                <span className="text-emerald-400 font-semibold">{data.booking.total - data.booking.active} Selesai</span>
+                <span className="text-emerald-400 font-semibold">{data.booking.completed} Selesai</span>
                 <span className="text-slate-400">•</span>
                 <span className="text-blue-400 font-semibold">{data.booking.active} Aktif</span>
               </div>
@@ -506,7 +490,7 @@ export default function SuperAdminReportsPage() {
                   <div className="flex items-center justify-between text-xs py-1 border-b border-white/5">
                     <span className={isDark ? 'text-white/60' : 'text-slate-600'}>Pemesanan Selesai:</span>
                     <span className="font-semibold text-emerald-400">
-                      {data.booking.total - data.booking.active}
+                      {data.booking.completed}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs py-1 border-b border-white/5">

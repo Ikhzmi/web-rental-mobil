@@ -22,6 +22,7 @@ import { PlatformSummary } from '../../components/superadmin/PlatformSummary';
 import { QuickActions } from '../../components/superadmin/QuickActions';
 import { RecentTransactions } from '../../components/superadmin/RecentTransactions';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton, SkeletonStatsGrid, SkeletonChart, SkeletonPanel } from '../../components/Skeleton';
 
 interface DashboardData {
   totalInstansiAktif: number;
@@ -32,11 +33,12 @@ interface DashboardData {
   totalPendapatanPlatform: number;
   totalKomisiTerkumpul: number;
   bookingStats: Record<string, number>;
+  // Kontrak dle backend GET /api/superadmin/dashboard → refundStats.
   refundStats?: {
-    berhasilCount: number;
-    berhasilAmount: number;
-    pendingCount: number;
-    pendingAmount: number;
+    totalBerhasil: number;
+    countBerhasil: number;
+    totalPending: number;
+    countPending: number;
   };
 }
 
@@ -132,7 +134,7 @@ export default function SuperAdminDashboardPage() {
     throwOnError: false,
   });
 
-  const { data: trendData } = useQuery<DashboardTrendData>({
+  const { data: trendData, isLoading: isTrendsLoading } = useQuery<DashboardTrendData>({
     queryKey: ['superadmin-dashboard-trends'],
     queryFn: api.getDashboardTrends,
     enabled: !!data,
@@ -177,7 +179,9 @@ export default function SuperAdminDashboardPage() {
   const pendingApprovals = (displayData as DashboardData).mobilMenungguApproval ?? 0;
   const pendingInstansi = (displayData as DashboardData).totalInstansiMenunggu ?? 0;
 
-  if (isLoading) {
+  // Skeleton menunggu data + tren supaya kartu tidak flash 0 dan seluruh
+  // grid bawah (chart, aktivitas, dsb) tidak pop-in bertahap saat reload.
+  if (isLoading || (data && isTrendsLoading)) {
     return (
       <motion.div
         key="dashboard-loading"
@@ -185,18 +189,23 @@ export default function SuperAdminDashboardPage() {
         animate={{ opacity: 1 }}
         className="space-y-6"
       >
-        <div className="animate-pulse">
-          <div className={`h-8 w-48 rounded mb-2 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-          <div className={`h-4 w-64 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-64" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className={`p-5 rounded-2xl h-[140px] ${getGlassCardClass(isDark)}`}>
-              <div className={`h-3 w-20 rounded mb-3 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-              <div className={`h-8 w-24 rounded mb-3 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-              <div className={`h-10 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
-            </div>
-          ))}
+        <SkeletonStatsGrid isDark={isDark} count={4} />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7">
+            <SkeletonChart isDark={isDark} />
+          </div>
+          <div className="lg:col-span-5">
+            <SkeletonPanel isDark={isDark} rows={4} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SkeletonPanel isDark={isDark} rows={3} />
+          <SkeletonPanel isDark={isDark} rows={3} />
+          <SkeletonPanel isDark={isDark} rows={3} />
         </div>
       </motion.div>
     );
@@ -254,13 +263,13 @@ export default function SuperAdminDashboardPage() {
                 {pendingInstansi} Instansi Pending
               </span>
             )}
-            {((displayData as DashboardData).refundStats?.pendingCount ?? 0) > 0 && (
+            {((displayData as DashboardData).refundStats?.countPending ?? 0) > 0 && (
               <Link
                 to="/superadmin/refunds"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30 transition-colors"
               >
                 <RotateCcw size={12} />
-                {(displayData as DashboardData).refundStats?.pendingCount} Refund Perlu Dipantau
+                {(displayData as DashboardData).refundStats?.countPending} Refund Perlu Dipantau
               </Link>
             )}
             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${isDark ? 'bg-white/10 text-white/60' : 'bg-slate-100 text-slate-600'}`}>

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -15,7 +16,12 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { api, type Notification as NotificationType } from '../lib/api';
+import { Skeleton } from './Skeleton';
 import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+import { useProfile } from '../hooks/useProfile';
+import { useChat } from '../context/ChatContext';
+import { resolveNotificationTarget } from '../lib/notificationTarget';
 
 interface NotificationBellProps {
   /**
@@ -33,10 +39,15 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   const queryClient = useQueryClient();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const { showToast } = useToast();
+  const { profile } = useProfile();
+  const { openChat } = useChat();
 
   const [isOpen, setIsOpen] = useState(false);
   const [filterUnread, setFilterUnread] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
 
   // Ambil data notifikasi
   const { data: response, isLoading } = useQuery({
@@ -65,10 +76,53 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
     },
   });
 
+  const updatePosition = useCallback(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const topPos = rect.bottom + 10;
+      
+      if (align === 'right') {
+        setPopoverStyle({
+          position: 'fixed',
+          top: topPos,
+          right: window.innerWidth - rect.right,
+          zIndex: 100, // memastikan di atas segalanya
+        });
+      } else {
+        setPopoverStyle({
+          position: 'fixed',
+          top: topPos,
+          left: rect.left,
+          zIndex: 100,
+        });
+      }
+    }
+  }, [align]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsOpen(false);
+    };
+
+    if (isOpen) {
+      updatePosition();
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', handleScroll, { passive: true });
+      return () => {
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', handleScroll);
+      };
+    }
+  }, [isOpen, updatePosition]);
+
   // Handle klik di luar untuk menutup popover
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const isOutsideContainer = containerRef.current && !containerRef.current.contains(target);
+      const isOutsidePopover = popoverRef.current && !popoverRef.current.contains(target);
+      
+      if (isOutsideContainer && isOutsidePopover) {
         setIsOpen(false);
       }
     }
@@ -80,16 +134,29 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
     };
   }, [isOpen]);
 
-  // Handler klik pada item notifikasi
+  // Handler klik pada item notifikasi — lewat resolver aman berbasis role
+  // supaya TIDAK PERNAH mendarat di rute mati / lintas-role / layar kosong.
   const handleNotificationClick = (item: NotificationType) => {
     if (!item.isRead) {
       markReadMutation.mutate(item.id);
     }
     const actionUrl = item.data?.actionUrl as string | undefined;
-    if (actionUrl) {
-      setIsOpen(false);
-      navigate(actionUrl);
+    const role = profile?.role === 'admin' || profile?.role === 'super_admin' ? profile.role : 'customer';
+    const target = resolveNotificationTarget(actionUrl, role);
+    setIsOpen(false);
+
+    if (target.kind === 'chat') {
+      openChat(target.conversationId);
+      return;
     }
+    if (target.kind === 'fallback') {
+      if (target.reason === 'unknown' || target.reason === 'external') {
+        showToast('warning', 'Tautan Kedaluwarsa', 'Membuka halaman utama sebagai gantinya.');
+      }
+      navigate(target.url);
+      return;
+    }
+    navigate(target.url);
   };
 
   // Format waktu relatif dalam bahasa Indonesia
@@ -163,15 +230,11 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 ${
-          isOpen
-            ? isDark
-              ? 'bg-white/20 text-white border border-white/30'
-              : 'bg-neutral-100 text-neutral-900 border border-neutral-300'
-            : isDark
-            ? 'bg-white/10 hover:bg-white/15 text-white/80 hover:text-white border border-white/10'
-            : 'bg-white hover:bg-neutral-50 text-neutral-700 hover:text-neutral-900 border border-neutral-200/80 shadow-sm'
-        }`}
+        className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 glass-nav-links ${
+          isDark
+            ? 'text-white/80 hover:text-white'
+            : 'text-neutral-600 hover:text-neutral-900'
+        } ${isOpen ? (isDark ? 'ring-2 ring-white/20' : 'ring-2 ring-neutral-300') : ''}`}
         aria-label="Notifikasi"
         title="Notifikasi"
       >
@@ -183,15 +246,15 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
         )}
       </button>
 
-      {/* Popover Card Dropdown */}
-      {isOpen && (
+      {/* Popover Card Dropdown rendered in Portal */}
+      {isOpen && createPortal(
         <div
-          className={`absolute top-full mt-2.5 z-50 w-[340px] sm:w-[380px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl border backdrop-blur-xl transition-all animate-in fade-in zoom-in-95 duration-150 ${
-            align === 'right' ? 'right-0 sm:right-0' : 'left-0'
-          } ${
+          ref={popoverRef}
+          style={popoverStyle}
+          className={`w-[340px] sm:w-[380px] max-w-[calc(100vw-2rem)] rounded-2xl border transition-all animate-in fade-in zoom-in-95 duration-150 ${
             isDark
-              ? 'bg-neutral-900/95 border-white/10 text-neutral-100 shadow-black/60'
-              : 'bg-white/95 border-neutral-200 text-neutral-900 shadow-neutral-300/60'
+              ? 'sa-glass-dark border-white/15 text-white shadow-2xl shadow-black/80'
+              : 'sa-glass-light border-white/80 text-neutral-900 shadow-2xl shadow-slate-900/15'
           }`}
         >
           {/* Header Popover */}
@@ -260,9 +323,16 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
           {/* Daftar Notifikasi */}
           <div className="max-h-[380px] overflow-y-auto divide-y divide-neutral-200/40 dark:divide-white/5 custom-scrollbar">
             {isLoading ? (
-              <div className="p-8 text-center">
-                <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                <p className="text-xs text-neutral-500">Memuat notifikasi...</p>
+              <div className="p-3.5 space-y-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="flex gap-3 items-start">
+                    <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <Skeleton className="h-3 w-2/3" />
+                      <Skeleton className="h-2.5 w-full" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : notifications.length === 0 ? (
               <div className="p-8 text-center">
@@ -345,7 +415,8 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

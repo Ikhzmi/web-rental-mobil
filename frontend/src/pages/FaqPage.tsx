@@ -10,73 +10,107 @@ type FaqCategory = { category: string; items: FaqItem[] };
 
 const FAQ_CATEGORIES: FaqCategory[] = [
   {
-    category: 'Pemesanan & Pembayaran',
+    category: 'Pemesanan & Sewa Armada',
     items: [
       {
-        q: 'Bagaimana cara pembayaran di v1?',
-        a: 'Saat ini pembayaran dilakukan lewat transfer manual. Setelah kamu booking, kami kirim instruksi transfer, dan admin akan memverifikasi pembayaran sebelum status pesanan dikonfirmasi.',
+        q: 'Bagaimana cara melakukan pemesanan (booking) mobil di KerenTal Kita?',
+        a: 'Pilih armada yang diinginkan di halaman Mobil/Katalog, tentukan tanggal sewa & lokasi, pilih jenis sewa (Lepas Kunci / Dengan Sopir), serta add-on tambahan jika diperlukan. Setelah itu isi data penyewa dan lanjutkan ke pembayaran.',
       },
       {
-        q: 'Berapa lama proses konfirmasi pesanan?',
-        a: 'Umumnya admin memverifikasi dan mengonfirmasi pesanan dalam waktu 1x24 jam setelah bukti transfer diunggah. Untuk booking mendadak, hubungi tim kami via WhatsApp agar diprioritaskan.',
+        q: 'Apa bedanya sewa Lepas Kunci dan Dengan Sopir?',
+        a: 'Lepas Kunci berarti Anda mengendarai sendiri kendaraan (self-drive) setelah memverifikasi KTP & SIM A. Dengan Sopir berarti armada disewakan beserta pengemudi berpengalaman yang siap mengantar Anda.',
       },
       {
-        q: 'Apakah ada minimal durasi sewa?',
-        a: 'Minimal sewa adalah 1 hari (jam 08:00 – 20:00 WIB). Untuk sewa jangka panjang (mingguan/bulanan), hubungi tim kami langsung untuk penawaran harga khusus.',
+        q: 'Berapa minimal durasi sewa mobil?',
+        a: 'Minimal durasi sewa adalah 1 hari (24 jam). Untuk sewa jangka panjang (mingguan atau bulanan), Anda dapat mengonfirmasi penawaran khusus langsung dengan pihak mitra rental via Live Chat.',
+      },
+      {
+        q: 'Apakah saya bisa mengajukan perubahan jadwal (Reschedule)?',
+        a: 'Bisa! Anda dapat mengajukan Reschedule tanggal sewa secara mandiri dari halaman Detail Pesanan di akun Anda selama status booking sudah dikonfirmasi dan armada tersedia di jadwal baru.',
       },
     ],
   },
   {
-    category: 'Dokumen & Syarat',
+    category: 'Pembayaran & Konfirmasi Otomatis',
     items: [
       {
-        q: 'Dokumen apa yang perlu disiapkan?',
-        a: 'KTP dan SIM yang masih berlaku. Unggah lewat halaman profil sebelum booking pertama disetujui.',
+        q: 'Metode pembayaran apa saja yang didukung?',
+        a: 'Pembayaran didukung secara instan melalui QRIS (dapat discan seluruh e-wallet & m-banking seperti BCA, Mandiri, BRI, GoPay, OVO, ShopeePay), Virtual Account Bank, dan E-Wallet.',
       },
       {
-        q: 'Berapa usia minimal untuk menyewa?',
-        a: 'Minimal usia penyewa adalah 21 tahun dan sudah memiliki SIM A yang masih berlaku minimal 1 tahun.',
+        q: 'Apakah konfirmasi pembayaran dilakukan secara otomatis?',
+        a: 'Ya! Sistem pembayaran terhubung langsung secara otomatis melalui payment gateway. Begitu pembayaran berhasil, status transaksi langsung terkonfirmasi otomatis tanpa perlu unggah bukti transfer manual.',
       },
       {
-        q: 'Apa bedanya sewa lepas kunci dan dengan sopir?',
-        a: 'Lepas kunci berarti kamu menyetir sendiri (self-drive), kunci diserahkan langsung ke kamu. Dengan sopir berarti mobil datang bersama sopir dari pihak kami, kunci tetap dipegang sopir sepanjang masa sewa.',
+        q: 'Berapa lama batas waktu pembayaran checkout?',
+        a: 'Setiap transaksi memiliki batas waktu pembayaran (countdown timer) pada halaman invoice checkout. Jika tidak dibayar hingga batas waktu habis, pesanan akan otomatis dibatalkan.',
       },
     ],
   },
   {
-    category: 'Selama Masa Sewa',
+    category: 'Dokumen, Syarat & Verifikasi',
     items: [
       {
-        q: 'Apa yang terjadi jika terlambat mengembalikan mobil?',
-        a: 'Keterlambatan dikenakan denda per jam sesuai kebijakan yang tertera di detail pesanan. Kalau kamu tahu akan terlambat, kabari tim kami lebih dulu supaya bisa dikoordinasikan.',
+        q: 'Dokumen apa saja yang wajib disiapkan untuk menyewa?',
+        a: 'Untuk sewa Lepas Kunci, Anda wajib menyiapkan KTP asli dan SIM A yang masih berlaku. Dokumen diunggah melalui menu Profil akun Anda untuk verifikasi.',
       },
       {
-        q: 'Apakah mobil sudah termasuk asuransi?',
-        a: 'Setiap armada sudah dilindungi asuransi dasar untuk kecelakaan. Kerusakan akibat kelalaian penyewa (seperti salah bahan bakar atau kerusakan interior) tetap menjadi tanggung jawab penyewa sesuai ketentuan yang berlaku.',
+        q: 'Apakah akun saya harus diverifikasi terlebih dahulu?',
+        a: 'Ya, verifikasi dokumen KTP dan SIM bertujuan untuk keamanan bersama antara pelanggan dan mitra instansi rental.',
       },
       {
-        q: 'Apakah tersedia layanan antar-jemput?',
-        a: 'Ya, untuk area yang tercakup dalam jangkauan layanan. Biaya antar-jemput mengikuti jarak lokasi dan akan diinfokan saat proses booking.',
+        q: 'Berapa usia minimal untuk menyewa kendaraan?',
+        a: 'Minimal usia penyewa adalah 21 tahun dan memiliki SIM A aktif minimal 1 tahun untuk tipe sewa Lepas Kunci.',
       },
     ],
   },
   {
-    category: 'Pembatalan & Perubahan',
+    category: 'Pembatalan & Pengajuan Refund',
     items: [
       {
-        q: 'Bisa batalkan pesanan?',
-        a: 'Bisa, selama status pesanan masih "pending" (belum dikonfirmasi admin). Setelah dikonfirmasi, pembatalan perlu dikoordinasikan langsung dengan tim kami.',
+        q: 'Apakah saya bisa membatalkan pesanan yang sudah dibayar?',
+        a: 'Bisa. Anda dapat mengajukan pembatalan pesanan dan refund langsung melalui menu Detail Pesanan sesuai dengan syarat & ketentuan yang berlaku.',
       },
       {
-        q: 'Bisa ubah tanggal sewa setelah pesanan dikonfirmasi?',
-        a: 'Bisa, sepanjang unit yang sama masih tersedia di tanggal baru. Hubungi tim kami via WhatsApp minimal 1 hari sebelum tanggal jemput untuk perubahan jadwal.',
+        q: 'Bagaimana proses pengembalian dana (Refund)?',
+        a: 'Pengajuan refund akan ditinjau oleh pihak Admin Instansi dan pengembalian dananya diproses langsung oleh Super Admin ke rekening bank tujuan Anda.',
+      },
+    ],
+  },
+  {
+    category: 'Fitur Live Chat, Notifikasi & Ulasan',
+    items: [
+      {
+        q: 'Bagaimana cara menghubungi pihak rental saat menyewa?',
+        a: 'Setiap pesanan dilengkapi fitur Live Chat langsung di dalam aplikasi. Anda dapat berkomunikasi dengan Admin Instansi rental untuk koordinasi penjemputan atau serah terima unit.',
+      },
+      {
+        q: 'Bagaimana saya mengetahui status terbaru pesanan saya?',
+        a: 'Anda akan menerima notifikasi real-time di akun Anda (ikon Lonceng Notifikasi) untuk setiap update seperti konfirmasi pembayaran, pengingat jadwal, pesan chat baru, hingga status refund.',
+      },
+      {
+        q: 'Bagaimana cara memberikan ulasan dan rating kendaraan?',
+        a: 'Setelah status sewa Selesai, Anda dapat memberikan ulasan bintang 1–5 beserta komentar untuk unit armada dan instansi rental melalui halaman riwayat pesanan.',
+      },
+    ],
+  },
+  {
+    category: 'Kemitraan Mitra Rental (Admin Instansi)',
+    items: [
+      {
+        q: 'Bagaimana cara mendaftarkan penyedia rental saya di KerenTal Kita?',
+        a: 'SIlahkan hubungi kerental kita pada menu kontak untuk membuat kesepakatan, kemudian anda dapat mulai mengelola armada dan menerima pesanan.',
+      },
+      {
+        q: 'Bagaimana pencairan dana pendapatan bagi Mitra Instansi Rental?',
+        a: 'Pendapatan sewa bersih dari transaksi yang berhasil dapat dicairkan pada setiap hari senin yang akan ditransfer oleh Super Admin ke rekening bank instansi Anda.',
       },
     ],
   },
 ];
 
 export default function FaqPage() {
-  const [openKey, setOpenKey] = useState<string | null>('Pemesanan & Pembayaran-0');
+  const [openKey, setOpenKey] = useState<string | null>('Pemesanan & Sewa Armada-0');
   const [query, setQuery] = useState('');
   const listRef = useScrollReveal<HTMLDivElement>({ stagger: 0.07, dependencies: [query] });
   const { theme } = useTheme();

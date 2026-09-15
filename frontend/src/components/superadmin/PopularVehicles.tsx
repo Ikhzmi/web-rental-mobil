@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { Skeleton } from '../../components/Skeleton';
 
 export function PopularVehicles() {
   const { theme } = useTheme();
@@ -34,12 +35,12 @@ export function PopularVehicles() {
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex flex-col bg-transparent">
                 <div className="h-16 bg-transparent mb-1 flex items-center justify-center">
-                  <div className={`w-12 h-12 rounded-full ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                  <Skeleton className="w-12 h-12 rounded-full" />
                 </div>
                 <div className={`p-2.5 rounded-xl backdrop-blur-md border ${isDark ? 'bg-white/5 border-white/10' : 'bg-slate-100 border-slate-200'}`}>
-                  <div className={`h-3 w-3/4 rounded mb-1.5 ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
-                  <div className={`h-2 w-full rounded mb-1.5 ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
-                  <div className={`h-2.5 w-1/2 rounded ${isDark ? 'bg-white/10' : 'bg-slate-200'} animate-pulse`} />
+                  <Skeleton className="h-3 w-3/4 mb-1.5" />
+                  <Skeleton className="h-2 w-full mb-1.5" />
+                  <Skeleton className="h-2.5 w-1/2" />
                 </div>
               </div>
             ))}

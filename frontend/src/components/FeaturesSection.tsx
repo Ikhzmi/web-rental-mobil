@@ -6,6 +6,7 @@ import { ShieldCheck, Clock, MapPin, Sparkles } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '../hooks/useTheme';
 import { AmbientGlow, RouteWaypoint } from './decor/RouteMotifs';
+import { Skeleton } from './Skeleton';
 import { api } from '../lib/api';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -46,7 +47,7 @@ export default function FeaturesSection() {
   const isDark = theme === 'dark';
 
   // Fetch real stats dari backend
-  const { data: stats } = useQuery({
+  const { data: stats, isLoading: isStatsLoading } = useQuery({
     queryKey: ['public-stats'],
     queryFn: () => api.getPublicStats(),
     staleTime: 5 * 60 * 1000, // cache 5 menit
@@ -158,8 +159,14 @@ export default function FeaturesSection() {
               <div className={`text-3xl md:text-4xl font-bold tracking-tighter flex items-baseline justify-center gap-1 ${
                 isDark ? 'text-white' : 'text-zinc-900'
               }`}>
-                <span ref={(el) => { statRefs.current[i] = el; }}>0</span>
-                <span className={isDark ? 'text-zinc-400' : 'text-zinc-500'}>{stat.suffix}</span>
+                {isStatsLoading && !stats ? (
+                  <Skeleton className="h-9 w-20 rounded-xl" />
+                ) : (
+                  <>
+                    <span ref={(el) => { statRefs.current[i] = el; }}>0</span>
+                    <span className={isDark ? 'text-zinc-400' : 'text-zinc-500'}>{stat.suffix}</span>
+                  </>
+                )}
               </div>
               <p className={`text-sm mt-1 ${
                 isDark ? 'text-zinc-500' : 'text-zinc-500'

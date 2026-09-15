@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ClipboardList, Search, ChevronRight, Car, Clock, LayoutGrid, List, AlertTriangle, X, Loader2, CheckCircle } from 'lucide-react';
 import { api, type StatusBooking, type AdminBooking } from '../../lib/api';
 import { formatRupiah, formatCompactRupiah } from '../../lib/pricing';
-import { SkeletonList } from '../../components/Skeleton';
+import { Skeleton, SkeletonList, SkeletonCarGrid } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { getBookingStatusWithIcon } from '../../lib/statusConfig';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
+import { formatWibTanggalShort } from '../../lib/dates';
 
 // Status labels for status transitions and buttons
 const STATUS_LABEL: Record<StatusBooking, string> = {
@@ -27,9 +28,7 @@ const NEXT_STATUS: Record<StatusBooking, StatusBooking[]> = {
   dibatalkan: [],
 };
 
-function formatTanggal(iso: string): string {
-  return new Date(iso).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-}
+const formatTanggal = formatWibTanggalShort;
 
 function StatusBadge({ status, isDark }: { status: StatusBooking; isDark: boolean }) {
   const config = getBookingStatusWithIcon(status, isDark);
@@ -391,7 +390,7 @@ export default function AdminPesananPage() {
 
   const [filterStatus, setFilterStatus] = useState<StatusBooking | ''>(initialStatus);
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'horizontal'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'horizontal'>('horizontal');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
 
   useEffect(() => {
@@ -498,7 +497,14 @@ export default function AdminPesananPage() {
         </div>
       </motion.div>
 
-      {/* Stats Filter Tabs */}
+      {/* Stats Filter Tabs — skeleton pil saat loading agar count tidak flash "(0)" */}
+      {isLoading ? (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-9 w-[110px] rounded-xl" />
+          ))}
+        </div>
+      ) : (
       <div className="flex flex-wrap gap-2 mb-6">
         {[
           { key: '', label: 'Semua', count: allBookings.length },
@@ -525,6 +531,7 @@ export default function AdminPesananPage() {
           </button>
         ))}
       </div>
+      )}
 
       {/* Search */}
       <div className="relative mb-6">
@@ -542,9 +549,13 @@ export default function AdminPesananPage() {
         />
       </div>
 
-      {/* Booking List Container */}
+      {/* Booking List Container — skeleton mengikuti viewMode aktif */}
       {isLoading ? (
-        <SkeletonList count={6} />
+        viewMode === 'grid' ? (
+          <SkeletonCarGrid count={6} isDark={isDark} />
+        ) : (
+          <SkeletonList count={6} isDark={isDark} />
+        )
       ) : isError ? (
         <motion.div
           initial={{ opacity: 0 }}

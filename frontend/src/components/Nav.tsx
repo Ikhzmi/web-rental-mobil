@@ -29,6 +29,12 @@ export default function Nav() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { toggleChat, unreadCount } = useChat();
+  // Hooks sesi/profil WAJIB di atas early return agar urutan hooks stabil
+  // di semua render (aturan hooks React). Sebelumnya ada di bawah
+  // `if (isAdminPage) return null` sehingga jumlah hooks berubah-ubah.
+  const { session } = useSession();
+  const { profile, isAdmin } = useProfile();
+  const isSuperAdmin = (profile?.role as string) === 'super_admin';
 
   const isDark = theme === 'dark';
 
@@ -71,10 +77,6 @@ export default function Nav() {
 
   const isAdminPage = location.pathname.startsWith('/admin') || location.pathname.startsWith('/superadmin');
   if (isAdminPage) return null;
-
-  const { session } = useSession();
-  const { profile, isAdmin } = useProfile();
-  const isSuperAdmin = (profile?.role as string) === 'super_admin';
 
   return (
     <>
@@ -125,10 +127,10 @@ export default function Nav() {
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className={`p-2.5 rounded-full transition-all duration-300 ${
+            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 glass-nav-links transition-all duration-300 ${
               isDark
-                ? 'bg-white/10 hover:bg-white/15 text-white'
-                : 'bg-white/80 hover:bg-white border border-neutral-200/50 shadow-sm text-neutral-900'
+                ? 'text-white/80 hover:text-white'
+                : 'text-neutral-600 hover:text-neutral-900'
             }`}
             aria-label="Toggle theme"
           >
@@ -161,19 +163,21 @@ export default function Nav() {
             <>
               <Link
                 to="/login"
-                className={`text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'}`}
+                className={`text-sm font-medium px-4 py-2 rounded-full glass-nav-links transition-all duration-300 ${
+                  isDark
+                    ? 'text-white/80 hover:text-white'
+                    : 'text-neutral-600 hover:text-neutral-900'
+                }`}
               >
                 Masuk
               </Link>
               <Link
                 to="/daftar"
-                className={`
-                  text-sm font-semibold px-5 py-2 rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]
-                  ${isDark
+                className={`text-sm font-semibold px-5 py-2 rounded-full transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
+                  isDark
                     ? 'bg-white text-neutral-950 hover:bg-white/90 shadow-lg'
-                    : 'glass-daftar-btn-light'
-                  }
-                `}
+                    : 'bg-white text-neutral-900 shadow-lg hover:bg-white/90'
+                }`}
               >
                 Daftar
               </Link>
@@ -182,10 +186,10 @@ export default function Nav() {
             <>
               <Link
                 to="/superadmin"
-                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full transition-all ${
+                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full glass-nav-links transition-all duration-300 ${
                   isDark
-                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-sm'
-                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 shadow-sm'
+                    ? 'text-amber-300 hover:text-amber-200'
+                    : 'text-amber-900'
                 }`}
               >
                 <LayoutDashboard size={15} />
@@ -193,10 +197,10 @@ export default function Nav() {
               </Link>
               <button
                 onClick={handleLogout}
-                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full glass-nav-links transition-all duration-300 ${
                   isDark
-                    ? 'bg-white/10 hover:bg-white/15 text-white'
-                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                    ? 'text-white/80 hover:text-white'
+                    : 'text-neutral-600 hover:text-neutral-900'
                 }`}
               >
                 <LogOut size={14} />
@@ -207,10 +211,10 @@ export default function Nav() {
             <>
               <Link
                 to="/admin"
-                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full transition-all ${
+                className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full glass-nav-links transition-all duration-300 ${
                   isDark
-                    ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 shadow-sm'
-                    : 'bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 shadow-sm'
+                    ? 'text-blue-300 hover:text-blue-200'
+                    : 'text-blue-900'
                 }`}
               >
                 <LayoutDashboard size={15} />
@@ -218,10 +222,10 @@ export default function Nav() {
               </Link>
               <button
                 onClick={handleLogout}
-                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full glass-nav-links transition-all duration-300 ${
                   isDark
-                    ? 'bg-white/10 hover:bg-white/15 text-white'
-                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                    ? 'text-white/80 hover:text-white'
+                    : 'text-neutral-600 hover:text-neutral-900'
                 }`}
               >
                 <LogOut size={14} />
@@ -233,20 +237,20 @@ export default function Nav() {
               {/* Notification Bell Icon */}
               <NotificationBell align="right" />
 
-              {/* Message Icon Button - Bulat */}
+              {/* Message Icon Button */}
               <button
                 onClick={toggleChat}
-                className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 shrink-0 ${
+                className={`relative w-10 h-10 rounded-full flex items-center justify-center shrink-0 glass-nav-links transition-all duration-300 ${
                   isDark
-                    ? 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
-                    : 'bg-white hover:bg-neutral-50 border border-neutral-200 shadow-sm text-neutral-800'
+                    ? 'text-white/80 hover:text-white'
+                    : 'text-neutral-600 hover:text-neutral-900'
                 }`}
                 aria-label="Pesan / Chat"
                 title="Pesan / Chat Rental"
               >
-                <MessageSquare size={17} />
+                <MessageSquare size={18} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-neutral-900">
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-neutral-900 shadow-sm">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -254,17 +258,21 @@ export default function Nav() {
 
               <Link
                 to="/akun/profil"
-                className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'}`}
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full glass-nav-links transition-all duration-300 ${
+                  isDark
+                    ? 'text-white/80 hover:text-white'
+                    : 'text-neutral-600 hover:text-neutral-900'
+                }`}
               >
                 <User size={15} />
                 {profile?.nama ?? 'Profil Saya'}
               </Link>
               <button
                 onClick={handleLogout}
-                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full transition-colors ${
+                className={`flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-full glass-nav-links transition-all duration-300 ${
                   isDark
-                    ? 'bg-white/10 hover:bg-white/15 text-white'
-                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-700'
+                    ? 'text-white/80 hover:text-white'
+                    : 'text-neutral-600 hover:text-neutral-900'
                 }`}
               >
                 <LogOut size={14} />
@@ -278,14 +286,12 @@ export default function Nav() {
         <div className="flex items-center gap-2 md:hidden">
           <button
             onClick={toggleTheme}
-            className={`p-2 rounded-full transition-all ${
-              isDark
-                ? 'bg-white/10 hover:bg-white/15 text-white'
-                : 'bg-white/80 hover:bg-neutral-100 shadow-sm text-neutral-900'
+            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 glass-nav-links transition-all duration-300 ${
+              isDark ? 'text-white' : 'text-neutral-900'
             }`}
             aria-label="Toggle theme"
           >
-            {isDark ? <Sun size={20} className="text-yellow-400" /> : <Moon size={20} className="text-neutral-600" />}
+            {isDark ? <Sun size={18} className="text-yellow-400" /> : <Moon size={18} className="text-neutral-600" />}
           </button>
 
           {/* Mobile Notification & Message Buttons */}
@@ -294,25 +300,25 @@ export default function Nav() {
               <NotificationBell align="right" />
               <button
                 onClick={toggleChat}
-                className={`relative w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${
-                isDark
-                  ? 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
-                  : 'bg-white hover:bg-neutral-50 border border-neutral-200 shadow-sm text-neutral-800'
-              }`}
-              aria-label="Pesan / Chat"
-            >
-              <MessageSquare size={17} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
+                className={`relative w-9 h-9 rounded-full flex items-center justify-center shrink-0 glass-nav-links transition-all duration-300 ${
+                  isDark ? 'text-white/80 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'
+                }`}
+                aria-label="Pesan / Chat"
+              >
+                <MessageSquare size={17} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
             </>
           )}
 
           <button
-            className={`p-2 rounded-full ${isDark ? 'text-white' : 'text-neutral-900'}`}
+            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 glass-nav-links transition-all duration-300 ${
+              isDark ? 'text-white' : 'text-neutral-900'
+            }`}
             onClick={() => setOpen((v) => !v)}
             aria-label="Toggle menu"
           >
@@ -359,14 +365,16 @@ export default function Nav() {
                 <Link
                   to="/login"
                   onClick={() => setOpen(false)}
-                  className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:bg-white/10' : 'text-neutral-600 hover:bg-neutral-50'}`}
+                  className={`text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    isDark ? 'text-white/80 hover:bg-white/10' : 'text-neutral-600 hover:bg-neutral-50'
+                  }`}
                 >
                   Masuk
                 </Link>
                 <Link
                   to="/daftar"
                   onClick={() => setOpen(false)}
-                  className={`mt-1 text-center text-sm font-semibold px-6 py-2.5 rounded-full ${
+                  className={`mt-1 text-center text-sm font-semibold px-6 py-2.5 rounded-full transition-all ${
                     isDark
                       ? 'bg-white text-neutral-950 hover:bg-white/90'
                       : 'glass-daftar-btn-light'
@@ -403,7 +411,9 @@ export default function Nav() {
                   <Link
                     to="/akun/profil"
                     onClick={() => setOpen(false)}
-                    className={`flex items-center gap-2 text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${isDark ? 'text-white/80 hover:bg-white/10' : 'text-neutral-600 hover:bg-neutral-50'}`}
+                    className={`flex items-center gap-2 text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      isDark ? 'text-white/80 hover:bg-white/10' : 'text-neutral-600 hover:bg-neutral-50'
+                    }`}
                   >
                     <User size={16} />
                     <span>{profile?.nama ?? 'Profil Saya'}</span>
