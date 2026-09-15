@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, ApiError, type JenisAddon } from '../lib/api';
 import { estimasiHarga, formatRupiah } from '../lib/pricing';
+import { Skeleton } from '../components/Skeleton';
 import { formatRentangTanggal, isSameWibDay, toWibDayKey } from '../lib/dates';
 import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
@@ -427,9 +428,40 @@ export default function BookingPage() {
 
   if (carQuery.isLoading) {
     return (
-      <main className="min-h-screen flex items-center justify-center gap-3 transition-colors duration-500 bg-[var(--bg-primary)] pt-28 pb-20">
-        <Loader2 size={20} className={`animate-spin ${isDark ? 'text-white/60' : 'text-slate-600'}`} />
-        <span className={`text-sm font-medium ${isDark ? 'text-white/60' : 'text-slate-600'}`}>Memuat form pemesanan...</span>
+      <main className="min-h-screen pt-12 sm:pt-20 pb-28 sm:pb-20 px-3 sm:px-6 lg:px-8 transition-colors duration-500 bg-[var(--bg-primary)]">
+        <div className="relative max-w-6xl mx-auto space-y-6">
+          <div className="text-center space-y-2">
+            <Skeleton className="h-4 w-32 rounded-full mx-auto" />
+            <Skeleton className="h-10 w-64 rounded-2xl mx-auto" />
+            <Skeleton className="h-4 w-80 max-w-full rounded mx-auto" />
+          </div>
+          <Skeleton className="h-20 w-full rounded-2xl" />
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8">
+            <div className="lg:col-span-3 space-y-6">
+              <div className="rounded-3xl p-6 md:p-8 border border-white/10 space-y-4">
+                <Skeleton className="h-6 w-48 rounded-xl" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Skeleton className="h-20 rounded-xl" />
+                  <Skeleton className="h-20 rounded-xl" />
+                </div>
+              </div>
+              <div className="rounded-3xl p-6 md:p-8 border border-white/10 space-y-4">
+                <Skeleton className="h-6 w-56 rounded-xl" />
+                <Skeleton className="h-20 w-full rounded-xl" />
+                <Skeleton className="h-12 w-full rounded-xl" />
+              </div>
+            </div>
+            <div className="lg:col-span-2">
+              <div className="lg:sticky lg:top-24 rounded-3xl p-6 md:p-8 border border-white/10 space-y-3">
+                <Skeleton className="h-40 w-full rounded-2xl" />
+                <Skeleton className="h-5 w-40 rounded" />
+                <Skeleton className="h-4 w-full rounded" />
+                <Skeleton className="h-4 w-5/6 rounded" />
+                <Skeleton className="h-12 w-full rounded-2xl" />
+              </div>
+            </div>
+          </div>
+        </div>
       </main>
     );
   }

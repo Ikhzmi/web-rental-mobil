@@ -305,11 +305,13 @@ export default function FleetConfigurator() {
               {KATEGORI_LABEL[activeCar.kategori]}
             </p>
           </div>
-          <div className="text-right">
-            <p className={`text-2xl sm:text-3xl font-medium ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+          {/* Harga — font disamakan dengan merk (playfair italic) dan
+              disejajarkan dengan baris nama via offset atas */}
+          <div className="text-right pt-6 md:pt-8 shrink-0">
+            <p className={`text-2xl sm:text-3xl md:text-4xl font-playfair italic ${isDark ? 'text-white' : 'text-zinc-900'}`}>
               {formatRupiah(Number(activeCar.hargaPerHari))}
             </p>
-            <p className={`text-xs ${isDark ? 'text-white/40' : 'text-zinc-500'}`}>per day</p>
+            <p className={`text-xs ${isDark ? 'text-white/40' : 'text-zinc-500'}`}>per hari</p>
           </div>
         </div>
 

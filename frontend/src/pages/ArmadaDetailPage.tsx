@@ -171,6 +171,12 @@ export default function ArmadaDetailPage() {
     void import('./BookingPage');
   }, []);
 
+  // Preload ulang saat user mengarah/menyentuh CTA — mencakup kasus
+  // preload awal terlewat (mis. klik < 1 detik setelah halaman dibuka).
+  const preloadBookingChunk = () => {
+    void import('./BookingPage');
+  };
+
   const handleSewaSekarang = () => {
     try {
       let from = range?.from;
@@ -829,6 +835,9 @@ export default function ArmadaDetailPage() {
 
                 <button
                   onClick={handleSewaSekarang}
+                  onMouseEnter={preloadBookingChunk}
+                  onFocus={preloadBookingChunk}
+                  onTouchStart={preloadBookingChunk}
                   disabled={car.status !== 'tersedia'}
                   className={`w-full py-3.5 px-4 rounded-2xl font-bold text-sm transition-all shadow-lg flex items-center justify-center gap-2 ${
                     car.status === 'tersedia'
@@ -884,6 +893,9 @@ export default function ArmadaDetailPage() {
           </button>
           <button
             onClick={handleSewaSekarang}
+            onMouseEnter={preloadBookingChunk}
+            onFocus={preloadBookingChunk}
+            onTouchStart={preloadBookingChunk}
             disabled={car.status !== 'tersedia'}
             className={`py-2.5 px-5 rounded-xl font-bold text-xs transition-all shadow-md ${
               car.status === 'tersedia'

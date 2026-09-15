@@ -15,16 +15,17 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { useProfile } from './hooks/useProfile';
 
 /**
- * Preload chunk halaman lazy saat browser idle supaya klik PERTAMA ke
- * halaman berat (detail pesanan, booking, konfirmasi) tidak menampilkan
- * layar loading lama / hitam. Chunk customer selalu dipreload; chunk
- * admin/superadmin hanya jika role cocok.
+ * Preload SEMUA chunk halaman lazy saat browser idle supaya pindah menu
+ * TIDAK menampilkan fallback loading (yang bentuknya skeleton dashboard
+ * sehingga terlihat seperti "skeleton dashboard terikut" di menu lain).
+ * Chunk customer selalu dipreload; chunk admin/superadmin sesuai role.
  */
 function RoutePreloader() {
   const { profile } = useProfile();
 
   useEffect(() => {
     const preload = () => {
+      // Customer
       void import('./pages/BookingPage');
       void import('./pages/BookingConfirmationPage');
       void import('./pages/PaymentPage');
@@ -32,12 +33,25 @@ function RoutePreloader() {
       void import('./pages/AkunPesananDetailPage');
       void import('./pages/AkunProfilPage');
       if (profile?.role === 'admin' || profile?.role === 'super_admin') {
+        void import('./pages/admin/AdminDashboardPage');
+        void import('./pages/admin/AdminArmadaPage');
+        void import('./pages/admin/AdminPesananPage');
         void import('./pages/admin/AdminPesananDetailPage');
         void import('./pages/admin/AdminMessagesPage');
+        void import('./pages/admin/AdminCalendarPage');
+        void import('./pages/admin/AdminSettingsPage');
+        void import('./pages/admin/AdminKeuanganPage');
       }
       if (profile?.role === 'super_admin') {
+        void import('./pages/superadmin/SuperAdminDashboardPage');
         void import('./pages/superadmin/SuperAdminBookingsPage');
+        void import('./pages/superadmin/SuperAdminTransactionsPage');
         void import('./pages/superadmin/SuperAdminRefundsPage');
+        void import('./pages/superadmin/SuperAdminReportsPage');
+        void import('./pages/superadmin/SuperAdminInstansiPage');
+        void import('./pages/superadmin/SuperAdminAdminPage');
+        void import('./pages/superadmin/SuperAdminApprovalPage');
+        void import('./pages/superadmin/SuperAdminPencairanPage');
       }
     };
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {

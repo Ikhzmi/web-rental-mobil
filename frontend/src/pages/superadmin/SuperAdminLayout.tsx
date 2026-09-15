@@ -23,7 +23,6 @@ import { supabase } from '../../lib/supabase';
 
 import { useTheme } from '../../hooks/useTheme';
 import { NotificationBell } from '../../components/NotificationBell';
-import { Skeleton, SkeletonStatsGrid, SkeletonChart, SkeletonPanel } from '../../components/Skeleton';
 import bgDashboardDark from '../../assets/bg-dashboard-dark.jpg';
 import bgDashboardLight from '../../assets/bg-dashboard-light.png';
 
@@ -42,30 +41,27 @@ const navItemsSlide2 = [
   { to: '/superadmin/reports', label: 'Laporan', icon: BarChart3, end: false },
 ];
 
-// Loading fallback untuk transisi code-split antar halaman.
-// Memakai Skeleton terpusat (shimmer + glass bening di kedua mode).
+// Fallback transisi antar menu — SENGAJA netral (bukan skeleton
+// dashboard) agar tidak terlihat seperti "skeleton dashboard terikut"
+// saat pindah ke menu lain. Dengan RoutePreloader, fallback ini hampir
+// tidak pernah tampil kecuali jaringan sangat lambat.
 function ContentFallback() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
   return (
-    <div className="space-y-6">
-      {/* Header Skeleton */}
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-64 rounded-xl" />
-        <Skeleton className="h-4 w-96 rounded-lg" />
-      </div>
-
-      {/* Metric Cards Skeleton Grid */}
-      <SkeletonStatsGrid isDark={isDark} count={4} />
-
-      {/* Main Content Area Skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <SkeletonChart isDark={isDark} />
+    <div className="min-h-[50vh] flex flex-col items-center justify-center gap-4">
+      <div className="relative w-12 h-12">
+        <div className={`absolute inset-0 rounded-2xl ${isDark ? 'bg-white/10' : 'bg-slate-900/10'} overflow-hidden`}>
+          <span className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/15" />
         </div>
-        <SkeletonPanel isDark={isDark} rows={4} />
       </div>
+      <div className={`h-2 w-40 rounded-full overflow-hidden relative ${isDark ? 'bg-white/10' : 'bg-slate-900/10'}`}>
+        <span className="animate-shimmer absolute inset-0 bg-gradient-to-r from-transparent via-[#e8702a]/70 to-transparent" />
+      </div>
+      <p className={`text-xs font-medium ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+        Memuat halaman...
+      </p>
     </div>
   );
 }
