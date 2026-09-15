@@ -29,8 +29,8 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api, type Kategori, type TipeSewa } from '../lib/api';
-import { supabase } from '../lib/supabase';
 import { useTheme } from '../hooks/useTheme';
+import { useSession } from '../hooks/useSession';
 import { useProfile } from '../hooks/useProfile';
 import { useChat } from '../context/ChatContext';
 import { sanitizeHtml } from '../lib/sanitize';
@@ -157,47 +157,54 @@ export default function ArmadaDetailPage() {
     { scope: sectionRef }
   );
 
-  const handleSewaSekarang = async () => {
-    const { data } = await supabase.auth.getSession();
+  const { session } = useSession();
 
-    let from = range?.from;
-    let to = range?.to;
+  const handleSewaSekarang = () => {
+    try {
+      let from = range?.from;
+      let to = range?.to;
 
-    // Jika user belum memilih tanggal di kalender detail armada, buat default hari ini
-    if (!from) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      from = today;
-      to = today;
-    } else if (from && !to) {
-      to = from;
+      // Jika user belum memilih tanggal di kalender detail armada, buat default hari ini
+      if (!from) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        from = today;
+        to = today;
+      } else if (from && !to) {
+        to = from;
+      }
+
+      const finalTo = to ?? from;
+      const serializedRange = {
+        from: from.toISOString(),
+        to: finalTo.toISOString(),
+      };
+
+      if (id) {
+        localStorage.setItem(`booking_range_${id}`, JSON.stringify(serializedRange));
+      }
+
+      // Use centralized session state to avoid races with onAuthStateChange
+      if (!session) {
+        const redirectPath = `/booking/${id}`;
+        navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+        return;
+      }
+
+      navigate(`/booking/${id}`, { state: { range: serializedRange } });
+    } catch (err) {
+      console.error('handleSewaSekarang error:', err);
     }
-
-    const finalTo = to ?? from;
-    const serializedRange = {
-      from: from.toISOString(),
-      to: finalTo.toISOString(),
-    };
-
-    if (id) {
-      localStorage.setItem(`booking_range_${id}`, JSON.stringify(serializedRange));
-    }
-
-    if (!data.session) {
-      navigate(`/login?redirect=/booking/${id}`);
-      return;
-    }
-    navigate(`/booking/${id}`, { state: { range: serializedRange } });
   };
 
   const handleChatRental = async () => {
     if (!car) return;
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      navigate(`/login?returnUrl=/armada/${car.id}`);
-      return;
-    }
     try {
+      if (!session) {
+        const redirectPath = `/armada/${car.id}`;
+        navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`);
+        return;
+      }
       await startChatWithRental(car);
     } catch (err) {
       console.error('Chat error:', err);
