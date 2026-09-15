@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { DayPicker, type DateRange } from 'react-day-picker';
@@ -34,6 +34,7 @@ import { useSession } from '../hooks/useSession';
 import { useProfile } from '../hooks/useProfile';
 import { useChat } from '../context/ChatContext';
 import { sanitizeHtml } from '../lib/sanitize';
+import { parseWibDate } from '../lib/dates';
 
 gsap.registerPlugin(ScrollTrigger, useGSAP);
 
@@ -120,6 +121,10 @@ export default function ArmadaDetailPage() {
     queryKey: ['car-availability', id],
     queryFn: () => api.getCarAvailability(id!),
     enabled: !!id,
+    // Ketersediaan harus selalu segar saat halaman dibuka — cache basi
+    // (staleTime global 30 dtk) membuat tanggal yang baru terbooking orang
+    // lain masih terlihat hitam padahal backend akan menolaknya.
+    staleTime: 0,
   });
 
   const reviewsQuery = useQuery({
@@ -157,7 +162,14 @@ export default function ArmadaDetailPage() {
     { scope: sectionRef }
   );
 
-  const { session } = useSession();
+  const { session, loading: sessionLoading } = useSession();
+
+  // Preload chunk halaman booking sejak awal supaya klik pertama
+  // "Sewa Sekarang" tidak menampilkan fallback loading (blackscreen)
+  // karena lazy chunk belum terunduh.
+  useEffect(() => {
+    void import('./BookingPage');
+  }, []);
 
   const handleSewaSekarang = () => {
     try {
@@ -184,7 +196,15 @@ export default function ArmadaDetailPage() {
         localStorage.setItem(`booking_range_${id}`, JSON.stringify(serializedRange));
       }
 
-      // Use centralized session state to avoid races with onAuthStateChange
+      // Use centralized session state to avoid races with onAuthStateChange.
+      // Jangan paksa redirect ke login selagi sesi masih loading — user yang
+      // sudah login akan terpental ke /login lalu balik lagi (terlihat
+      // seperti blackscreen pada klik pertama). Biarkan RequireAuth yang
+      // memutuskan setelah loading selesai.
+      if (sessionLoading) {
+        navigate(`/booking/${id}`, { state: { range: serializedRange } });
+        return;
+      }
       if (!session) {
         const redirectPath = `/booking/${id}`;
         navigate(`/login?redirect=${encodeURIComponent(redirectPath)}`);
@@ -214,15 +234,12 @@ export default function ArmadaDetailPage() {
   const car = carQuery.data;
   const bookedRanges = availabilityQuery.data ?? [];
 
-  // Helper: parse tanggal backend tanpa timezone shift.
-  // Backend mengirim ISO string UTC (e.g. "2024-01-15T00:00:00.000Z").
-  // Agar kalender tidak geser 1 hari karena WIB UTC+7, kita ekstrak
-  // bagian YYYY-MM-DD dan buat Date dari local timezone.
-  const parseLocalDate = (dateStr: string) => {
-    const datePart = dateStr.split('T')[0];
-    const [year, month, day] = datePart.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  };
+  // Helper: parse tanggal booking backend ke tanggal kalender WIB.
+  // Jadwal tersimpan 01:00–23:00 WIB; 01:00 WIB = 18:00 UTC di hari
+  // sebelumnya, jadi ambil bagian YYYY-MM-DD mentah dari ISO akan
+  // menggeser blokir merah 1 hari lebih awal (tanggal terbooking terlihat
+  // hitam tapi ditolak backend). parseWibDate memakai tanggal WIB.
+  const parseLocalDate = (dateStr: string) => parseWibDate(dateStr);
 
   // Hitung durasi dan harga sewa jika user memilih range tanggal di kalender
   const rentalCalculation = useMemo(() => {
@@ -540,7 +557,7 @@ export default function ArmadaDetailPage() {
                   </div>
                   <div className="flex items-start gap-1.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                    <span>Sewa Harian (Jam 08.00 – 20.00 WIB)</span>
+                    <span>Sewa Harian (Jam 01.00 – 23.00 WIB)</span>
                   </div>
                   <div className="flex items-start gap-1.5">
                     <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />

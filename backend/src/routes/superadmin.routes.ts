@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { Role } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireSuperAdmin } from '../middleware/verifySupabaseToken';
 import { createClient } from '@supabase/supabase-js';
@@ -1253,6 +1254,18 @@ superadminRouter.post('/disbursements', async (req, res) => {
       });
     });
 
+    if (disbursement?.instansiId) {
+      notifyInstansi(disbursement.instansiId, {
+        type: 'disbursement',
+        title: 'Pencairan Dana Diproses',
+        message: `Pencairan dana sebesar Rp ${Number(disbursement.jumlahBersih).toLocaleString('id-ID')} sedang diproses.`,
+        data: {
+          actionUrl: '/admin/saldo',
+          disbursementId: disbursement.id,
+        },
+      }).catch(() => {/* fire-and-forget */});
+    }
+
     res.status(201).json({ data: disbursement });
   } catch (error) {
     console.error('POST /api/superadmin/disbursements error:', error);
@@ -1735,17 +1748,29 @@ superadminRouter.get('/dashboard/approvals', async (_req, res) => {
  */
 superadminRouter.get('/dashboard/notifications', async (req, res) => {
   const { unreadOnly } = req.query;
+  const user = req.user!;
 
   try {
+    const baseWhere = {
+      OR: [
+        { userId: user.id },
+        { targetRole: Role.super_admin },
+      ],
+    };
+    const where = unreadOnly === 'true' ? { ...baseWhere, isRead: false } : baseWhere;
+
     const notifications = await prisma.notification.findMany({
-      where: {
-        ...(unreadOnly === 'true' && { isRead: false }),
-      },
+      where,
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
 
-    const unreadCount = await prisma.notification.count({ where: { isRead: false } });
+    const unreadCount = await prisma.notification.count({
+      where: {
+        ...baseWhere,
+        isRead: false,
+      },
+    });
 
     res.json({ data: notifications, unreadCount });
   } catch (error) {

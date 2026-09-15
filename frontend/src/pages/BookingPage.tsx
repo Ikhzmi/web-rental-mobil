@@ -480,7 +480,7 @@ export default function BookingPage() {
               <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-0.5 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>Tanggal Sewa</p>
               <p className={`text-xs sm:text-sm font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>
                 {range.from.toDateString() === range.to.toDateString() ? (
-                  <>{formatDate(range.from)} <span className="text-[11px] sm:text-xs opacity-75 font-normal">(Dimulai Jam 00:00 WIB)</span></>
+                  <>{formatDate(range.from)} <span className="text-[11px] sm:text-xs opacity-75 font-normal">(Jam 01.00 – 23.00 WIB)</span></>
                 ) : (
                   <>{formatDate(range.from)} — {formatDate(range.to)}</>
                 )}
@@ -1521,7 +1521,7 @@ export default function BookingPage() {
                 <ul className={`text-xs space-y-1.5 ${isDark ? 'text-amber-300/90' : 'text-amber-800'}`}>
                   <li className="flex items-start gap-1.5">
                     <Clock size={11} className="shrink-0 mt-0.5" />
-                    <span><strong>Jam operasional:</strong> Pengambilan & pengembalian kendaraan dimulai dari pukul <strong>00:00 WIB (24 Jam)</strong>.</span>
+                    <span><strong>Jam operasional:</strong> Pengambilan & pengembalian kendaraan <strong>Jam 01.00 – 23.00 WIB</strong>.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <ShieldCheck size={11} className="shrink-0 mt-0.5" />

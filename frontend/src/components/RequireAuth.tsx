@@ -3,8 +3,9 @@ import { useSession } from '../hooks/useSession';
 
 function GuardFallback() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col items-center justify-center gap-3 transition-colors duration-300">
+      <div className="w-8 h-8 border-2 border-slate-300 dark:border-white/20 border-t-slate-900 dark:border-t-white rounded-full animate-spin" />
+      <p className="text-xs font-medium text-slate-500 dark:text-white/50">Memeriksa sesi login...</p>
     </div>
   );
 }

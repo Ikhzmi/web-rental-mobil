@@ -13,6 +13,7 @@ import { SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
 import { compressImage, isImageFile } from '../../lib/imageCompression';
+import { parseWibDate } from '../../lib/dates';
 
 const KATEGORI_LABELS: Record<string, string> = {
   city_car: 'City Car', hatchback: 'Hatchback', suv: 'SUV', mpv: 'MPV',
@@ -548,12 +549,10 @@ function EditCarModal({ car, onClose, isDark: propIsDark }: { car: Car; onClose:
     'Libur Operasional',
   ];
 
-  // Helper: parse tanggal UTC dari backend tanpa timezone shift
-  const parseLocalDate = (dateStr: string) => {
-    const datePart = dateStr.split('T')[0];
-    const [year, month, day] = datePart.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  };
+  // Helper: parse tanggal booking backend ke tanggal kalender WIB
+  // (lihat penjelasan di lib/dates.ts — parse mentah YYYY-MM-DD dari ISO
+  // UTC menggeser blokir 1 hari lebih awal untuk jadwal 01:00 WIB).
+  const parseLocalDate = (dateStr: string) => parseWibDate(dateStr);
 
   const blockedMatchers = availabilityRanges.map((a) => ({
     from: parseLocalDate(a.tanggalMulai),

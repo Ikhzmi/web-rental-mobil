@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireAdmin } from '../middleware/verifySupabaseToken';
+import { notifyUser, notifyInstansi } from '../services/notification.service';
 
 // ==========================================
 // 1. CUSTOMER MESSAGES ROUTER (/api/messages)
@@ -327,6 +328,16 @@ customerMessagesRouter.post('/conversations/:id/messages', async (req, res) => {
       }),
     ]);
 
+    notifyInstansi(conversation.instansiId, {
+      type: 'chat',
+      title: 'Pesan Baru dari Pelanggan',
+      message: pesan.length > 50 ? `${pesan.slice(0, 50)}...` : pesan,
+      data: {
+        actionUrl: `/admin/chat?conversationId=${id}`,
+        conversationId: id,
+      },
+    }).catch(() => {/* fire-and-forget */});
+
     res.status(201).json({ data: message });
   } catch (error) {
     console.error('[customerMessages] send message error:', error);
@@ -504,7 +515,7 @@ adminMessagesRouter.post('/conversations/:id/messages', async (req, res) => {
 
     const conversation = await prisma.conversation.findUnique({
       where: { id },
-      select: { id: true, instansiId: true },
+      select: { id: true, instansiId: true, customerId: true },
     });
 
     if (!conversation) {
@@ -535,6 +546,16 @@ adminMessagesRouter.post('/conversations/:id/messages', async (req, res) => {
         },
       }),
     ]);
+
+    notifyUser(conversation.customerId, {
+      type: 'chat',
+      title: 'Pesan Baru dari Rental',
+      message: pesan.length > 50 ? `${pesan.slice(0, 50)}...` : pesan,
+      data: {
+        actionUrl: `/user/chat?conversationId=${id}`,
+        conversationId: id,
+      },
+    }).catch(() => {/* fire-and-forget */});
 
     res.status(201).json({ data: message });
   } catch (error) {

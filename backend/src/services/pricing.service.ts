@@ -14,14 +14,27 @@ export interface PriceBreakdown {
   totalHarga: number;
 }
 
+/**
+ * Konversi ke tanggal kalender WIB (UTC+7) dalam bentuk UTC-midnight key.
+ * Frontend mengirim jadwal 01:00–23:00 WIB untuk sewa 1 hari pada tanggal
+ * yang sama. Kalau durasi dihitung dengan `setHours(0,0,0,0)` memakai
+ * timezone server (UTC di production), 01:00 WIB (= 18:00 UTC hari
+ * sebelumnya) dan 23:00 WIB (= 16:00 UTC hari yang sama) jatuh di dua
+ * tanggal UTC yang berbeda → sewa 1 hari terhitung 2 hari (harga ×2).
+ * Dengan patokan kalender WIB, tanggal yang sama di WIB selalu = 1 hari.
+ */
+function toWibDayKey(d: Date): number {
+  const wibMs = d.getTime() + 7 * 3600 * 1000;
+  const w = new Date(wibMs);
+  return Date.UTC(w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate());
+}
+
 function hitungDurasiHari(tanggalMulai: Date, tanggalSelesai: Date): number {
-  const start = new Date(tanggalMulai);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(tanggalSelesai);
-  end.setHours(0, 0, 0, 0);
+  const startKey = toWibDayKey(new Date(tanggalMulai));
+  const endKey = toWibDayKey(new Date(tanggalSelesai));
 
   const msPerDay = 1000 * 60 * 60 * 24;
-  const diffDays = Math.round((end.getTime() - start.getTime()) / msPerDay) + 1;
+  const diffDays = Math.round((endKey - startKey) / msPerDay) + 1;
   return Math.max(1, diffDays);
 }
 

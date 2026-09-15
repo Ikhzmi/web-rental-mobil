@@ -86,7 +86,7 @@ bookingsRouter.post('/', async (req, res) => {
   }
   let { carId, tanggalMulai, tanggalSelesai, lokasiAmbil, lokasiKembali, addons } = parsed.data;
 
-  // Validasi: Tanggal selesai tidak boleh sebelum tanggal mulai (sewa 1 hari pada tanggal yang sama 08:00 - 20:00 WIB diperbolehkan)
+  // Validasi: Tanggal selesai tidak boleh sebelum tanggal mulai (sewa 1 hari pada tanggal yang sama 01:00 - 23:00 WIB diperbolehkan)
   if (tanggalSelesai < tanggalMulai) {
     res.status(400).json({ error: 'tanggal_selesai tidak boleh sebelum tanggal_mulai' });
     return;
@@ -482,6 +482,16 @@ bookingsRouter.post('/:id/reschedule', async (req, res) => {
       });
       return b;
     });
+
+    notifyInstansi(booking.car.instansiId, {
+      type: 'booking',
+      title: 'Permintaan Reschedule',
+      message: `Jadwal booking ${booking.car.nama} diubah ke ${tanggalMulai.toISOString().slice(0, 10)} s/d ${tanggalSelesai.toISOString().slice(0, 10)}`,
+      data: {
+        actionUrl: `/admin/pesanan/${booking.id}`,
+        bookingId: booking.id,
+      },
+    }).catch(() => {/* fire-and-forget */});
 
     res.json({ data: updated });
   } catch (err) {

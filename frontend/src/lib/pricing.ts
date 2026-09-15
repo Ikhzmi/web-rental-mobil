@@ -1,4 +1,5 @@
 import type { Car, JenisAddon } from './api';
+import { toWibDayKey } from './dates';
 
 export interface AddonEstimate {
   jenis: JenisAddon;
@@ -38,13 +39,8 @@ export function estimasiHarga(
 ): PriceEstimate | null {
   if (!tanggalMulai || !tanggalSelesai) return null;
 
-  const start = new Date(tanggalMulai);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(tanggalSelesai);
-  end.setHours(0, 0, 0, 0);
-
   const msPerDay = 1000 * 60 * 60 * 24;
-  const diffDays = Math.round((end.getTime() - start.getTime()) / msPerDay) + 1;
+  const diffDays = Math.round((toWibDayKey(new Date(tanggalSelesai)) - toWibDayKey(new Date(tanggalMulai))) / msPerDay) + 1;
   const durasiHari = Math.max(1, diffDays);
 
   const hargaPerHari = Number(car.hargaPerHari);

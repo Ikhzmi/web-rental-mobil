@@ -993,20 +993,20 @@ export const api = {
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
     const query = qs.toString();
-    return apiFetch<NotificationResponse>(`/api/notifications${query ? `?${query}` : ''}`);
+    return apiFetchFull<NotificationResponse>(`/api/notifications${query ? `?${query}` : ''}`);
   },
   getNotificationUnreadCount: () =>
     apiFetch<{ unreadCount: number }>('/api/notifications/unread-count'),
   markNotificationRead: (id: string) =>
     apiFetch<Notification>(`/api/notifications/${id}/read`, { method: 'PATCH' }),
   markAllNotificationsRead: () =>
-    apiFetch<{ success: boolean; count: number }>('/api/notifications/mark-all-read', { method: 'POST' }),
+    apiFetchFull<{ success: boolean; count: number }>('/api/notifications/mark-all-read', { method: 'POST' }),
   deleteNotification: (id: string) =>
-    apiFetch<{ success: boolean }>(`/api/notifications/${id}`, { method: 'DELETE' }),
+    apiFetchFull<{ success: boolean }>(`/api/notifications/${id}`, { method: 'DELETE' }),
 
   // ── Admin: Notifications (Kompatibilitas) ──
   getAdminNotifications: (unreadOnly?: boolean) =>
-    apiFetch<NotificationResponse>(`/api/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
+    apiFetchFull<NotificationResponse>(`/api/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
   markAdminNotificationRead: (id: string) =>
     apiFetch<Notification>(`/api/notifications/${id}/read`, { method: 'PATCH' }),
 
@@ -1130,7 +1130,7 @@ export const api = {
   getSuperAdminActivities: () => apiFetch<DashboardActivity[]>('/api/superadmin/dashboard/activities'),
   getSuperAdminApprovals: () => apiFetch<ApprovalSummary>('/api/superadmin/dashboard/approvals'),
   getSuperAdminNotifications: (unreadOnly?: boolean) =>
-    apiFetch<NotificationResponse>(`/api/superadmin/dashboard/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
+    apiFetchFull<NotificationResponse>(`/api/superadmin/dashboard/notifications${unreadOnly ? '?unreadOnly=true' : ''}`),
   getTopCompanies: () => apiFetch<TopCompany[]>('/api/superadmin/dashboard/top-companies'),
   getPopularVehicles: () => apiFetch<PopularVehicle[]>('/api/superadmin/dashboard/popular-vehicles'),
   getCommissionStats: () => apiFetch<CommissionStats>('/api/superadmin/dashboard/commission'),
