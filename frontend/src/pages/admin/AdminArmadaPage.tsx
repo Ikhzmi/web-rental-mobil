@@ -1549,10 +1549,14 @@ function CarCard({ car, onEdit, onDelete, onManageAvailability, isDark }: {
       transition={{ duration: 0.25 }}
       className={`group relative flex flex-col rounded-3xl overflow-hidden transition-all duration-500 ${
         isDark
-          ? 'sa-glass-dark border border-white/15 hover:border-white/30 hover:shadow-black/70 shadow-2xl'
-          : 'sa-glass-light border border-white/80 hover:border-white hover:shadow-slate-300/60 shadow-xl'
+          ? 'sa-glass-dark border border-white/25 hover:border-white/40 shadow-2xl shadow-black/60'
+          : 'sa-glass-light border border-white hover:border-white shadow-xl shadow-slate-900/10'
       }`}
     >
+      {/* Garis highlight atas agar kartu tegas sejak awal (tanpa perlu hover) */}
+      <div className={`pointer-events-none absolute top-0 left-4 right-4 h-px z-20 bg-gradient-to-r from-transparent to-transparent ${
+        isDark ? 'via-white/25' : 'via-white'
+      }`} />
       {/* Dynamic Specular Sheen Sweep on Hover */}
       <div className="absolute -inset-full top-0 bg-gradient-to-r from-transparent via-white/20 dark:via-white/10 to-transparent transform -skew-x-12 group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none z-30" />
 
@@ -1589,7 +1593,7 @@ function CarCard({ car, onEdit, onDelete, onManageAvailability, isDark }: {
         )}
 
         {/* Top Vignette Gradient for Badges Legibility */}
-        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/25 via-transparent to-transparent opacity-90" />
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/25 via-transparent to-transparent opacity-60" />
 
         {/* Floating Badges (Top Bar) */}
         <div className="absolute top-3 inset-x-3 flex items-start justify-between gap-2 z-10">

@@ -170,14 +170,14 @@ export default function Testimonials() {
                   }`}
                 />
 
-                {/* Stars */}
+                {/* Stars — selalu amber terisi sesuai rating */}
                 <div className="flex items-center gap-1 mb-6">
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
                       size={16}
                       className={i < active.rating
-                        ? 'fill-zinc-400 text-zinc-400'
+                        ? 'fill-amber-400 text-amber-400'
                         : isDark ? 'text-zinc-700' : 'text-zinc-300'
                       }
                     />

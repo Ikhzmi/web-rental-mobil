@@ -16,8 +16,10 @@ export default function InactiveNoticeBanner() {
 
   return (
     <>
-      {/* Sticky Notice Banner at top */}
-      <div className={`w-full py-3 px-4 flex items-center justify-between gap-3 border-b z-50 sticky top-0 shadow-md ${
+      {/* Banner statis di atas konten (bukan sticky): versi sticky top-0
+          selalu tergelincir ke BAWAH header fixed sehingga pesannya
+          ketutup header. Modal di bawah tetap memastikan pesan terlihat. */}
+      <div className={`w-full py-3 px-4 flex items-center justify-between gap-3 border-b shadow-md ${
         isDark
           ? 'bg-rose-950/90 border-rose-800/50 text-rose-200 backdrop-blur-xl'
           : 'bg-rose-50 border-rose-200 text-rose-800 backdrop-blur-md'

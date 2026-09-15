@@ -669,6 +669,7 @@ export interface SuperAdminReportsData {
   fleet: {
     total: number;
     available: number;
+    takedown: number;
     utilization: number;
   };
   rental: {
@@ -989,8 +990,8 @@ export const api = {
       totalLokasi: number;
       totalBookingSelesai: number;
       totalReview: number;
-      avgRating?: number;
-      kepuasanPersen: number;
+      avgRating?: number | null;
+      kepuasanPersen: number | null;
     }>('/api/public/stats'),
 
   getMyProfile: () => apiFetch<Profile>('/api/profiles/me'),

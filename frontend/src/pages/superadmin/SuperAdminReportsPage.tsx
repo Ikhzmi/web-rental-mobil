@@ -221,6 +221,12 @@ export default function SuperAdminReportsPage() {
             </tr>
             <tr>
               <td>Armada</td>
+              <td>Ditakedown / Ditolak</td>
+              <td class="number">${data.fleet.takedown} unit</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Armada</td>
               <td>Tingkat Utilisasi Armada</td>
               <td class="number">${data.fleet.utilization}%</td>
               <td style="text-align: center;">-</td>
@@ -515,6 +521,12 @@ export default function SuperAdminReportsPage() {
                     <span className={isDark ? 'text-white/60' : 'text-slate-600'}>Armada Tersedia:</span>
                     <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       {data.fleet.available} unit
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs py-1">
+                    <span className={isDark ? 'text-white/60' : 'text-slate-600'}>Ditakedown / Ditolak:</span>
+                    <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      {data.fleet.takedown} unit
                     </span>
                   </div>
                 </div>

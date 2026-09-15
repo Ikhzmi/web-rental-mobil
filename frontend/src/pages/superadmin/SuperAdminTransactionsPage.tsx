@@ -259,29 +259,28 @@ export default function SuperAdminTransactionsPage() {
         Menampilkan {totalItems > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}-{Math.min(currentPage * itemsPerPage, totalItems)} dari {totalItems} transaksi
       </p>
 
-      {/* List — struktur skeleton menyerupai baris transaksi asli */}
+      {/* List — struktur & jarak skeleton menyerupai baris transaksi asli */}
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div
               key={i}
-              className={`p-4 rounded-xl border flex items-center justify-between gap-4 ${
-                isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white/40 border-white/60'
-              }`}
+              className={`rounded-2xl p-4 ${getGlassCardClass(isDark)}`}
             >
-              <div className="flex items-center gap-3">
-                <Skeleton className="w-10 h-10 rounded-xl" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-4 w-48 rounded" />
-                  <Skeleton className="h-3 w-32 rounded" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <Skeleton className="h-4 w-48 max-w-full rounded" />
+                    <Skeleton className="h-3 w-40 max-w-full rounded" />
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right space-y-1.5">
-                  <Skeleton className="h-4 w-28 rounded" />
-                  <Skeleton className="h-3 w-20 rounded ml-auto" />
+                <div className="flex items-center gap-4 sm:gap-3">
+                  <div className="text-right space-y-1.5">
+                    <Skeleton className="h-4 w-28 rounded" />
+                    <Skeleton className="h-5 w-20 rounded-full ml-auto" />
+                  </div>
                 </div>
-                <Skeleton className="w-20 h-6 rounded-full" />
               </div>
             </div>
           ))}

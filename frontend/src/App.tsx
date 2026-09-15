@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -25,12 +25,8 @@ function RoutePreloader() {
 
   useEffect(() => {
     const preload = () => {
-      // Customer
-      void import('./pages/BookingPage');
-      void import('./pages/BookingConfirmationPage');
-      void import('./pages/PaymentPage');
+      // Halaman booking flow sudah eager (lihat import statis di atas).
       void import('./pages/AkunPesananPage');
-      void import('./pages/AkunPesananDetailPage');
       void import('./pages/AkunProfilPage');
       if (profile?.role === 'admin' || profile?.role === 'super_admin') {
         void import('./pages/admin/AdminDashboardPage');
@@ -65,6 +61,29 @@ function RoutePreloader() {
   return null;
 }
 
+/**
+ * Kembali ke ATAS setiap pindah halaman — berlaku untuk SEMUA layout
+ * (publik, admin, superadmin). Tanpa ini, navigasi via navbar dari posisi
+ * paling bawah membuat halaman baru tetap di bawah. Scroll restoration
+ * browser juga dimatikan agar konsisten.
+ */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    try {
+      if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+      }
+    } catch {
+      // abaikan — tidak didukung browser lama
+    }
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 import HomePage from './pages/HomePage';
 import ArmadaPage from './pages/ArmadaPage';
 import ArmadaDetailPage from './pages/ArmadaDetailPage';
@@ -76,12 +95,17 @@ import DaftarPage from './pages/DaftarPage';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 
+// Halaman alur booking & pesanan dimuat EAGER (bukan lazy): ini jalur uang
+// yang wajib terbuka instan saat klik pertama — lazy chunk di sinilah
+// sumber blackscreen berulang (fallback gelap saat chunk dingin).
+// Ukuran tambahan ke bundle utama sebanding dengan hilangnya keluhan.
+import BookingPage from './pages/BookingPage';
+import BookingConfirmationPage from './pages/BookingConfirmationPage';
+import PaymentPage from './pages/PaymentPage';
+import AkunPesananDetailPage from './pages/AkunPesananDetailPage';
+
 // Lazy loaded public pages
-const BookingPage = lazy(() => import('./pages/BookingPage'));
-const BookingConfirmationPage = lazy(() => import('./pages/BookingConfirmationPage'));
-const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 const AkunPesananPage = lazy(() => import('./pages/AkunPesananPage'));
-const AkunPesananDetailPage = lazy(() => import('./pages/AkunPesananDetailPage'));
 const AkunProfilPage = lazy(() => import('./pages/AkunProfilPage'));
 const SyaratPage = lazy(() => import('./pages/SyaratPage'));
 const PrivasiPage = lazy(() => import('./pages/PrivasiPage'));
@@ -134,6 +158,7 @@ function App() {
         <ThemeProvider>
           <ToastProvider>
             <BrowserRouter>
+              <ScrollToTop />
               <SessionExpiredProvider>
                 <ChatProvider>
                   <RoutePreloader />

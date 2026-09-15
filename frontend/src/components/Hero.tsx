@@ -360,11 +360,11 @@ export default function Hero() {
         </p>
       </div>
 
-      {/* Bottom-right glass card — di mobile dinaikkan agar tidak
-          tenggelam di bawah dan tidak tertutup hint scroll */}
+      {/* Bottom-right glass card — di mobile jauh di atas bawah agar
+          selalu terlihat tanpa perlu scroll */}
       <div
         ref={rightCopyRef}
-        className={`absolute bottom-24 sm:bottom-14 left-5 right-5 sm:left-auto sm:right-10 md:right-14 max-w-full sm:max-w-[280px] flex flex-col items-start gap-4 sm:gap-5 z-50 rounded-2xl p-5 glass-hero-card ${
+        className={`absolute bottom-32 sm:bottom-14 left-5 right-5 sm:left-auto sm:right-10 md:right-14 max-w-full sm:max-w-[280px] flex flex-col items-start gap-4 sm:gap-5 z-50 rounded-2xl p-5 glass-hero-card ${
           isDark ? '' : ''
         }`}
       >
@@ -385,7 +385,7 @@ export default function Hero() {
       {/* Scroll hint — di mobile di bawah card CTA yang dinaikkan */}
       <div
         ref={scrollHintRef}
-        className={`absolute z-50 flex flex-col items-center gap-1 -translate-x-1/2 pointer-events-none bottom-6 sm:bottom-4 left-1/2 ${isDark ? 'text-white/50' : 'text-slate-400'}`}
+        className={`absolute z-50 flex flex-col items-center gap-1 -translate-x-1/2 pointer-events-none bottom-10 sm:bottom-4 left-1/2 ${isDark ? 'text-white/50' : 'text-slate-400'}`}
       >
         <span className="text-[10px] uppercase tracking-[0.2em]">Scroll</span>
         <ChevronDown size={16} />

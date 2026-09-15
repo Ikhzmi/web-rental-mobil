@@ -53,12 +53,13 @@ export default function FeaturesSection() {
     staleTime: 5 * 60 * 1000, // cache 5 menit
   });
 
-  // Stats yang ditampilkan: real data dengan fallback angka yang masuk akal
-  const STATS = [
+  // Stats yang ditampilkan: real data dengan fallback angka yang masuk akal.
+  // Kepuasan null bila belum ada ulasan → tampil "-" (bukan 0%/100% palsu).
+  const STATS: { value: number | null; suffix: string; label: string }[] = [
     { value: stats?.totalArmada ?? 0, suffix: '+', label: 'Armada' },
     { value: 24, suffix: '/7', label: 'Dukungan' },
     { value: stats?.totalLokasi ?? 0, suffix: '+', label: 'Lokasi' },
-    { value: stats?.kepuasanPersen ?? 0, suffix: '%', label: 'Kepuasan' },
+    { value: stats ? stats.kepuasanPersen : null, suffix: '%', label: 'Kepuasan' },
   ];
 
   useGSAP(
@@ -67,6 +68,7 @@ export default function FeaturesSection() {
       statRefs.current.forEach((el, i) => {
         if (!el) return;
         const target = STATS[i].value;
+        if (target === null) return; // stat "-" tidak dianimasikan
         const counter = { val: 0 };
         gsap.to(counter, {
           val: target,
@@ -161,6 +163,12 @@ export default function FeaturesSection() {
               }`}>
                 {isStatsLoading && !stats ? (
                   <Skeleton className="h-9 w-20 rounded-xl" />
+                ) : stat.value === null ? (
+                  /* Belum ada ulasan: tampil "-" polos + caption jujur */
+                  <div className="flex flex-col items-center">
+                    <span className={`text-3xl md:text-4xl font-bold tracking-tighter ${isDark ? 'text-white/40' : 'text-zinc-400'}`}>-</span>
+                    <span className={`text-[10px] mt-1 ${isDark ? 'text-white/30' : 'text-zinc-400'}`}>Belum ada ulasan</span>
+                  </div>
                 ) : (
                   <>
                     <span ref={(el) => { statRefs.current[i] = el; }}>0</span>

@@ -33,15 +33,18 @@ publicStatsRouter.get('/', asyncHandler(async (_req, res) => {
     prisma.review.count(),
   ]);
 
-  // Hitung rata-rata rating dari semua ulasan
+  // Hitung rata-rata rating dari semua ulasan.
+  // Jujur saat kosong: null (frontend menampilkan "-"), BUKAN 100%/5.0
+  // palsu — persentase harus sesuai rating nyata.
   const avgRatingResult = await prisma.review.aggregate({
     _avg: { rating: true },
   });
 
-  const avgRating = avgRatingResult._avg.rating ?? 5;
+  const hasReview = totalReview > 0 && avgRatingResult._avg.rating !== null;
+  const avgRating = hasReview ? Number((avgRatingResult._avg.rating as number).toFixed(1)) : null;
 
   // Kepuasan dalam persen (skala 1-5 → persentase)
-  const kepuasanPersen = Math.round((avgRating / 5) * 100);
+  const kepuasanPersen = hasReview ? Math.round(((avgRatingResult._avg.rating as number) / 5) * 100) : null;
 
   res.json({
     data: {
@@ -49,8 +52,8 @@ publicStatsRouter.get('/', asyncHandler(async (_req, res) => {
       totalLokasi,
       totalBookingSelesai,
       totalReview,
-      avgRating: Number(avgRating.toFixed(1)),
-      kepuasanPersen: totalReview > 0 ? kepuasanPersen : 100,
+      avgRating,
+      kepuasanPersen,
     },
   });
 }));

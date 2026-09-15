@@ -80,7 +80,20 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const topPos = rect.bottom + 10;
-      
+
+      // Layar sempit (mobile): popover selalu di TENGAH layar agar tidak
+      // menempel ke tepi / meluber. Di desktop ikut align seperti biasa.
+      if (window.innerWidth < 480) {
+        setPopoverStyle({
+          position: 'fixed',
+          top: topPos,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 100,
+        });
+        return;
+      }
+
       if (align === 'right') {
         setPopoverStyle({
           position: 'fixed',

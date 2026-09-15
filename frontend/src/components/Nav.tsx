@@ -125,13 +125,13 @@ export default function Nav() {
 
         {/* Right Side Actions - NOT in glass pill */}
         <div className="hidden md:flex items-center gap-3 ml-auto">
-          {/* Theme Toggle */}
+          {/* Theme Toggle — gaya disamakan dengan ikon notifikasi di sebelahnya */}
           <button
             onClick={toggleTheme}
-            className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 glass-nav-links transition-all duration-300 ${
+            className={`p-2 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${
               isDark
-                ? 'text-white/80 hover:text-white'
-                : 'text-neutral-600 hover:text-neutral-900'
+                ? 'glass-daftar-btn-dark text-white/70 hover:text-white'
+                : 'glass-daftar-btn-light text-slate-500 hover:text-slate-900'
             }`}
             aria-label="Toggle theme"
           >
@@ -287,8 +287,10 @@ export default function Nav() {
         <div className="flex items-center gap-2 md:hidden">
           <button
             onClick={toggleTheme}
-            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 glass-nav-links transition-all duration-300 ${
-              isDark ? 'text-white' : 'text-neutral-900'
+            className={`p-2 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${
+              isDark
+                ? 'glass-daftar-btn-dark text-white/70 hover:text-white'
+                : 'glass-daftar-btn-light text-slate-500 hover:text-slate-900'
             }`}
             aria-label="Toggle theme"
           >

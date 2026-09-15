@@ -1963,10 +1963,14 @@ superadminRouter.get('/dashboard/top-companies', async (_req, res) => {
  */
 superadminRouter.get('/dashboard/popular-vehicles', async (_req, res) => {
   try {
+    // SENGAJA tanpa filter status operasional: peringkat harus selalu
+    // dimulai dari penyewaan terbanyak, apa pun statusnya saat ini
+    // (mobil terlaris yang sedang maintenance TETAP peringkat 1, dengan
+    // penanda available=false). Filter `tersedia` sebelumnya membuat
+    // peringkat 1 hilang dari daftar.
     const vehicles = await prisma.car.findMany({
       where: {
         statusApproval: 'disetujui',
-        status: 'tersedia',
       },
       include: {
         images: { take: 1, orderBy: { urutan: 'asc' } },
@@ -2800,6 +2804,7 @@ superadminRouter.get('/reports', async (req, res) => {
       newUsers,
       totalCars,
       availableCars,
+      takedownCars,
       totalInstansi,
       activeInstansi,
       bookingsInPeriod,
@@ -2821,9 +2826,13 @@ superadminRouter.get('/reports', async (req, res) => {
       prisma.profile.count({ where: { role: 'customer' } }),
       prisma.profile.count({ where: { role: 'customer', createdAt: { gte: dari } } }),
 
-      // Cars stats
-      prisma.car.count(),
-      prisma.car.count({ where: { status: 'tersedia' } }),
+      // Cars stats — HANYA armada disetujui (published) agar rekonsiliasi
+      // dengan halaman approval (publis + takedown = total). Sebelumnya
+      // status 'tersedia' apa pun dihitung sehingga 5 unit DITOLAK yang
+      // berstatus tersedia ikut menjadi "Armada Tersedia".
+      prisma.car.count({ where: { statusApproval: 'disetujui' } }),
+      prisma.car.count({ where: { statusApproval: 'disetujui', status: 'tersedia' } }),
+      prisma.car.count({ where: { statusApproval: 'ditolak' } }),
 
       // Instansi stats
       prisma.instansi.count(),
@@ -2938,6 +2947,7 @@ superadminRouter.get('/reports', async (req, res) => {
       fleet: {
         total: totalCars,
         available: availableCars,
+        takedown: takedownCars,
         utilization: Math.round(utilizationRate),
       },
       rental: {
