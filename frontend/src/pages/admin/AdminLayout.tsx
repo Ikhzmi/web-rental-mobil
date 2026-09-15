@@ -106,7 +106,8 @@ export default function AdminLayout() {
   }, [lastScrollY]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // scope 'local' — perangkat lain tetap login (multi-device)
+    await supabase.auth.signOut({ scope: 'local' });
     navigate('/');
   };
 
@@ -117,19 +118,20 @@ export default function AdminLayout() {
   const borderClass = isDark ? 'border-white/10' : 'border-slate-200/60';
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)]">
+    <div className="min-h-screen bg-[var(--bg-primary)] overflow-x-clip">
       {/* Fixed Background — GPU-promoted agar menetap menutupi seluruh
           viewport walau scroll cepat di mobile (tanpa background-attachment:
           fixed yang patah di browser mobile) */}
       <div
         aria-hidden
-        className="fixed inset-0"
+        className="fixed inset-0 pointer-events-none"
         style={{
           backgroundImage: `url(${isDark ? bgDashboardDark : bgDashboardLight})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
           transform: 'translate3d(0,0,0)',
+          WebkitTransform: 'translate3d(0,0,0)',
         }}
       />
 

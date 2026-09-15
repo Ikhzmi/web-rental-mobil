@@ -4,6 +4,7 @@ import { verifySupabaseToken } from '../middleware/verifySupabaseToken';
 import { notifySuperAdmins } from '../services/notification.service';
 import { logAdminActivity } from '../services/activity.service';
 import { komisiUntukBooking, nettUntukBooking } from '../services/commission.service';
+import { endOfWibMonth, startOfWibDay, startOfWibMonth, wibDate, wibDay, wibDayKey, wibHour, wibMonth, wibYear } from '../lib/wib';
 
 // Schema untuk pendaftaran instansi baru (public)
 import { z } from 'zod';
@@ -312,13 +313,13 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
   const instansiId = req.instansiScope!.instansiId;
 
   try {
+    // SEMUA batas memakai kalender WIB (bukan timezone server) — lihat lib/wib.ts
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    const sevenDaysAgo = new Date(startOfToday);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // termasuk hari ini = 7 hari
+    const startOfToday = startOfWibDay(now);
+    const startOfThisMonth = startOfWibMonth(now, 0);
+    const startOfLastMonth = startOfWibMonth(now, -1);
+    const endOfLastMonth = endOfWibMonth(now, -1);
+    const sevenDaysAgo = new Date(startOfToday.getTime() - 6 * 24 * 3600 * 1000); // termasuk hari ini = 7 hari
 
     // Ambil rate komisi instansi (LIVE — hanya fallback & proyeksi;
     // histori memakai snapshot per booking)
@@ -395,7 +396,8 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
     );
 
     // --- Sparkline 7 hari terakhir (tetap untuk visual graph) ---
-    const dayKey = (d: Date) => d.toISOString().split('T')[0];
+    // Kunci hari memakai WIB, bukan tanggal UTC.
+    const dayKey = (d: Date) => wibDayKey(d);
 
     const revenueByDay: Record<string, number> = {};
     const activeBookingCountByDay: Record<string, number> = {};
@@ -417,8 +419,8 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
     const sparklineSaldoTertunda: number[] = [];
 
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(startOfToday);
-      d.setDate(d.getDate() - i);
+      // Aritmetika ms murni (zona-agnostik); kunci hari via WIB di bawah.
+      const d = new Date(startOfToday.getTime() - i * 24 * 3600 * 1000);
       const key = dayKey(d);
 
       sparklinePendapatan.push(revenueByDay[key] ?? 0);
@@ -429,8 +431,8 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
       // (sebelumnya memakai rumus derived dari activeBookingCount).
       sparklineArmadaTersedia.push(availableCars);
 
-      const dayEnd = new Date(d);
-      dayEnd.setHours(23, 59, 59, 999);
+      // Akhir hari WIB (bukan setHours server-local)
+      const dayEnd = new Date(d.getTime() + 24 * 3600 * 1000 - 1);
       const pendingUpToDayNett = completedPendingBookings
         .filter(b => new Date(b.updatedAt || b.createdAt) <= dayEnd)
         .reduce((sum, b) => sum + nettUntukBooking(b.totalHarga, b.komisiPersenSnapshot, instansiId, liveRateMap), 0);
@@ -472,16 +474,18 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
   const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
   try {
+    // SEMUA batas & bucket memakai kalender WIB (lib/wib.ts)
     const now = new Date();
+    const todayStart = startOfWibDay(now);
     let rangeStart: Date;
     if (period === 'today') {
-      rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      rangeStart = todayStart;
     } else if (period === '7days') {
-      rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      rangeStart = new Date(todayStart.getTime() - 6 * 24 * 3600 * 1000);
     } else if (period === 'month') {
-      rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      rangeStart = startOfWibMonth(now, 0);
     } else {
-      rangeStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+      rangeStart = startOfWibMonth(now, -11);
     }
 
     const instansi = await prisma.instansi.findUnique({
@@ -507,51 +511,54 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
       nettUntukBooking(b.totalHarga as number, b.komisiPersenSnapshot as number | null, instansiId, liveRateMap);
 
     if (period === 'today') {
-      // Bucket per 4 jam
+      // Bucket per 4 jam (jam WIB)
       labels = Array.from({ length: 6 }, (_, i) => `${String(i * 4).padStart(2, '0')}:00`);
       values = new Array(6).fill(0);
       for (const b of bookings) {
-        const hour = new Date(b.createdAt).getHours();
+        const hour = wibHour(new Date(b.createdAt));
         values[Math.floor(hour / 4)] += getNett(b);
       }
     } else if (period === '7days') {
       const days: string[] = [];
       const keys: string[] = [];
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-        days.push(DAYS_ID[d.getDay()]);
-        keys.push(d.toISOString().split('T')[0]);
+        const d = new Date(todayStart.getTime() - i * 24 * 3600 * 1000);
+        days.push(DAYS_ID[wibDay(d)]);
+        keys.push(wibDayKey(d));
       }
       labels = days;
       values = new Array(7).fill(0);
       for (const b of bookings) {
-        const key = new Date(b.createdAt).toISOString().split('T')[0];
+        const key = wibDayKey(new Date(b.createdAt));
         const idx = keys.indexOf(key);
         if (idx !== -1) values[idx] += getNett(b);
       }
     } else if (period === 'month') {
-      const weeksInMonth = Math.ceil(
-        (new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) / 7
-      );
+      // Label minggu dihitung dari tanggal WIB agar konsisten
+      const wNow = new Date(now.getTime() + 7 * 3600 * 1000);
+      const daysInWibMonth = new Date(Date.UTC(wNow.getUTCFullYear(), wNow.getUTCMonth() + 1, 0)).getUTCDate();
+      const weeksInMonth = Math.ceil(daysInWibMonth / 7);
       labels = Array.from({ length: weeksInMonth }, (_, i) => `Minggu ${i + 1}`);
       values = new Array(weeksInMonth).fill(0);
       for (const b of bookings) {
-        const dayOfMonth = new Date(b.createdAt).getDate();
+        const dayOfMonth = wibDate(new Date(b.createdAt));
         const weekIdx = Math.min(Math.floor((dayOfMonth - 1) / 7), weeksInMonth - 1);
         values[weekIdx] += getNett(b);
       }
     } else {
-      // year — 12 bulan terakhir
+      // year — 12 bulan terakhir (bulan WIB)
       const monthKeys: string[] = [];
+      const wNow = new Date(now.getTime() + 7 * 3600 * 1000);
       for (let i = 11; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        labels.push(MONTHS_ID[d.getMonth()]);
-        monthKeys.push(`${d.getFullYear()}-${d.getMonth()}`);
+        const mDate = new Date(Date.UTC(wNow.getUTCFullYear(), wNow.getUTCMonth() - i, 1));
+        const mIdx = mDate.getUTCMonth();
+        labels.push(MONTHS_ID[mIdx]);
+        monthKeys.push(`${mDate.getUTCFullYear()}-${mIdx}`);
       }
       values = new Array(12).fill(0);
       for (const b of bookings) {
         const d = new Date(b.createdAt);
-        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        const key = `${wibYear(d)}-${wibMonth(d)}`;
         const idx = monthKeys.indexOf(key);
         if (idx !== -1) values[idx] += getNett(b);
       }

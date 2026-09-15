@@ -445,8 +445,14 @@ export default function AkunPesananDetailPage() {
   const rescheduleMutation = useMutation({
     mutationFn: () => {
       if (!rescheduleRange?.from || !rescheduleRange?.to) throw new Error('Pilih tanggal baru terlebih dahulu');
-      const fmt = (d: Date) => d.toISOString().slice(0, 10);
-      return api.rescheduleBooking(id!, fmt(rescheduleRange.from), fmt(rescheduleRange.to));
+      // Samakan dengan create booking: 01.00–23.00 WIB. JANGAN kirim
+      // tanggal saja (toISOString date-only = 00:00 UTC = 07:00 WIB)
+      // karena info jam hilang dan jendela overlap jadi titik nol.
+      const s = new Date(rescheduleRange.from);
+      s.setHours(1, 0, 0, 0);
+      const e = new Date(rescheduleRange.to);
+      e.setHours(23, 0, 0, 0);
+      return api.rescheduleBooking(id!, s.toISOString(), e.toISOString());
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-booking', id] });

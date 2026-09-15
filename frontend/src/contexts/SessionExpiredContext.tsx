@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
+import { checkAndRefreshToken, startSessionHeartbeat } from '../lib/sessionManager';
 import SessionExpiredPopup from '../components/SessionExpiredPopup';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -26,8 +27,19 @@ export function SessionExpiredProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Handle session expiration — show popup, clear activity timestamp, then sign out
+  // Handle session expiration — TAPI verifikasi dulu ke Supabase:
+  // sinyal expired palsu (race refresh antar tab, 401 sesaat) TIDAK BOLEH
+  // memaksa logout. Sign out lokal hanya bila sesi benar-benar tidak ada.
+  // Multi-device aman: scope 'local' tidak mengganggu perangkat lain.
   const handleExpiration = useCallback(async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        return;
+      }
+    } catch {
+      // Gagal membaca sesi (mis. storage error) — lanjut ke alur expired
+    }
     setIsExpired(true);
     localStorage.removeItem(LAST_ACTIVITY_KEY);
     try {
@@ -98,6 +110,28 @@ export function SessionExpiredProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', handleVisibilityChange);
     };
   }, [recordActivity]);
+
+  // Heartbeat keep-alive: selagi tab terlihat, segarkan token proaktif
+  // tiap 10 menit supaya sesi tidak pernah kedaluwarsa saat dipakai.
+  useEffect(() => {
+    return startSessionHeartbeat();
+  }, []);
+
+  // Saat tab kembali terlihat/fokus (mis. setelah lama ditinggal), langsung
+  // cek & refresh token — mencegah 401 pertama setelah idle panjang.
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void checkAndRefreshToken();
+      }
+    };
+    window.addEventListener('focus', handleVisible);
+    document.addEventListener('visibilitychange', handleVisible);
+    return () => {
+      window.removeEventListener('focus', handleVisible);
+      document.removeEventListener('visibilitychange', handleVisible);
+    };
+  }, []);
 
   // Listen for SESSION_EXPIRED_EVENT dispatched by api.ts saat token kedaluwarsa & gagal refresh
   useEffect(() => {

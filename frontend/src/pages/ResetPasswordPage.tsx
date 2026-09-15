@@ -78,6 +78,8 @@ export default function ResetPasswordPage() {
     // Sesi recovery sementara ini sengaja diputus setelah password diganti,
     // supaya user login ulang secara normal pakai password barunya —
     // mengonfirmasi password barunya benar-benar tersimpan.
+    // SENGAJA global (semua perangkat ikut keluar): standar keamanan
+    // setelah password diganti — pengguna login ulang per perangkat.
     await supabase.auth.signOut();
     setTimeout(() => navigate('/login?reset=true', { replace: true }), 1500);
   };

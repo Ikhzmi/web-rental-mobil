@@ -789,15 +789,24 @@ async function refreshSessionToken(): Promise<string | null> {
     return refreshPromise;
   }
 
+  // Retry hingga 3x dengan backoff: gangguan jaringan sesaat TIDAK BOLEH
+  // langsung dianggap sesi berakhir (penyebab popup "sesi berakhir" palsu).
   refreshPromise = (async () => {
     try {
-      const { data, error } = await supabase.auth.refreshSession();
-      if (error || !data.session) {
-        return null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const { data, error } = await supabase.auth.refreshSession();
+          if (!error && data.session) {
+            lastRefreshSuccess = Date.now();
+            return data.session.access_token;
+          }
+        } catch {
+          // Gangguan jaringan — coba lagi di bawah
+        }
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+        }
       }
-      lastRefreshSuccess = Date.now();
-      return data.session.access_token;
-    } catch {
       return null;
     } finally {
       refreshPromise = null;
@@ -805,6 +814,20 @@ async function refreshSessionToken(): Promise<string | null> {
   })();
 
   return refreshPromise;
+}
+
+/**
+ * Verifikasi akhir sebelum menyatakan sesi berakhir: kembalikan token dari
+ * sesi yang masih tersimpan bila ada. Dipakai setelah refresh gagal agar
+ * false-positive 401 (race propagasi token Supabase) tidak memaksa logout.
+ */
+async function getStoredToken(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // Proactive refresh: cek expiry sebelum request agar user aktif tidak kena 401 dadakan
@@ -850,9 +873,11 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
 
-  // Jika dapat 401 dan sebelumnya memiliki token (pengguna login), coba silent refresh token & retry
+  // Jika dapat 401 dan sebelumnya memiliki token (pengguna login), coba silent refresh token & retry.
+  // Bila refresh gagal, JANGAN langsung vonis expired: cek sesi tersimpan
+  // dulu — token hasil refresh paralel/tab lain sering kali sudah ada.
   if (res.status === 401 && token) {
-    const newToken = await refreshSessionToken();
+    const newToken = (await refreshSessionToken()) ?? (await getStoredToken());
     if (newToken) {
       token = newToken;
       res = await fetch(`${API_URL}${path}`, {
@@ -877,12 +902,16 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    // Handle 401 - jika token gagal di-refresh dan sesi memang kedaluwarsa
+    // Handle 401 — nyatakan sesi berakhir HANYA bila tidak ada sesi sama
+    // sekali di storage. Selama sesi masih ada, ini gangguan sesaat:
+    // lempar error biasa (bisa retry) tanpa popup/logout paksa.
     if (res.status === 401) {
-      if (token) {
+      const stillHasSession = (await getStoredToken()) !== null;
+      if (!stillHasSession) {
         dispatchSessionExpired();
+        throw new ApiError('Sesi berakhir. Silakan login kembali.', 401);
       }
-      throw new ApiError('Sesi berakhir. Silakan login kembali.', 401);
+      throw new ApiError('Koneksi sesi terganggu. Silakan coba lagi.', 401);
     }
     throw new ApiError(body?.error ?? `Request gagal (${res.status})`, res.status);
   }
@@ -907,7 +936,7 @@ async function apiFetchFull<T>(path: string, init?: RequestInit): Promise<T> {
 
   // Jika dapat 401 dan sebelumnya memiliki token (pengguna login), coba silent refresh token & retry
   if (res.status === 401 && token) {
-    const newToken = await refreshSessionToken();
+    const newToken = (await refreshSessionToken()) ?? (await getStoredToken());
     if (newToken) {
       token = newToken;
       res = await fetch(`${API_URL}${path}`, {
@@ -927,10 +956,12 @@ async function apiFetchFull<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     if (res.status === 401) {
-      if (token) {
+      const stillHasSession = (await getStoredToken()) !== null;
+      if (!stillHasSession) {
         dispatchSessionExpired();
+        throw new ApiError('Sesi berakhir. Silakan login kembali.', 401);
       }
-      throw new ApiError('Sesi berakhir. Silakan login kembali.', 401);
+      throw new ApiError('Koneksi sesi terganggu. Silakan coba lagi.', 401);
     }
     throw new ApiError(body?.error ?? `Request gagal (${res.status})`, res.status);
   }

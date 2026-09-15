@@ -70,7 +70,8 @@ export default function Nav() {
   const isActive = (to: string) => (to === '/' ? location.pathname === '/' : location.pathname.startsWith(to));
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // scope 'local': hanya perangkat ini yang keluar — perangkat lain tetap login (multi-device)
+    await supabase.auth.signOut({ scope: 'local' });
     setOpen(false);
     navigate('/');
   };

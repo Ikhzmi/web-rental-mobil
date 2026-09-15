@@ -151,8 +151,10 @@ export default function AdminMessagesPage() {
         </p>
       </div>
 
-      {/* Main Split-Box Chat Panel — Liquid Glass */}
-      <div className={`h-[calc(100vh-14rem)] min-h-[550px] rounded-3xl border flex overflow-hidden transition-all ${
+      {/* Main Split-Box Chat Panel — Liquid Glass.
+          Tinggi memakai dvh agar stabil saat address bar mobile muncul/
+          hilang; min-h direndahkan di HP supaya tidak overflow. */}
+      <div className={`h-[calc(100dvh-13rem)] min-h-[480px] sm:min-h-[550px] rounded-3xl border flex overflow-hidden transition-all ${
         isDark
           ? 'sa-glass-dark border-white/15 text-white shadow-2xl shadow-black/80'
           : 'sa-glass-light border-white/80 text-slate-900 shadow-xl shadow-slate-900/10'
@@ -321,20 +323,21 @@ export default function AdminMessagesPage() {
                     {activeConversation.customer?.nama?.charAt(0).toUpperCase() ?? 'U'}
                   </div>
 
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h3 className="font-bold text-sm truncate">
                       {activeConversation.customer?.nama ?? 'Pelanggan'}
                     </h3>
-                    <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-white/50">
+                    {/* Kontak bertumpuk di HP agar tidak overflow horizontal */}
+                    <div className="flex flex-col gap-0.5 text-xs text-slate-500 dark:text-white/50 sm:flex-row sm:items-center sm:gap-3">
                       {activeConversation.customer?.email && (
                         <span className="flex items-center gap-1 truncate">
-                          <Mail size={12} />
-                          {activeConversation.customer.email}
+                          <Mail size={12} className="shrink-0" />
+                          <span className="truncate">{activeConversation.customer.email}</span>
                         </span>
                       )}
                       {activeConversation.customer?.noHp && (
                         <span className="flex items-center gap-1 shrink-0">
-                          <Phone size={12} />
+                          <Phone size={12} className="shrink-0" />
                           {activeConversation.customer.noHp}
                         </span>
                       )}
@@ -351,11 +354,12 @@ export default function AdminMessagesPage() {
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all"
+                    title="Hubungi via WhatsApp"
+                    className="shrink-0 inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 transition-all"
                   >
                     <Phone size={13} />
-                    <span>Hubungi WA</span>
-                    <ExternalLink size={11} />
+                    <span className="hidden sm:inline">Hubungi WA</span>
+                    <ExternalLink size={11} className="hidden sm:inline" />
                   </a>
                 )}
               </div>
@@ -391,11 +395,12 @@ export default function AdminMessagesPage() {
                     href={`/armada/${activeConversation.car.id}`}
                     target="_blank"
                     rel="noreferrer"
+                    title="Lihat Unit"
                     className={`shrink-0 text-xs font-medium underline flex items-center gap-1 ${
                       isDark ? 'text-white/70 hover:text-white' : 'text-slate-700 hover:text-slate-900'
                     }`}
                   >
-                    <span>Lihat Unit</span>
+                    <span className="hidden sm:inline">Lihat Unit</span>
                     <ExternalLink size={12} />
                   </a>
                 </div>
@@ -407,7 +412,7 @@ export default function AdminMessagesPage() {
                   <div className="space-y-3.5 p-2">
                     {Array.from({ length: 3 }).map((_, i) => (
                       <div key={i} className={`flex items-start gap-3 ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
-                        <div className={`max-w-[70%] rounded-2xl space-y-1.5 ${
+                        <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl space-y-1.5 ${
                           isDark ? 'border border-white/10 p-0' : 'border border-white/60 p-0'
                         }`}>
                           <Skeleton className="h-3 w-36 rounded" />
@@ -463,7 +468,7 @@ export default function AdminMessagesPage() {
 
                         {/* Liquid Glass Message Bubble */}
                         <div
-                          className={`max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                          className={`max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
                             isAdminMsg
                               ? 'bg-gradient-to-tr from-orange-600 to-amber-600 text-white rounded-br-xs shadow-md shadow-orange-600/20'
                               : isDark

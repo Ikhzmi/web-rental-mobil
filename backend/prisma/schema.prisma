@@ -275,8 +275,10 @@ model Booking {
   id             String        @id @default(uuid()) @db.Uuid
   userId         String        @map("user_id") @db.Uuid
   carId          String        @map("car_id") @db.Uuid
-  tanggalMulai   DateTime      @map("tanggal_mulai") @db.Date
-  tanggalSelesai DateTime      @map("tanggal_selesai") @db.Date
+  /// Timestamp penuh 01.00–23.00 WIB (bukan DATE): jam dipakai untuk
+  /// jendela overlap, display dashboard, dan harga. Lihat 008.
+  tanggalMulai   DateTime      @map("tanggal_mulai")
+  tanggalSelesai DateTime      @map("tanggal_selesai")
   lokasiAmbil    String        @map("lokasi_ambil")
   lokasiKembali  String        @map("lokasi_kembali")
   hargaDasar     Decimal       @map("harga_dasar") @db.Decimal(12, 2)

@@ -58,7 +58,8 @@ export default function AdminSettingsPage() {
   });
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // scope 'local' — perangkat lain tetap login (multi-device)
+    await supabase.auth.signOut({ scope: 'local' });
     navigate('/');
   };
 

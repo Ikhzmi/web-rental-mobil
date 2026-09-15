@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Role } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { komisiUntukBooking } from '../services/commission.service';
+import { endOfWibMonth, startOfWibDay, startOfWibMonth, wibDayKey } from '../lib/wib';
 import { verifySupabaseToken, requireSuperAdmin } from '../middleware/verifySupabaseToken';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../lib/supabaseAdmin';
@@ -170,9 +171,10 @@ superadminRouter.get('/dashboard', async (_req, res) => {
 superadminRouter.get('/dashboard/trends', async (_req, res) => {
   try {
     const now = new Date();
-    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    // Batas bulan memakai WIB (lib/wib.ts), bukan timezone server.
+    const startOfThisMonth = startOfWibMonth(now, 0);
+    const startOfLastMonth = startOfWibMonth(now, -1);
+    const endOfLastMonth = endOfWibMonth(now, -1);
     // Jendela 8 hari terakhir untuk sparkline harian (data nyata)
     const startOfWindow = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
 
@@ -288,13 +290,13 @@ superadminRouter.get('/dashboard/trends', async (_req, res) => {
 
     // Sparkline harian 8 titik TERAKHIR dari data nyata (bukan acak):
     // jumlah baru per hari untuk instansi/users/armada, dan komisi per hari
-    // untuk komisi. Titik yang sepi memang 0 — jujur, tidak difabrikasi.
+    // untuk komisi. Kunci hari memakai WIB. Titik yang sepi memang 0.
+    const todayStart = startOfWibDay(now);
     const dayKeys: string[] = [];
     for (let i = 7; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      dayKeys.push(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+      dayKeys.push(wibDayKey(new Date(todayStart.getTime() - i * 24 * 3600 * 1000)));
     }
-    const dayKeyOf = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const dayKeyOf = (d: Date) => wibDayKey(d);
     const bucketCount = (rows: { createdAt: Date }[]): number[] =>
       dayKeys.map((k) => rows.filter((r) => dayKeyOf(new Date(r.createdAt)) === k).length);
     const bucketCommission = (rows: { createdAt: Date; totalHarga: { toString(): string }; komisiPersenSnapshot: { toString(): string } | null; car: { instansiId: string } }[]): number[] =>

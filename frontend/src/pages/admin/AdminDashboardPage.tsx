@@ -1423,7 +1423,9 @@ export default function AdminDashboardPage() {
         <StatCard
           label="Armada Tersedia"
           value={data.mobilTersedia}
-          change={trends?.trendArmadaTersedia}
+          // Tanpa badge tren: ini snapshot posisi saat ini, bukan metrik
+          // bulanan — badge "+0% vs bulan lalu" menyesatkan.
+          change={undefined}
           sparklineData={trends?.sparklineArmadaTersedia}
           caption={`dari ${data.totalMobil} unit total`}
           index={2}

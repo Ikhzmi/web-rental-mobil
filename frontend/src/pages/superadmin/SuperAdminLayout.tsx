@@ -132,7 +132,8 @@ export default function SuperAdminLayout() {
   }, [lastScrollY]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // scope 'local' — perangkat lain tetap login (multi-device)
+    await supabase.auth.signOut({ scope: 'local' });
     navigate('/');
   };
 
@@ -144,7 +145,7 @@ export default function SuperAdminLayout() {
 
   return (
     <div
-      className="min-h-screen bg-[var(--bg-primary)] transition-colors duration-300"
+      className="min-h-screen bg-[var(--bg-primary)] overflow-x-clip transition-colors duration-300"
     >
       {/* Fixed Background — GPU-promoted agar menetap menutupi seluruh
           viewport walau scroll cepat di mobile. Jangan pakai
@@ -152,13 +153,14 @@ export default function SuperAdminLayout() {
           background terpotong saat scroll cepat). */}
       <div
         aria-hidden
-        className="fixed inset-0"
+        className="fixed inset-0 pointer-events-none"
         style={{
           backgroundImage: `url(${isDark ? bgDashboardDark : bgDashboardLight})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
           transform: 'translate3d(0,0,0)',
+          WebkitTransform: 'translate3d(0,0,0)',
         }}
       />
       <div className="relative" style={{ zIndex: 1 }}>      {/* Desktop Glassmorphic Sidebar - Rounded corners, below header */}
