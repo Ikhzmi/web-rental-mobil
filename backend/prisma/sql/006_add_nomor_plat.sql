@@ -7,4 +7,4 @@
 ALTER TABLE cars
   ADD COLUMN IF NOT EXISTS nomor_plat TEXT;
 
-COMMENT ON COLUMN cars.nomor_plat IS 'Nomor polisi kendaraan, e.g. B 1234 XYZ. Nullable untuk kompatibilitas data lama.';
+COMMENT ON COLUMN cars.nomor_plat IS 'Nomor polisi kendaraan, e.g. BK 1234 XYZ. Nullable untuk kompatibilitas data lama.';

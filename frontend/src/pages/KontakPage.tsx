@@ -10,12 +10,11 @@ import { BUSINESS_EMAIL, BUSINESS_PHONE_DISPLAY, buildWhatsAppLink } from '../li
 const WHATSAPP_MESSAGE = 'Halo KerenTal Kita, saya ingin bertanya soal sewa mobil.';
 const EMAIL = BUSINESS_EMAIL;
 const PHONE_DISPLAY = BUSINESS_PHONE_DISPLAY;
-const ADDRESS = 'Jl. Contoh Raya No. 1, Jakarta';
+const ADDRESS = 'Desa Lengau Seprang Dusun 3, Kecamatan Tanjung Morawa, Kabupaten Deli Serdang, Sumatera Utara';
 
 const OPERATING_HOURS = [
-  { day: 'Senin – Jumat', hours: '08.00 – 20.00' },
-  { day: 'Sabtu – Minggu', hours: '09.00 – 18.00' },
-  { day: 'Hari Libur Nasional', hours: 'Tetap buka (jam terbatas)' },
+  { day: 'Senin – Minggu (24/7)', hours: '24 Jam Nonstop' },
+  { day: 'Layanan Pengaduan & Bantuan', hours: '24 Jam (Siap Melayani)' },
 ];
 
 const waLink = buildWhatsAppLink(WHATSAPP_MESSAGE);

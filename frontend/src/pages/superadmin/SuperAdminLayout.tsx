@@ -17,6 +17,7 @@ import {
   ClipboardList,
   Receipt,
   BarChart3,
+  RotateCcw,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -34,6 +35,7 @@ const navItems = [
 
 const navItemsSlide2 = [
   { to: '/superadmin/transactions', label: 'Transaksi', icon: Receipt, end: false },
+  { to: '/superadmin/refunds', label: 'Refund', icon: RotateCcw, end: false },
   { to: '/superadmin/pencairan', label: 'Pencairan', icon: Wallet, end: false },
   { to: '/superadmin/admin', label: 'Akun', icon: Users, end: false },
   { to: '/superadmin/reports', label: 'Laporan', icon: BarChart3, end: false },

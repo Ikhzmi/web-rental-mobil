@@ -188,7 +188,7 @@ export default function AdminCalendarPage() {
             <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Tidak ada jadwal di tanggal ini.</p>
           ) : (
             <AnimatePresence mode="popLayout">
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {selectedList.map((b) => {
                   const isStart = toKey(new Date(b.tanggalMulai)) === selectedDay;
                   const statusCfg = getBookingStatusWithIcon(b.status, isDark);
@@ -197,32 +197,70 @@ export default function AdminCalendarPage() {
                       key={`${b.id}-${isStart ? 'start' : 'end'}`}
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`p-3 rounded-xl ${isDark ? 'bg-white/[0.04]' : 'bg-slate-50'}`}
+                      className={`p-3.5 rounded-2xl border transition-all ${
+                        isStart
+                          ? 'border-l-4 border-l-emerald-500'
+                          : 'border-l-4 border-l-amber-500'
+                      } ${
+                        isDark
+                          ? 'bg-white/[0.04] border-t-white/10 border-r-white/10 border-b-white/10'
+                          : 'bg-white border-t-slate-200 border-r-slate-200 border-b-slate-200 shadow-sm'
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                      {/* Event Type Badge & Status */}
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <div className={`px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1.5 border ${
+                          isStart
+                            ? isDark
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            : isDark
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              : 'bg-amber-100 text-amber-800 border-amber-300'
+                        }`}>
                           {isStart ? (
-                            <LogIn size={13} className="text-emerald-400 shrink-0" />
+                            <>
+                              <LogIn size={13} className="shrink-0" />
+                              <span>PENGAMBILAN</span>
+                            </>
                           ) : (
-                            <LogOutIcon size={13} className="text-amber-400 shrink-0" />
+                            <>
+                              <LogOutIcon size={13} className="shrink-0" />
+                              <span>PENGEMBALIAN</span>
+                            </>
                           )}
-                          <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                            {b.car?.nama ?? '-'}
-                          </p>
                         </div>
+
                         <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${statusCfg.bg}`}>
                           {statusCfg.label}
                         </span>
                       </div>
-                      <p className={`text-xs mt-1 ml-5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                        {b.profile?.nama ?? '-'} · {isStart ? 'Diambil' : 'Dikembalikan'} hari ini
-                      </p>
-                      <Link
-                        to={`/admin/pesanan/${b.id}`}
-                        className={`inline-flex items-center gap-1 text-xs mt-2 ml-5 font-medium ${isDark ? 'text-white/60 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
-                      >
-                        <Car size={11} /> Lihat detail
-                      </Link>
+
+                      {/* Car & Customer Info */}
+                      <div className="space-y-1">
+                        <p className={`text-sm font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                          {b.car?.nama ?? '-'}
+                        </p>
+                        <p className={`text-xs ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
+                          Penyewa: <strong className={isDark ? 'text-white' : 'text-slate-900'}>{b.profile?.nama ?? '-'}</strong>
+                        </p>
+                        <p className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+                          Periode: {new Date(b.tanggalMulai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} — {new Date(b.tanggalSelesai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+
+                      {/* Detail Link */}
+                      <div className={`mt-3 pt-2 border-t ${isDark ? 'border-white/5' : 'border-slate-100'}`}>
+                        <Link
+                          to={`/admin/pesanan/${b.id}`}
+                          className={`inline-flex items-center gap-1.5 text-xs font-semibold transition-colors ${
+                            isDark ? 'text-amber-400 hover:text-amber-300' : 'text-amber-700 hover:text-amber-800'
+                          }`}
+                        >
+                          <Car size={13} />
+                          <span>Lihat Detail Pesanan</span>
+                        </Link>
+                      </div>
                     </motion.div>
                   );
                 })}

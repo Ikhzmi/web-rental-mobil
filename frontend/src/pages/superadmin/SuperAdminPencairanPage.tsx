@@ -437,12 +437,12 @@ export default function SuperAdminPencairanPage() {
       >
         <div className="p-5 flex items-center justify-between">
           <div>
-            <p className={`text-sm mb-1 ${isDark ? 'text-white/60' : 'text-[#8B7355]/70'}`}>Total Kotor</p>
+            <p className={`text-xs font-medium mb-1 ${isDark ? 'text-white/60' : 'text-[#8B7355]/70'}`}>Total Dana Kotor Pencairan</p>
             <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{formatRupiah(stats.totalKotor)}</p>
           </div>
           <div className={`w-px h-12 ${isDark ? 'bg-white/10' : 'bg-[#D4CFC7]/30'}`} />
           <div className="text-right">
-            <p className={`text-sm mb-1 ${isDark ? 'text-white/60' : 'text-[#8B7355]/70'}`}>Total Komisi</p>
+            <p className={`text-xs font-medium mb-1 ${isDark ? 'text-white/60' : 'text-[#8B7355]/70'}`}>Total Komisi Platform Termasuk</p>
             <p className={`text-2xl font-bold ${isDark ? 'text-[#f5ebe0]' : 'text-[#6b5545]'}`}>{formatRupiah(stats.totalKomisi)}</p>
           </div>
         </div>

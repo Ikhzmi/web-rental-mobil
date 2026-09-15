@@ -263,10 +263,10 @@ function ApprovalCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
-      className={`group rounded-3xl overflow-hidden transition-all duration-300 border ${
+      className={`group rounded-3xl overflow-hidden transition-all duration-300 border ${getGlassCardClass(isDark)} ${
         isDark
-          ? 'bg-zinc-900/60 border-white/10 hover:border-white/20 shadow-xl shadow-black/40'
-          : 'bg-white/80 border-slate-200/80 hover:border-slate-300 shadow-xl shadow-slate-900/5'
+          ? 'border-white/10 hover:border-white/20 shadow-xl shadow-black/40'
+          : 'border-slate-200/80 hover:border-slate-300 shadow-xl shadow-slate-900/5'
       }`}
     >
       <div className="flex flex-col lg:flex-row">
@@ -596,10 +596,10 @@ function PublishedCarCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04, duration: 0.3 }}
-      className={`group rounded-3xl overflow-hidden transition-all duration-300 border ${
+      className={`group rounded-3xl overflow-hidden transition-all duration-300 border ${getGlassCardClass(isDark)} ${
         isDark
-          ? 'bg-zinc-900/60 border-white/10 hover:border-white/20 shadow-xl shadow-black/40'
-          : 'bg-white/80 border-slate-200/80 hover:border-slate-300 shadow-xl shadow-slate-900/5'
+          ? 'border-white/10 hover:border-white/20 shadow-xl shadow-black/40'
+          : 'border-slate-200/80 hover:border-slate-300 shadow-xl shadow-slate-900/5'
       }`}
     >
       <div className="flex flex-col lg:flex-row">
@@ -839,10 +839,10 @@ function TakedownCarCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04, duration: 0.3 }}
-      className={`group rounded-3xl overflow-hidden transition-all duration-300 border ${
+      className={`group rounded-3xl overflow-hidden transition-all duration-300 border ${getGlassCardClass(isDark)} ${
         isDark
-          ? 'bg-rose-950/10 border-rose-500/20 hover:border-rose-500/30 shadow-xl shadow-black/40'
-          : 'bg-rose-50/40 border-rose-200 hover:border-rose-300 shadow-xl shadow-slate-900/5'
+          ? 'border-rose-500/20 hover:border-rose-500/30 shadow-xl shadow-black/40'
+          : 'border-rose-200 hover:border-rose-300 shadow-xl shadow-slate-900/5'
       }`}
     >
       <div className="flex flex-col lg:flex-row">

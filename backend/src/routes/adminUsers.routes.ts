@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireAdmin } from '../middleware/verifySupabaseToken';
 import { supabaseAdmin } from '../lib/supabaseAdmin';
+import { logAdminActivity } from '../services/activity.service';
 
 export const adminUsersRouter = Router();
 export const adminDokumenRouter = Router();
@@ -16,6 +17,82 @@ const listUsersSchema = z.object({
   cari: z.string().trim().optional(),
 });
 
+/** POST /api/admin/users/create-admin — Admin menambahkan admin baru untuk instansinya sendiri */
+const createAdminUserSchema = z.object({
+  email: z.string().email('Email tidak valid'),
+  password: z.string().min(8, 'Password minimal 8 karakter'),
+  nama: z.string().min(1, 'Nama wajib diisi'),
+  noHp: z.string().min(1, 'No HP wajib diisi'),
+});
+
+/** POST /api/admin/users/create-admin — Admin menambahkan admin baru untuk instansinya sendiri */
+adminUsersRouter.post('/create-admin', async (req, res) => {
+  const instansiId = req.user?.instansiId;
+  if (!instansiId) {
+    res.status(403).json({ error: 'Instansi tidak ditemukan untuk admin ini' });
+    return;
+  }
+
+  const parsed = createAdminUserSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
+    return;
+  }
+
+  const { email, password, nama, noHp } = parsed.data;
+
+  const existing = await prisma.profile.findUnique({ where: { email } });
+  if (existing) {
+    res.status(400).json({ error: 'Email sudah terdaftar' });
+    return;
+  }
+
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { nama, role: 'admin' },
+  });
+
+  if (authError || !authData.user) {
+    res.status(400).json({ error: authError?.message || 'Gagal membuat akun auth' });
+    return;
+  }
+
+  const profile = await prisma.profile.upsert({
+    where: { id: authData.user.id },
+    create: {
+      id: authData.user.id,
+      email,
+      nama,
+      noHp,
+      role: 'admin',
+      instansiId,
+      aktif: true,
+    },
+    update: {
+      email,
+      nama,
+      noHp,
+      role: 'admin',
+      instansiId,
+      aktif: true,
+    },
+  });
+
+  // Catat log aktivitas admin
+  void logAdminActivity({
+    instansiId,
+    userId: req.user!.id,
+    action: 'create_admin',
+    title: 'Admin Baru Ditambahkan',
+    description: `${(req.user as any)?.nama || req.user?.email || 'Admin'} menambahkan admin baru: ${nama} (${email})`,
+    metadata: { newAdminId: profile.id, email },
+  });
+
+  res.status(201).json({ data: profile });
+});
+
 /** GET /api/admin/users — F12 dengan pagination. */
 adminUsersRouter.get('/', async (req, res) => {
   const parsed = listUsersSchema.safeParse(req.query);
@@ -25,71 +102,6 @@ adminUsersRouter.get('/', async (req, res) => {
   }
   const { page, limit, cari } = parsed.data;
   const skip = (page - 1) * limit;
-
-  const createAdminUserSchema = z.object({
-    email: z.string().email('Email tidak valid'),
-    password: z.string().min(8, 'Password minimal 8 karakter'),
-    nama: z.string().min(1, 'Nama wajib diisi'),
-    noHp: z.string().min(1, 'No HP wajib diisi'),
-  });
-
-  /** POST /api/admin/users/create-admin — Admin menambahkan admin baru untuk instansinya sendiri */
-  adminUsersRouter.post('/create-admin', async (req, res) => {
-    const instansiId = req.user?.instansiId;
-    if (!instansiId) {
-      res.status(403).json({ error: 'Instansi tidak ditemukan untuk admin ini' });
-      return;
-    }
-
-    const parsed = createAdminUserSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
-      return;
-    }
-
-    const { email, password, nama, noHp } = parsed.data;
-
-    const existing = await prisma.profile.findUnique({ where: { email } });
-    if (existing) {
-      res.status(400).json({ error: 'Email sudah terdaftar' });
-      return;
-    }
-
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { nama, role: 'admin' },
-    });
-
-    if (authError || !authData.user) {
-      res.status(400).json({ error: authError?.message || 'Gagal membuat akun auth' });
-      return;
-    }
-
-    const profile = await prisma.profile.upsert({
-      where: { id: authData.user.id },
-      create: {
-        id: authData.user.id,
-        email,
-        nama,
-        noHp,
-        role: 'admin',
-        instansiId,
-        aktif: true,
-      },
-      update: {
-        email,
-        nama,
-        noHp,
-        role: 'admin',
-        instansiId,
-        aktif: true,
-      },
-    });
-
-    res.status(201).json({ data: profile });
-  });
 
   // Admin scoping: filter users by admin's instansiId
   const instansiId = req.user?.instansiId;

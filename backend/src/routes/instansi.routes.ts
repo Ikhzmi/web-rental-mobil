@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { verifySupabaseToken } from '../middleware/verifySupabaseToken';
-import { scopeToInstansi } from '../middleware/scopeToInstansi';
 import { notifySuperAdmins } from '../services/notification.service';
+import { logAdminActivity } from '../services/activity.service';
 
 // Schema untuk pendaftaran instansi baru (public)
 import { z } from 'zod';
@@ -79,15 +79,35 @@ instansiRouter.post('/daftar', async (req, res) => {
 // ADMIN INSTANSI ENDPOINTS (Butuh Auth + Scoping)
 // ============================================================================
 
-// Semua endpoint di bawah butuh auth + admin role + instansi scoping
+const isValidUuid = (id?: string | null): boolean =>
+  Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+// Semua endpoint di bawah butuh auth + admin/super_admin role + instansi scoping
 instansiRouter.use(verifySupabaseToken, async (req, res, next) => {
-  // Check if user is admin and has instansiId
-  if (req.user?.role !== 'admin' || !req.user?.instansiId) {
-    res.status(403).json({ error: 'Endpoint ini khusus admin instansi' });
+  const isSuperAdmin = req.user?.role === 'super_admin';
+  const isAdmin = req.user?.role === 'admin';
+
+  if (!isAdmin && !isSuperAdmin) {
+    res.status(403).json({ error: 'Endpoint ini khusus admin instansi / super admin' });
     return;
   }
-  // Attach instansiId to request
-  req.instansiScope = { instansiId: req.user.instansiId };
+
+  let instansiId = req.user?.instansiId || (req.query.instansiId as string);
+
+  if (!isValidUuid(instansiId)) {
+    const firstInstansi = await prisma.instansi.findFirst({
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    instansiId = firstInstansi?.id || '';
+  }
+
+  if (!isValidUuid(instansiId)) {
+    res.status(400).json({ error: 'Instansi ID tidak valid atau belum terdaftar' });
+    return;
+  }
+
+  req.instansiScope = { instansiId };
   next();
 });
 
@@ -142,6 +162,7 @@ instansiRouter.get('/dashboard', async (req, res) => {
       completedBookings,
       disbursements,
       recentBookings,
+      refunds,
     ] = await Promise.all([
       // Instansi info (untuk komisi)
       prisma.instansi.findUnique({
@@ -210,6 +231,12 @@ instansiRouter.get('/dashboard', async (req, res) => {
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
+
+      // Refund instansi
+      prisma.refund.findMany({
+        where: { booking: { car: { instansiId } } },
+        select: { id: true, status: true, jumlahRefund: true },
+      }),
     ]);
 
     // Hitung statistik
@@ -235,6 +262,13 @@ instansiRouter.get('/dashboard', async (req, res) => {
       .filter(d => d.status === 'berhasil')
       .reduce((sum, d) => sum + Number(d.jumlahBersih), 0);
 
+    // Refund stats
+    const refundPending = refunds.filter(r => r.status === 'menunggu_persetujuan').length;
+    const refundDiproses = refunds.filter(r => r.status === 'diproses').length;
+    const totalRefundBerhasil = refunds
+      .filter(r => r.status === 'berhasil')
+      .reduce((sum, r) => sum + Number(r.jumlahRefund), 0);
+
     res.json({
       data: {
         totalMobil,
@@ -248,6 +282,11 @@ instansiRouter.get('/dashboard', async (req, res) => {
         totalSudahDicairkan,
         recentBookings,
         recentDisbursements: disbursements,
+        refundStats: {
+          pending: refundPending,
+          diproses: refundDiproses,
+          totalBerhasil: totalRefundBerhasil,
+        },
       },
     });
   } catch (error) {
@@ -260,7 +299,7 @@ const STATUS_DIHITUNG_PENDAPATAN = ['dikonfirmasi', 'berjalan', 'selesai'] as co
 
 /**
  * GET /api/instansi/dashboard/trends
- * Tren harian nyata (hari ini vs kemarin) + sparkline 7 hari terakhir,
+ * Tren bulanan nyata (bulan ini vs bulan lalu) + sparkline 7 hari terakhir,
  * dihitung dari data booking asli — untuk semua stat cards.
  */
 instansiRouter.get('/dashboard/trends', async (req, res) => {
@@ -269,8 +308,9 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
   try {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfYesterday = new Date(startOfToday);
-    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
     const sevenDaysAgo = new Date(startOfToday);
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // termasuk hari ini = 7 hari
 
@@ -281,8 +321,21 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
     });
     const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
 
+    const STATUS_PESANAN_AKTIF = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'] as const;
+
     // Ambil data pendukung sekali jalan
-    const [recentBookings, availableCars, completedPendingBookings] = await Promise.all([
+    const [thisMonthBookings, lastMonthBookings, recentBookings, availableCars, completedPendingBookings] = await Promise.all([
+      // Booking bulan ini
+      prisma.booking.findMany({
+        where: { car: { instansiId }, createdAt: { gte: startOfThisMonth } },
+        select: { totalHarga: true, status: true, createdAt: true },
+      }),
+      // Booking bulan lalu
+      prisma.booking.findMany({
+        where: { car: { instansiId }, createdAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+        select: { totalHarga: true, status: true, createdAt: true },
+      }),
+      // Booking 7 hari terakhir (untuk sparkline)
       prisma.booking.findMany({
         where: { car: { instansiId }, createdAt: { gte: sevenDaysAgo } },
         select: { totalHarga: true, status: true, createdAt: true },
@@ -298,11 +351,47 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
       }),
     ]);
 
-    const dayKey = (d: Date) => d.toISOString().split('T')[0];
-    const todayKey = dayKey(startOfToday);
-    const yesterdayKey = dayKey(startOfYesterday);
+    // --- Kalkulasi bulanan ---
+    const calcMonthly = (bookings: typeof thisMonthBookings) => {
+      let revenue = 0;
+      let activeCount = 0;
+      for (const b of bookings) {
+        if ((STATUS_PESANAN_AKTIF as readonly string[]).includes(b.status)) {
+          activeCount++;
+        }
+        if ((STATUS_DIHITUNG_PENDAPATAN as readonly string[]).includes(b.status)) {
+          const gross = Number(b.totalHarga);
+          revenue += Math.round(gross * (1 - komisiRate));
+        }
+      }
+      return { revenue, activeCount };
+    };
 
-    const STATUS_PESANAN_AKTIF = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'] as const;
+    const thisMonth = calcMonthly(thisMonthBookings);
+    const lastMonth = calcMonthly(lastMonthBookings);
+
+    const calcTrend = (current: number, previous: number): number => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Math.round(((current - previous) / previous) * 100);
+    };
+
+    // Saldo tertunda bulan ini vs bulan lalu
+    const saldoTertundaBulanIni = Math.round(
+      completedPendingBookings
+        .filter(b => new Date(b.updatedAt || b.createdAt) >= startOfThisMonth)
+        .reduce((sum, b) => sum + Number(b.totalHarga), 0) * (1 - komisiRate)
+    );
+    const saldoTertundaBulanLalu = Math.round(
+      completedPendingBookings
+        .filter(b => {
+          const d = new Date(b.updatedAt || b.createdAt);
+          return d >= startOfLastMonth && d <= endOfLastMonth;
+        })
+        .reduce((sum, b) => sum + Number(b.totalHarga), 0) * (1 - komisiRate)
+    );
+
+    // --- Sparkline 7 hari terakhir (tetap untuk visual graph) ---
+    const dayKey = (d: Date) => d.toISOString().split('T')[0];
 
     const revenueByDay: Record<string, number> = {};
     const activeBookingCountByDay: Record<string, number> = {};
@@ -313,19 +402,11 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
         activeBookingCountByDay[key] = (activeBookingCountByDay[key] ?? 0) + 1;
       }
       if ((STATUS_DIHITUNG_PENDAPATAN as readonly string[]).includes(b.status)) {
-        revenueByDay[key] = (revenueByDay[key] ?? 0) + Number(b.totalHarga);
+        const gross = Number(b.totalHarga);
+        const nett = Math.round(gross * (1 - komisiRate));
+        revenueByDay[key] = (revenueByDay[key] ?? 0) + nett;
       }
     }
-
-    const calcTrend = (current: number, previous: number): number => {
-      if (previous === 0) return current > 0 ? 100 : 0;
-      return Math.round(((current - previous) / previous) * 100);
-    };
-
-    const pendapatanHariIni = revenueByDay[todayKey] ?? 0;
-    const pendapatanKemarin = revenueByDay[yesterdayKey] ?? 0;
-    const bookingAktifHariIni = activeBookingCountByDay[todayKey] ?? 0;
-    const bookingAktifKemarin = activeBookingCountByDay[yesterdayKey] ?? 0;
 
     const sparklinePendapatan: number[] = [];
     const sparklineBookingAktif: number[] = [];
@@ -340,12 +421,10 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
       sparklinePendapatan.push(revenueByDay[key] ?? 0);
       sparklineBookingAktif.push(activeBookingCountByDay[key] ?? 0);
 
-      // Snapshot ketersediaan armada per hari
       const activeOnDay = activeBookingCountByDay[key] ?? 0;
       const calcAvailable = Math.max(0, availableCars - (activeOnDay > 0 ? (activeOnDay % 3) : 0));
       sparklineArmadaTersedia.push(calcAvailable);
 
-      // Accumulation saldo bersih tertunda per hari
       const dayEnd = new Date(d);
       dayEnd.setHours(23, 59, 59, 999);
       const pendingUpToDayKotor = completedPendingBookings
@@ -355,21 +434,16 @@ instansiRouter.get('/dashboard/trends', async (req, res) => {
       sparklineSaldoTertunda.push(Math.round(pendingUpToDayNett));
     }
 
-    const saldoTertundaHariIni = sparklineSaldoTertunda[6] ?? 0;
-    const saldoTertundaKemarin = sparklineSaldoTertunda[5] ?? 0;
-    const armadaTersediaHariIni = availableCars;
-    const armadaTersediaKemarin = sparklineArmadaTersedia[5] ?? availableCars;
-
     res.json({
       data: {
-        pendapatanHariIni,
-        bookingAktifHariIni,
-        armadaTersediaHariIni,
-        saldoTertundaHariIni,
-        trendPendapatan: calcTrend(pendapatanHariIni, pendapatanKemarin),
-        trendBookingAktif: calcTrend(bookingAktifHariIni, bookingAktifKemarin),
-        trendArmadaTersedia: calcTrend(armadaTersediaHariIni, armadaTersediaKemarin),
-        trendSaldoTertunda: calcTrend(saldoTertundaHariIni, saldoTertundaKemarin),
+        pendapatanBulanIni: thisMonth.revenue,
+        bookingAktifBulanIni: thisMonth.activeCount,
+        armadaTersediaBulanIni: availableCars,
+        saldoTertundaBulanIni,
+        trendPendapatan: calcTrend(thisMonth.revenue, lastMonth.revenue),
+        trendBookingAktif: calcTrend(thisMonth.activeCount, lastMonth.activeCount),
+        trendArmadaTersedia: 0, // snapshot, tidak ada tren historis
+        trendSaldoTertunda: calcTrend(saldoTertundaBulanIni, saldoTertundaBulanLalu),
         sparklinePendapatan,
         sparklineBookingAktif,
         sparklineArmadaTersedia,
@@ -407,6 +481,12 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
       rangeStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     }
 
+    const instansi = await prisma.instansi.findUnique({
+      where: { id: instansiId },
+      select: { komisiPlatformPersen: true },
+    });
+    const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
+
     const bookings = await prisma.booking.findMany({
       where: {
         car: { instansiId },
@@ -419,13 +499,16 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
     let labels: string[] = [];
     let values: number[] = [];
 
+    // Helper untuk pendapatan bersih
+    const getNett = (gross: number) => Math.round(gross * (1 - komisiRate));
+
     if (period === 'today') {
       // Bucket per 4 jam
       labels = Array.from({ length: 6 }, (_, i) => `${String(i * 4).padStart(2, '0')}:00`);
       values = new Array(6).fill(0);
       for (const b of bookings) {
         const hour = new Date(b.createdAt).getHours();
-        values[Math.floor(hour / 4)] += Number(b.totalHarga);
+        values[Math.floor(hour / 4)] += getNett(Number(b.totalHarga));
       }
     } else if (period === '7days') {
       const days: string[] = [];
@@ -440,7 +523,7 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
       for (const b of bookings) {
         const key = new Date(b.createdAt).toISOString().split('T')[0];
         const idx = keys.indexOf(key);
-        if (idx !== -1) values[idx] += Number(b.totalHarga);
+        if (idx !== -1) values[idx] += getNett(Number(b.totalHarga));
       }
     } else if (period === 'month') {
       const weeksInMonth = Math.ceil(
@@ -451,7 +534,7 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
       for (const b of bookings) {
         const dayOfMonth = new Date(b.createdAt).getDate();
         const weekIdx = Math.min(Math.floor((dayOfMonth - 1) / 7), weeksInMonth - 1);
-        values[weekIdx] += Number(b.totalHarga);
+        values[weekIdx] += getNett(Number(b.totalHarga));
       }
     } else {
       // year — 12 bulan terakhir
@@ -466,7 +549,7 @@ instansiRouter.get('/dashboard/revenue-series', async (req, res) => {
         const d = new Date(b.createdAt);
         const key = `${d.getFullYear()}-${d.getMonth()}`;
         const idx = monthKeys.indexOf(key);
-        if (idx !== -1) values[idx] += Number(b.totalHarga);
+        if (idx !== -1) values[idx] += getNett(Number(b.totalHarga));
       }
     }
 
@@ -647,14 +730,45 @@ instansiRouter.get('/disbursements/:id', async (req, res) => {
 });
 
 /**
+ * POST /api/instansi/log-activity
+ * Endpoint untuk mencatat log aksi admin (mis. login, ubah profile)
+ */
+const logActivitySchema = z.object({
+  action: z.enum(['login', 'create_admin', 'create_car', 'update_car', 'update_booking_status', 'update_settings']),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+instansiRouter.post('/log-activity', async (req, res) => {
+  const instansiId = req.instansiScope!.instansiId;
+  const parsed = logActivitySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Data tidak valid', detail: parsed.error.flatten() });
+    return;
+  }
+
+  await logAdminActivity({
+    instansiId,
+    userId: req.user?.id,
+    action: parsed.data.action,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    metadata: parsed.data.metadata,
+  });
+
+  res.status(201).json({ success: true });
+});
+
+/**
  * GET /api/instansi/activities
- * Log aktivitas lengkap untuk admin instansi (pesanan, status log, armada)
+ * Log aktivitas lengkap untuk admin instansi (pesanan, status log, armada, aktivitas admin)
  */
 instansiRouter.get('/activities', async (req, res) => {
   const instansiId = req.instansiScope!.instansiId;
 
   try {
-    const [recentBookings, statusLogs, recentCars] = await Promise.all([
+    const [recentBookings, statusLogs, recentCars, adminActivities] = await Promise.all([
       // 1. Pesanan terbaru
       prisma.booking.findMany({
         where: { car: { instansiId } },
@@ -695,17 +809,41 @@ instansiRouter.get('/activities', async (req, res) => {
         orderBy: { createdAt: 'desc' },
         take: 15,
       }),
+
+      // 4. Log aksi admin instansi (login, create admin, ubah armada, dsb.)
+      prisma.notification.findMany({
+        where: {
+          instansiId,
+          type: 'admin_activity',
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      }),
     ]);
 
     const activities: Array<{
       id: string;
-      tipe: 'pesanan' | 'armada';
+      tipe: 'pesanan' | 'armada' | 'admin';
       judul: string;
       deskripsi: string;
       status: string;
       waktu: string;
       detailUrl?: string;
     }> = [];
+
+    // Map admin activities
+    for (const act of adminActivities) {
+      const actionType = (act.data as any)?.action || 'admin';
+      activities.push({
+        id: `admin-${act.id}`,
+        tipe: 'admin_activity',
+        judul: act.title,
+        deskripsi: act.message,
+        status: actionType,
+        waktu: act.createdAt.toISOString(),
+        detailUrl: (act.data as any)?.detailUrl || undefined,
+      });
+    }
 
     // Map status logs
     for (const log of statusLogs) {
@@ -755,13 +893,251 @@ instansiRouter.get('/activities', async (req, res) => {
       });
     }
 
-    // Sort by timestamp desc and take top 30
+    // Sort by timestamp desc and take top 40
     activities.sort((a, b) => new Date(b.waktu).getTime() - new Date(a.waktu).getTime());
-    const topActivities = activities.slice(0, 30);
+    const topActivities = activities.slice(0, 40);
 
     res.json({ data: topActivities });
   } catch (error) {
     console.error('GET /api/instansi/activities error:', error);
     res.status(500).json({ error: 'Gagal mengambil data log aktivitas' });
+  }
+});
+
+/**
+ * GET /api/instansi/financials
+ * Detail keuangan lengkap instansi: ringkasan pendapatan, komisi, saldo tertunda,
+ * riwayat batch pencairan dana (disbursements), dan breakdown per transaksi pesanan.
+ */
+instansiRouter.get('/financials', async (req, res) => {
+  let instansiId = req.instansiScope?.instansiId || req.user?.instansiId || (req.query.instansiId as string);
+
+  if (!isValidUuid(instansiId) && req.user?.role === 'super_admin') {
+    const firstInstansi = await prisma.instansi.findFirst({
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    instansiId = firstInstansi?.id || '';
+  }
+
+  if (!isValidUuid(instansiId)) {
+    res.status(400).json({ error: 'Instansi ID tidak valid atau tidak ditemukan' });
+    return;
+  }
+
+  try {
+    const instansi = await prisma.instansi.findUnique({
+      where: { id: instansiId },
+      select: {
+        id: true,
+        namaInstansi: true,
+        komisiPlatformPersen: true,
+        rekeningBank: true,
+      },
+    });
+
+    const komisiRate = Number(instansi?.komisiPlatformPersen ?? 10) / 100;
+
+    // Fetch ALL bookings for this instansi (including active, completed, cancelled, and refunded)
+    const bookings = await prisma.booking.findMany({
+      where: {
+        car: { instansiId },
+      },
+      select: {
+        id: true,
+        totalHarga: true,
+        status: true,
+        createdAt: true,
+        tanggalMulai: true,
+        tanggalSelesai: true,
+        car: {
+          select: { id: true, nama: true, nomorPlat: true },
+        },
+        profile: {
+          select: { id: true, nama: true, noHp: true },
+        },
+        refund: {
+          select: { id: true, status: true, jumlahRefund: true, alasan: true },
+        },
+        disbursementItems: {
+          select: {
+            id: true,
+            disbursement: {
+              select: {
+                id: true,
+                status: true,
+                createdAt: true,
+                dicairkanPada: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Fetch all disbursements & refunds for this instansi
+    const [disbursements, refunds] = await Promise.all([
+      prisma.disbursement.findMany({
+        where: { instansiId },
+        include: {
+          items: {
+            include: {
+              booking: {
+                select: {
+                  id: true,
+                  totalHarga: true,
+                  car: { select: { nama: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.refund.findMany({
+        where: { booking: { car: { instansiId } } },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              car: { select: { nama: true, nomorPlat: true } },
+              profile: { select: { nama: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    let totalGrossRevenue = 0;
+    let totalPlatformCommission = 0;
+    let totalNetRevenue = 0;
+
+    let saldoSiapDicairkanGross = 0;
+    let saldoSiapDicairkanNett = 0;
+
+    let saldoSudahDicairkanNett = 0;
+    let saldoDalamProsesNett = 0;
+
+    const formattedBookings = bookings.map((b) => {
+      const gross = Number(b.totalHarga);
+      const komisi = Math.round(gross * komisiRate);
+      const nett = gross - komisi;
+
+      if (['dikonfirmasi', 'berjalan', 'selesai'].includes(b.status)) {
+        totalGrossRevenue += gross;
+        totalPlatformCommission += komisi;
+        totalNetRevenue += nett;
+      }
+
+      const activeDisbursement = b.disbursementItems?.[0]?.disbursement;
+      const isDisbursed = activeDisbursement?.status === 'berhasil';
+      const isPendingDisbursement = activeDisbursement?.status === 'diproses';
+
+      if (b.status === 'selesai' && (!b.refund || b.refund.status === 'ditolak')) {
+        if (!activeDisbursement) {
+          saldoSiapDicairkanGross += gross;
+          saldoSiapDicairkanNett += nett;
+        } else if (isDisbursed) {
+          saldoSudahDicairkanNett += nett;
+        } else if (isPendingDisbursement) {
+          saldoDalamProsesNett += nett;
+        }
+      }
+
+      let statusPencairan = 'belum_dicairkan';
+      if (b.refund && b.refund.status !== 'ditolak') {
+        statusPencairan = 'refunded';
+      } else if (b.status === 'dibatalkan') {
+        statusPencairan = 'dibatalkan';
+      } else if (b.status === 'menunggu_pembayaran') {
+        statusPencairan = 'menunggu_pembayaran';
+      } else if (activeDisbursement) {
+        statusPencairan = activeDisbursement.status;
+      }
+
+      return {
+        id: b.id,
+        createdAt: b.createdAt.toISOString(),
+        tanggalMulai: b.tanggalMulai.toISOString(),
+        tanggalSelesai: b.tanggalSelesai.toISOString(),
+        statusBooking: b.status,
+        carNama: b.car?.nama ?? '-',
+        carPlat: b.car?.nomorPlat ?? '-',
+        customerNama: b.profile?.nama ?? 'Pelanggan',
+        gross,
+        komisiPlatform: komisi,
+        nett,
+        disbursementStatus: statusPencairan,
+        disbursementId: activeDisbursement?.id ?? null,
+        refundStatus: b.refund?.status ?? null,
+        refundJumlah: b.refund ? Number(b.refund.jumlahRefund) : null,
+      };
+    });
+
+    const formattedDisbursements = disbursements.map((d) => {
+      return {
+        id: d.id,
+        status: d.status,
+        jumlahKotor: Number(d.jumlahKotor),
+        komisiPlatform: Number(d.komisiPlatform),
+        jumlahBersih: Number(d.jumlahBersih),
+        rekeningTujuan: instansi?.rekeningBank ?? '-',
+        bankTransferId: d.bankTransferId ?? null,
+        createdAt: d.createdAt.toISOString(),
+        dicairkanPada: d.dicairkanPada ? d.dicairkanPada.toISOString() : null,
+        itemCount: d.items.length,
+      };
+    });
+
+    const formattedRefunds = refunds.map((r) => ({
+      id: r.id,
+      bookingId: r.bookingId,
+      carNama: r.booking?.car?.nama ?? '-',
+      carPlat: r.booking?.car?.nomorPlat ?? '-',
+      customerNama: r.booking?.profile?.nama ?? 'Pelanggan',
+      jumlahRefund: Number(r.jumlahRefund),
+      rekeningTujuan: r.rekeningTujuan ?? '-',
+      alasan: r.alasan ?? '-',
+      status: r.status,
+      createdAt: r.createdAt.toISOString(),
+    }));
+
+    const totalRefundAmount = formattedRefunds
+      .filter((r) => r.status === 'berhasil')
+      .reduce((sum, r) => sum + r.jumlahRefund, 0);
+
+    const countRefundPending = formattedRefunds
+      .filter((r) => ['menunggu_persetujuan', 'disetujui', 'diproses'].includes(r.status))
+      .length;
+
+    res.json({
+      data: {
+        instansi: {
+          namaInstansi: instansi?.namaInstansi ?? '-',
+          komisiPlatformPersen: Number(instansi?.komisiPlatformPersen ?? 10),
+          rekeningBank: instansi?.rekeningBank ?? '-',
+        },
+        summary: {
+          totalGrossRevenue,
+          totalPlatformCommission,
+          totalNetRevenue,
+          saldoSiapDicairkanGross,
+          saldoSiapDicairkanNett,
+          saldoSudahDicairkanNett,
+          saldoDalamProsesNett,
+          totalRefundAmount,
+          countRefundPending,
+        },
+        disbursements: formattedDisbursements,
+        bookings: formattedBookings,
+        refunds: formattedRefunds,
+      },
+    });
+  } catch (error) {
+    console.error('GET /api/instansi/financials error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Gagal mengambil detail keuangan instansi', details: message });
   }
 });

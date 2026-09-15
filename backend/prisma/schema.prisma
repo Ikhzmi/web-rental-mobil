@@ -141,6 +141,18 @@ enum StatusDisbursement {
   @@map("status_disbursement")
 }
 
+/// Status refund pengembalian dana - v2
+enum StatusRefund {
+  menunggu_persetujuan  // Menunggu disetujui admin instansi
+  disetujui             // Disetujui admin, siap diproses transfer
+  diproses              // Sedang dalam antrean transfer
+  berhasil              // Dana telah ditransfer ke rekening pelanggan
+  ditolak               // Permintaan refund ditolak
+
+  @@map("status_refund")
+}
+
+
 enum JenisAddon {
   sopir
   asuransi
@@ -195,7 +207,7 @@ model Profile {
 model Car {
   id                 String        @id @default(uuid()) @db.Uuid
   nama               String
-  nomorPlat          String?       @map("nomor_plat") // Nomor polisi kendaraan, e.g. "B 1234 XYZ"
+  nomorPlat          String?       @map("nomor_plat") // Nomor polisi kendaraan, e.g. "BK 1234 XYZ"
   kategori           KategoriMobil
   transmisi          Transmisi
   bahanBakar         BahanBakar    @default(bensin) @map("bahan_bakar")
@@ -288,6 +300,7 @@ model Booking {
   /// Ulasan customer untuk booking ini — hanya bisa dibuat setelah status
   /// 'selesai', satu ulasan per booking (lihat model Review).
   review     Review?
+  refund     Refund?
 
   @@map("bookings")
   @@index([carId, tanggalMulai, tanggalSelesai])
@@ -554,4 +567,33 @@ model ChatMessage {
 
   @@index([conversationId, createdAt])
   @@map("chat_messages")
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// REFUND MODEL
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// Model refund pengembalian dana pembatalan pesanan
+model Refund {
+  id              String       @id @default(uuid()) @db.Uuid
+  bookingId       String       @unique @map("booking_id") @db.Uuid
+  paymentId       String?      @map("payment_id") @db.Uuid
+  jumlahAsli      Decimal      @map("jumlah_asli") @db.Decimal(12, 2)     // Total harga sewa yang dibayar
+  potonganAdmin   Decimal      @default(0) @map("potongan_admin") @db.Decimal(12, 2)  // 0% (tidak dibebankan ke user)
+  jumlahRefund    Decimal      @map("jumlah_refund") @db.Decimal(12, 2)   // 100% dari dana dibayar
+  rekeningTujuan  String?      @map("rekening_tujuan")                     // Format: "BANK-NOMOR_REKENING a.n. NAMA"
+  alasan          String?
+  status          StatusRefund @default(menunggu_persetujuan)
+  disetujuiOleh   String?      @map("disetujui_oleh") @db.Uuid
+  disetujuiPada   DateTime?    @map("disetujui_pada")
+  diprosesOleh    String?      @map("diproses_oleh") @db.Uuid
+  selesaiPada     DateTime?    @map("selesai_pada")
+  catatan         String?                                                   // Catatan admin jika disetujui / ditolak
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("refunds")
+  @@index([status])
 }

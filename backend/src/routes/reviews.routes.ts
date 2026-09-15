@@ -18,7 +18,14 @@ reviewsRouter.get('/', async (req, res) => {
     where: carId ? { carId } : undefined,
     include: {
       profile: { select: { nama: true } },
-      car: { select: { nama: true } },
+      car: {
+        select: {
+          id: true,
+          nama: true,
+          instansi: { select: { id: true, namaInstansi: true } },
+          images: { take: 1, orderBy: { urutan: 'asc' } },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -29,15 +36,21 @@ reviewsRouter.get('/', async (req, res) => {
 
 /**
  * GET /api/reviews/featured — publik, dipakai homepage (menggantikan
- * testimoni statis). Ambil rating tertinggi dulu, lalu terbaru, supaya
- * ulasan yang tampil di landing page representatif.
+ * testimoni statis). Ambil rating tertinggi dulu, lalu terbaru.
  */
 reviewsRouter.get('/featured', async (_req, res) => {
   const reviews = await prisma.review.findMany({
-    where: { komentar: { not: null } }, // cuma yang ada komentarnya, rating-only kurang menarik ditampilkan sebagai testimoni
+    where: { komentar: { not: null } },
     include: {
       profile: { select: { nama: true } },
-      car: { select: { nama: true } },
+      car: {
+        select: {
+          id: true,
+          nama: true,
+          instansi: { select: { id: true, namaInstansi: true } },
+          images: { take: 1, orderBy: { urutan: 'asc' } },
+        },
+      },
     },
     orderBy: [{ rating: 'desc' }, { createdAt: 'desc' }],
     take: 6,

@@ -15,10 +15,13 @@ export interface PriceBreakdown {
 }
 
 function hitungDurasiHari(tanggalMulai: Date, tanggalSelesai: Date): number {
+  const start = new Date(tanggalMulai);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(tanggalSelesai);
+  end.setHours(0, 0, 0, 0);
+
   const msPerDay = 1000 * 60 * 60 * 24;
-  const diffDays = Math.ceil(
-    (tanggalSelesai.getTime() - tanggalMulai.getTime()) / msPerDay
-  );
+  const diffDays = Math.round((end.getTime() - start.getTime()) / msPerDay) + 1;
   return Math.max(1, diffDays);
 }
 

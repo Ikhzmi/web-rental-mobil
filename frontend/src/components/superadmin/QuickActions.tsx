@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
-import { Plus, CheckCircle, FileText, Wallet, Users } from 'lucide-react';
+import { Plus, CheckCircle, FileText, Wallet, Users, RotateCcw } from 'lucide-react';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 const vibrantActions = [
@@ -18,6 +18,14 @@ const vibrantActions = [
     icon: FileText,
     gradient: 'from-violet-600/80 to-violet-700/80',
     hoverGradient: 'hover:from-violet-500/90 hover:to-violet-600/90',
+    textClass: 'text-white/90',
+  },
+  {
+    label: 'Pantau Refund',
+    href: '/superadmin/refunds',
+    icon: RotateCcw,
+    gradient: 'from-orange-600/80 to-orange-700/80',
+    hoverGradient: 'hover:from-orange-500/90 hover:to-orange-600/90',
     textClass: 'text-white/90',
   },
   {

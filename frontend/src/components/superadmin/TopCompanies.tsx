@@ -71,9 +71,11 @@ export function TopCompanies() {
                 <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   {company.namaInstansi}
                 </p>
-                <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                  {formatRupiah(company.totalRevenue)}
-                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                    {formatRupiah(company.totalRevenue)}
+                  </p>
+                </div>
               </div>
               <div className={`text-xs font-semibold px-2 py-1 rounded-full ${
                 company.growth >= 0

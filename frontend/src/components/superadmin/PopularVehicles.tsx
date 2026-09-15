@@ -54,36 +54,29 @@ export function PopularVehicles() {
               key={vehicle.id}
               to={`/armada/${vehicle.id}`}
               state={{ from: '/superadmin', fromLabel: 'Dashboard Super Admin' }}
-              className="group flex flex-col bg-transparent border-0 shadow-none transition-transform duration-300 hover:-translate-y-1 block"
+              className={`group p-3 rounded-2xl border transition-all duration-300 flex flex-col hover:-translate-y-1 ${
+                isDark
+                  ? 'bg-white/[0.05] hover:bg-white/[0.10] border-white/10 hover:border-white/20 text-white shadow-lg shadow-black/20'
+                  : 'sa-glass-light hover:bg-white/50 border-white/70 text-slate-900 shadow-sm shadow-slate-200/50'
+              }`}
             >
-              {/* Card Mobil: Transparan Tanpa Background */}
-              <div className="h-16 relative overflow-hidden bg-transparent flex items-center justify-center rounded-lg mb-1.5">
+              {/* Gambar Mobil */}
+              <div className="h-20 relative overflow-hidden flex items-center justify-center rounded-xl mb-2 bg-black/5 dark:bg-white/5">
                 {vehicle.thumbnail ? (
                   <img
                     src={vehicle.thumbnail}
                     alt={vehicle.nama}
-                    className="w-full h-full object-contain transition-transform duration-500 ease-out group-hover:scale-108 filter drop-shadow-md"
+                    className="w-full h-full object-contain transition-transform duration-500 ease-out group-hover:scale-105 filter drop-shadow-md"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-transparent">
+                  <div className="w-full h-full flex items-center justify-center">
                     <span className="text-2xl">🚗</span>
                   </div>
                 )}
               </div>
 
-              {/* Card Informasi Mobil: Efek Glassmorphism */}
-              <div
-                className={`p-2.5 rounded-xl backdrop-blur-xl border transition-all duration-300 ${
-                  isDark
-                    ? 'bg-white/[0.06] hover:bg-white/[0.12] border-white/15 text-white shadow-lg shadow-black/30'
-                    : 'bg-white/75 hover:bg-white/95 border-white/80 text-slate-900 shadow-md shadow-slate-200/50'
-                }`}
-                style={{
-                  boxShadow: isDark
-                    ? 'inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.2)'
-                    : 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 12px rgba(0, 0, 0, 0.05)',
-                }}
-              >
+              {/* Informasi Mobil */}
+              <div>
                 <p className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   {vehicle.nama}
                 </p>

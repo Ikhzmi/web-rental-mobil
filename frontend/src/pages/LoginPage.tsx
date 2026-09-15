@@ -257,6 +257,25 @@ export default function LoginPage() {
           }
 
           if (profile?.role === 'admin') {
+            try {
+              if (token) {
+                await fetch(`${import.meta.env.VITE_API_URL || ''}/api/instansi/log-activity`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    action: 'login',
+                    title: 'Admin Berhasil Login',
+                    description: `${profile.nama || profile.email || 'Admin'} berhasil masuk ke Dashboard Admin`,
+                    metadata: { role: 'admin' },
+                  }),
+                });
+              }
+            } catch (e) {
+              console.warn('Failed to log admin login activity:', e);
+            }
             window.location.href = '/admin';
             return;
           }

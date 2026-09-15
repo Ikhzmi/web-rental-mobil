@@ -4,10 +4,10 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp, TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon,
-  Clock, Car as CarIcon,
+  Car as CarIcon,
   CreditCard, AlertTriangle,
   CarFront, CalendarClock,
-  Activity, ExternalLink, Search, X, ClipboardList,
+  Activity, ExternalLink, Search, X, ClipboardList, RotateCcw,
 } from 'lucide-react';
 import {
   api,
@@ -58,7 +58,7 @@ function StatCard({
   value: string | number;
   /** Nilai numerik mentah (tanpa format) — dipakai untuk format compact di mobile. */
   rawValue?: number;
-  /** Persentase perubahan nyata vs kemarin. Undefined = tidak ada data historis
+  /** Persentase perubahan nyata vs bulan lalu. Undefined = tidak ada data historis
    *  yang jujur untuk dihitung, jadi badge tren tidak ditampilkan sama sekali
    *  (lebih baik daripada menampilkan angka rekaan). */
   change?: number;
@@ -103,7 +103,7 @@ function StatCard({
           }`}>
             <TrendIcon size={12} className="shrink-0" />
             <span className="shrink-0">{Math.abs(change ?? 0)}%</span>
-            <span className={`font-normal hidden sm:inline ${isDark ? 'text-white/40' : 'text-slate-400'}`}>vs kemarin</span>
+            <span className={`font-normal hidden sm:inline ${isDark ? 'text-white/40' : 'text-slate-400'}`}>vs bulan lalu</span>
           </div>
         ) : (
           <span className={`text-[10px] md:text-xs truncate ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{caption}</span>
@@ -218,7 +218,7 @@ function RevenueChart({ isDark, trendPendapatan }: { isDark: boolean; trendPenda
       <div className="p-4 flex flex-col h-full">
         <div className="flex items-center gap-3 mb-3">
           <div>
-            <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>Total Pendapatan</p>
+            <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>Total Pendapatan Bersih</p>
             <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {formatRupiah(values.reduce((a, b) => a + b, 0))}
             </p>
@@ -239,7 +239,7 @@ function RevenueChart({ isDark, trendPendapatan }: { isDark: boolean; trendPenda
               <span className={`text-[10px] font-medium ${trendPendapatan >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {trendPendapatan >= 0 ? '+' : ''}{trendPendapatan}%
               </span>
-              <span className={`text-[10px] ${trendPendapatan >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'}`}>dari kemarin</span>
+              <span className={`text-[10px] ${trendPendapatan >= 0 ? 'text-emerald-400/70' : 'text-red-400/70'}`}>dari bulan lalu</span>
             </div>
           )}
         </div>
@@ -507,7 +507,7 @@ function BookingStatsChart({ isDark, bookingStats }: { isDark: boolean; bookingS
   );
 }
 
-// Section 5: Today's Bookings
+// Section 5: Today's Bookings — with car thumbnails and CTA at bottom
 function TodayBookingsCard({ isDark }: { isDark: boolean }) {
   // Fetch today's bookings from API
   const today = new Date();
@@ -548,7 +548,7 @@ function TodayBookingsCard({ isDark }: { isDark: boolean }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4 }}
-      className={`rounded-2xl overflow-hidden ${getGlassCardClass(isDark)}`}
+      className={`rounded-2xl overflow-hidden flex flex-col h-full ${getGlassCardClass(isDark)}`}
     >
       <div className={`p-5 border-b ${isDark ? 'border-white/10' : 'border-[#D4CFC7]/30'}`}>
         <div className="flex items-center justify-between">
@@ -560,11 +560,11 @@ function TodayBookingsCard({ isDark }: { isDark: boolean }) {
           </span>
         </div>
       </div>
-      <div className="divide-y divide-white/5">
+      <div className="divide-y divide-white/5 flex-1">
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 p-4">
-              <div className={`w-10 h-10 rounded-lg ${isDark ? 'bg-white/5 animate-pulse' : 'bg-[#F5F0E8] animate-pulse'}`} />
+              <div className={`w-16 sm:w-20 aspect-[16/9] rounded-xl ${isDark ? 'bg-white/5 animate-pulse' : 'bg-[#F5F0E8] animate-pulse'}`} />
               <div className="flex-1">
                 <div className={`h-3 w-20 rounded mb-2 ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-200 animate-pulse'}`} />
                 <div className={`h-3 w-32 rounded ${isDark ? 'bg-white/5 animate-pulse' : 'bg-slate-200 animate-pulse'}`} />
@@ -576,35 +576,48 @@ function TodayBookingsCard({ isDark }: { isDark: boolean }) {
             <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tidak ada booking hari ini</p>
           </div>
         ) : (
-          displayBookings.map((booking) => (
-            <Link
-              to={`/admin/pesanan/${booking.id}`}
-              key={booking.id}
-              className={`flex items-center gap-3 p-4 transition-colors ${
-                isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-[#F5F0E8]'
-              }`}
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'
-              }`}>
-                <Clock size={16} className={isDark ? 'text-white/50' : 'text-[#8B7355]/60'} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-xs ${isDark ? 'text-white/40' : 'text-[#8B7355]/70'}`}>
-                  {new Date(booking.tanggalMulai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-                <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {booking.car?.nama ?? '-'}
-                </p>
-                <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                  {booking.profile?.nama ?? '-'}
-                </p>
-              </div>
-              <span className={`text-xs px-2 py-1 rounded-full ${statusColors[booking.status] ?? ''}`}>
-                {statusLabels[booking.status] ?? booking.status}
-              </span>
-            </Link>
-          ))
+          displayBookings.map((booking) => {
+            const imageUrl = booking.car?.images?.[0]?.url;
+            return (
+              <Link
+                to={`/admin/pesanan/${booking.id}`}
+                key={booking.id}
+                className={`flex items-center gap-3 p-4 transition-colors ${
+                  isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-[#F5F0E8]'
+                }`}
+              >
+                <div className="relative w-16 sm:w-20 aspect-[16/9] rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-transparent">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={booking.car?.nama ?? 'Mobil'}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center rounded-xl ${
+                      isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'
+                    }`}>
+                      <CarFront size={18} className={isDark ? 'text-white/50' : 'text-[#8B7355]/60'} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs ${isDark ? 'text-white/40' : 'text-[#8B7355]/70'}`}>
+                    {new Date(booking.tanggalMulai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {booking.car?.nama ?? '-'}
+                  </p>
+                  <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                    {booking.profile?.nama ?? '-'}
+                  </p>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded-full ${statusColors[booking.status] ?? ''}`}>
+                  {statusLabels[booking.status] ?? booking.status}
+                </span>
+              </Link>
+            );
+          })
         )}
       </div>
       <Link
@@ -664,7 +677,13 @@ function RentedVehiclesCard({ isDark }: { isDark: boolean }) {
           displayBookings.map((booking) => {
             const imageUrl = booking.car?.images?.[0]?.url;
             return (
-              <div key={booking.id} className="flex items-center gap-3 p-4">
+              <Link
+                key={booking.id}
+                to={`/admin/pesanan/${booking.id}`}
+                className={`flex items-center gap-3 p-4 transition-colors ${
+                  isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-100/60'
+                }`}
+              >
                 <div className="relative w-16 sm:w-20 aspect-[16/9] rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-transparent">
                   {imageUrl ? (
                     <img
@@ -687,20 +706,25 @@ function RentedVehiclesCard({ isDark }: { isDark: boolean }) {
                   <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
                     {booking.profile?.nama ?? '-'}
                   </p>
+                  <span className={`inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                    isDark ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                  }`}>
+                    Berlangsung
+                  </span>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className={`text-xs ${isDark ? 'text-white/40' : 'text-[#8B7355]/70'}`}>Selesai</p>
-                  <p className={`text-xs font-medium ${isDark ? 'text-white/60' : 'text-slate-700'}`}>
+                  <p className={`text-xs ${isDark ? 'text-white/40' : 'text-[#8B7355]/70'}`}>Tgl Kembali</p>
+                  <p className={`text-xs font-semibold ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
                     {new Date(booking.tanggalSelesai).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
                   </p>
                 </div>
-              </div>
+              </Link>
             );
           })
         )}
       </div>
       <Link
-        to="/admin/armada"
+        to="/admin/pesanan?status=berjalan"
         className={`block p-4 text-center text-xs font-medium border-t ${
           isDark ? 'border-white/10 text-emerald-400 hover:text-emerald-300' : 'border-[#D4CFC7]/30 text-emerald-600 hover:text-emerald-700'
         }`}
@@ -716,14 +740,14 @@ function ActivityLogModal({
   isOpen,
   onClose,
   activities,
-  isDark: _isDark,
+  isDark = true,
 }: {
   isOpen: boolean;
   onClose: () => void;
   activities: InstansiActivity[];
   isDark?: boolean;
 }) {
-  const [filterTipe, setFilterTipe] = useState<'semua' | 'pesanan' | 'armada'>('semua');
+  const [filterTipe, setFilterTipe] = useState<'semua' | 'pesanan' | 'armada' | 'admin_activity'>('semua');
   const [search, setSearch] = useState('');
 
   if (!isOpen) return null;
@@ -743,7 +767,7 @@ function ActivityLogModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5"
+      className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-5"
       onClick={onClose}
     >
       <motion.div
@@ -751,60 +775,85 @@ function ActivityLogModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl rounded-3xl border border-white/15 bg-zinc-950/90 backdrop-blur-2xl text-white flex flex-col max-h-[88vh] shadow-2xl shadow-black/90 overflow-hidden"
+        className={`w-full max-w-2xl rounded-3xl border shadow-2xl flex flex-col max-h-[88vh] overflow-hidden ${
+          isDark
+            ? 'border-white/15 bg-zinc-950/90 backdrop-blur-2xl text-white shadow-black/90'
+            : 'border-slate-200 bg-white text-slate-900 shadow-slate-300/50'
+        }`}
       >
         {/* Header */}
-        <div className="p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-white/[0.02]">
+        <div className={`p-5 border-b flex items-center justify-between shrink-0 ${
+          isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-100 bg-slate-50/50'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center ${
+              isDark ? 'bg-white/10 border-white/15 text-white' : 'bg-slate-100 border-slate-200 text-slate-800'
+            }`}>
               <Activity size={18} />
             </div>
             <div>
-              <h3 className="font-bold text-base sm:text-lg text-white">Log Aktivitas Dashboard</h3>
-              <p className="text-xs text-white/50">Riwayat lengkap aktivitas pemesanan dan armada instansi</p>
+              <h3 className={`font-bold text-base sm:text-lg ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                Log Aktivitas Dashboard
+              </h3>
+              <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                Riwayat lengkap aktivitas pemesanan dan armada instansi
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            className={`p-2 rounded-xl transition-colors ${
+              isDark ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+            }`}
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Search & Filters */}
-        <div className="p-4 border-b border-white/10 space-y-3 bg-white/[0.01]">
+        <div className={`p-4 border-b space-y-3 ${
+          isDark ? 'border-white/10 bg-white/[0.01]' : 'border-slate-100 bg-slate-50/30'
+        }`}>
           <div className="relative">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40" />
+            <Search size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
             <input
               type="text"
               placeholder="Cari aktivitas atau status..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl text-xs bg-white/5 border border-white/10 text-white placeholder:text-white/35 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20"
+              className={`w-full pl-10 pr-4 py-2.5 rounded-xl text-xs focus:outline-none transition-all ${
+                isDark
+                  ? 'bg-white/5 border border-white/10 text-white placeholder:text-white/35 focus:border-white/30'
+                  : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
+              }`}
             />
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {[
               { id: 'semua', label: 'Semua' },
+              { id: 'admin_activity', label: 'Aktivitas Admin' },
               { id: 'pesanan', label: 'Pesanan' },
               { id: 'armada', label: 'Armada' },
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setFilterTipe(tab.id as 'semua' | 'pesanan' | 'armada')}
+                onClick={() => setFilterTipe(tab.id as 'semua' | 'pesanan' | 'armada' | 'admin_activity')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
                   filterTipe === tab.id
-                    ? 'bg-white/15 text-white border border-white/25 shadow-sm'
-                    : 'bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/80 border border-transparent'
+                    ? isDark
+                      ? 'bg-white/15 text-white border border-white/25 shadow-sm'
+                      : 'bg-slate-900 text-white shadow-sm'
+                    : isDark
+                      ? 'bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/80 border border-transparent'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                 }`}
               >
                 {tab.label}
               </button>
             ))}
-            <span className="text-[11px] text-white/40 ml-auto">
+            <span className={`text-[11px] ml-auto ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
               {filtered.length} riwayat
             </span>
           </div>
@@ -813,30 +862,37 @@ function ActivityLogModal({
         {/* Activity List */}
         <div className="p-4 space-y-2.5 overflow-y-auto flex-1">
           {filtered.length === 0 ? (
-            <div className="text-center py-12 text-white/40 text-xs">
+            <div className={`text-center py-12 text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
               Tidak ada log aktivitas yang cocok
             </div>
           ) : (
             filtered.map((act) => {
               const isPesanan = act.tipe === 'pesanan';
+              const isAdmin = act.tipe === 'admin_activity';
               return (
                 <div
                   key={act.id}
-                  className="p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 transition-all flex items-start gap-3.5"
+                  className={`p-3.5 rounded-2xl transition-all flex items-start gap-3.5 border ${
+                    isDark
+                      ? 'bg-white/[0.03] hover:bg-white/[0.06] border-white/10'
+                      : 'bg-slate-50/80 hover:bg-slate-100/80 border-slate-200'
+                  }`}
                 >
                   <div className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center mt-0.5 ${
-                    isPesanan
-                      ? 'bg-blue-500/15 border border-blue-500/30 text-blue-400'
-                      : 'bg-amber-500/15 border border-amber-500/30 text-amber-400'
+                    isAdmin
+                      ? isDark ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                      : isPesanan
+                        ? isDark ? 'bg-blue-500/15 border border-blue-500/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                        : isDark ? 'bg-amber-500/15 border border-amber-500/30 text-amber-400' : 'bg-amber-100 text-amber-700'
                   }`}>
-                    {isPesanan ? <ClipboardList size={16} /> : <CarIcon size={16} />}
+                    {isAdmin ? <Activity size={16} /> : isPesanan ? <ClipboardList size={16} /> : <CarIcon size={16} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-1">
-                      <h4 className="font-semibold text-xs sm:text-sm text-white truncate">
+                      <h4 className={`font-semibold text-xs sm:text-sm truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
                         {act.judul}
                       </h4>
-                      <span className="text-[10px] text-white/40 shrink-0">
+                      <span className={`text-[10px] shrink-0 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                         {new Date(act.waktu).toLocaleDateString('id-ID', {
                           day: 'numeric',
                           month: 'short',
@@ -845,18 +901,24 @@ function ActivityLogModal({
                         })}
                       </span>
                     </div>
-                    <p className="text-xs text-white/60 leading-relaxed line-clamp-2">
+                    <p className={`text-xs leading-relaxed line-clamp-2 ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
                       {act.deskripsi}
                     </p>
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/5 border border-white/10 text-white/70">
+                    <div className={`flex items-center justify-between mt-2 pt-2 border-t ${
+                      isDark ? 'border-white/5' : 'border-slate-200/60'
+                    }`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                        isDark ? 'bg-white/5 border-white/10 text-white/70' : 'bg-slate-100 border-slate-200 text-slate-700'
+                      }`}>
                         Status: {act.status.replace(/_/g, ' ')}
                       </span>
                       {act.detailUrl && (
                         <Link
                           to={act.detailUrl}
                           onClick={onClose}
-                          className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                          className={`inline-flex items-center gap-1 text-[11px] font-medium transition-colors ${
+                            isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700'
+                          }`}
                         >
                           <span>Lihat Rincian</span>
                           <ExternalLink size={11} />
@@ -881,7 +943,7 @@ function RecentActivitiesCard({
   isDark: boolean;
   recentBookings?: InstansiDashboardData['recentBookings'];
 }) {
-  const [filter, setFilter] = useState<'semua' | 'pesanan' | 'armada'>('semua');
+  const [filter, setFilter] = useState<'semua' | 'pesanan' | 'armada' | 'admin_activity'>('semua');
   const [showAllModal, setShowAllModal] = useState(false);
 
   // Fetch real activities from backend
@@ -940,11 +1002,18 @@ function RecentActivitiesCard({
 
           {/* Filter Pills */}
           <div className="flex items-center gap-1">
-            {(['semua', 'pesanan', 'armada'] as const).map((tab) => (
+            {(['semua', 'admin_activity', 'pesanan', 'armada'] as const).map((tab) => {
+              const tabLabels: Record<string, string> = {
+                semua: 'Semua',
+                admin_activity: 'Admin',
+                pesanan: 'Pesanan',
+                armada: 'Armada',
+              };
+              return (
               <button
                 key={tab}
                 onClick={() => setFilter(tab)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                   filter === tab
                     ? isDark
                       ? 'bg-white/15 text-white border border-white/20'
@@ -954,9 +1023,10 @@ function RecentActivitiesCard({
                       : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                {tab}
+                {tabLabels[tab] ?? tab}
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -979,6 +1049,7 @@ function RecentActivitiesCard({
           ) : (
             displayActivities.map((act, i) => {
               const isPesanan = act.tipe === 'pesanan';
+              const isAdmin = act.tipe === 'admin_activity';
               return (
                 <motion.div
                   key={act.id}
@@ -993,11 +1064,13 @@ function RecentActivitiesCard({
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5 ${
-                      isPesanan
-                        ? isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
-                        : isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'
+                      isAdmin
+                        ? isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+                        : isPesanan
+                          ? isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                          : isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'
                     }`}>
-                      {isPesanan ? <ClipboardList size={14} /> : <CarIcon size={14} />}
+                      {isAdmin ? <Activity size={14} /> : isPesanan ? <ClipboardList size={14} /> : <CarIcon size={14} />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
@@ -1049,28 +1122,46 @@ function RecentActivitiesCard({
   );
 }
 
-// Section 8: Today's Returns
+// Section 8: Today's Returns — timezone-safe local date comparison
 function TodayReturnsCard({ isDark }: { isDark: boolean }) {
-  // Fetch bookings that finish today (sedang berjalan, tanggal selesai = hari ini)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // Use local date parts to avoid UTC timezone offset bug
+  const now = new Date();
+  const todayYear = now.getFullYear();
+  const todayMonth = now.getMonth();
+  const todayDate = now.getDate();
 
-  // Get all berjalan bookings to find ones ending today
-  const { data: allOngoing, isLoading } = useQuery({
-    queryKey: ['admin-ongoing-all'],
+  // Get berjalan AND dikonfirmasi bookings to find ones ending today
+  const { data: berjalanData, isLoading: isLoadingBerjalan } = useQuery({
+    queryKey: ['admin-returns-berjalan'],
     queryFn: () => api.listAdminBookings({
       status: 'berjalan',
       limit: 50,
     }),
   });
 
-  // Filter bookings that are supposed to return today
-  const todayStr = today.toISOString().split('T')[0];
-  const returnsToday = (allOngoing?.data ?? []).filter((b) => {
-    const endDate = new Date(b.tanggalSelesai).toISOString().split('T')[0];
-    return endDate === todayStr;
+  const { data: dikonfirmasiData, isLoading: isLoadingDikonfirmasi } = useQuery({
+    queryKey: ['admin-returns-dikonfirmasi'],
+    queryFn: () => api.listAdminBookings({
+      status: 'dikonfirmasi',
+      limit: 50,
+    }),
+  });
+
+  const isLoading = isLoadingBerjalan || isLoadingDikonfirmasi;
+
+  // Filter bookings that are supposed to return today using LOCAL date comparison
+  const allBookings = [
+    ...(berjalanData?.data ?? []),
+    ...(dikonfirmasiData?.data ?? []),
+  ];
+
+  const returnsToday = allBookings.filter((b) => {
+    const endDate = new Date(b.tanggalSelesai);
+    return (
+      endDate.getFullYear() === todayYear &&
+      endDate.getMonth() === todayMonth &&
+      endDate.getDate() === todayDate
+    );
   }).slice(0, 5);
 
   return (
@@ -1104,25 +1195,48 @@ function TodayReturnsCard({ isDark }: { isDark: boolean }) {
             <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Tidak ada pengembalian hari ini</p>
           </div>
         ) : (
-          returnsToday.map((booking) => (
-            <div key={booking.id} className="flex items-center gap-3 p-4">
-              <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center ${
-                isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'
-              }`}>
-                <span className={`text-xs font-medium ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
-                  {new Date(booking.tanggalSelesai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {booking.car?.nama ?? '-'}
-                </p>
-                <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-                  {booking.profile?.nama ?? '-'}
-                </p>
-              </div>
-            </div>
-          ))
+          returnsToday.map((booking) => {
+            const imageUrl = booking.car?.images?.[0]?.url;
+            return (
+              <Link
+                to={`/admin/pesanan/${booking.id}`}
+                key={booking.id}
+                className={`flex items-center gap-3 p-4 transition-colors ${
+                  isDark ? 'hover:bg-white/[0.02]' : 'hover:bg-[#F5F0E8]'
+                }`}
+              >
+                <div className="relative w-16 sm:w-20 aspect-[16/9] rounded-xl overflow-hidden shrink-0 flex items-center justify-center bg-transparent">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={booking.car?.nama ?? 'Mobil'}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className={`w-full h-full flex items-center justify-center rounded-xl ${
+                      isDark ? 'bg-white/5' : 'bg-[#F5F0E8]'
+                    }`}>
+                      <CarFront size={18} className={isDark ? 'text-white/50' : 'text-[#8B7355]/60'} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {booking.car?.nama ?? '-'}
+                  </p>
+                  <p className={`text-xs truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                    {booking.profile?.nama ?? '-'}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-[10px] ${isDark ? 'text-white/40' : 'text-[#8B7355]/70'}`}>Kembali</p>
+                  <p className={`text-xs font-semibold ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                    {new Date(booking.tanggalSelesai).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                  </p>
+                </div>
+              </Link>
+            );
+          })
         )}
       </div>
     </motion.div>
@@ -1130,19 +1244,33 @@ function TodayReturnsCard({ isDark }: { isDark: boolean }) {
 }
 
 // Section 9: Payments Summary
-function PaymentsCard({ isDark, bookingStats }: { isDark: boolean; bookingStats?: Record<string, number> }) {
+function PaymentsCard({
+  isDark,
+  bookingStats,
+  refundStats,
+}: {
+  isDark: boolean;
+  bookingStats?: Record<string, number>;
+  refundStats?: {
+    pending: number;
+    diproses: number;
+    totalBerhasil: number;
+  };
+}) {
   const stats = bookingStats ?? {};
 
   const payments = [
-    { label: 'Menunggu', value: stats.menunggu_pembayaran ?? 0, color: 'amber' },
-    { label: 'Dikonfirmasi', value: (stats.dikonfirmasi ?? 0) + (stats.berjalan ?? 0), color: 'blue' },
-    { label: 'Selesai', value: stats.selesai ?? 0, color: 'emerald' },
+    { label: 'Menunggu', value: stats.menunggu_pembayaran ?? 0, color: 'amber', to: '/admin/pesanan' },
+    { label: 'Dikonfirmasi', value: (stats.dikonfirmasi ?? 0) + (stats.berjalan ?? 0), color: 'blue', to: '/admin/pesanan' },
+    { label: 'Selesai', value: stats.selesai ?? 0, color: 'emerald', to: '/admin/pesanan' },
+    { label: 'Refund', value: refundStats?.pending ?? 0, color: 'rose', to: '/admin/refunds' },
   ];
 
   const colorMap: Record<string, string> = {
     amber: isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600',
     emerald: isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600',
     blue: isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-600',
+    rose: isDark ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-600',
   };
 
   return (
@@ -1154,18 +1282,18 @@ function PaymentsCard({ isDark, bookingStats }: { isDark: boolean; bookingStats?
     >
       <div className={`p-5 border-b ${isDark ? 'border-white/10' : 'border-[#D4CFC7]/30'}`}>
         <h2 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
-          Pembayaran
+          Ringkasan Finansial & Pembayaran
         </h2>
       </div>
-      <div className="p-4 grid grid-cols-3 gap-3">
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
         {payments.map((payment) => (
           <Link
             key={payment.label}
-            to="/admin/pesanan"
-            className={`text-center p-3 rounded-xl ${isDark ? 'bg-white/[0.02]' : 'bg-[#F5F0E8]'}`}
+            to={payment.to}
+            className={`text-center p-3 rounded-xl transition-all ${isDark ? 'bg-white/[0.02] hover:bg-white/[0.05]' : 'bg-[#F5F0E8] hover:bg-slate-100'}`}
           >
             <div className={`w-10 h-10 rounded-lg flex items-center justify-center mx-auto mb-2 ${colorMap[payment.color]}`}>
-              <CreditCard size={16} />
+              {payment.label === 'Refund' ? <RotateCcw size={16} /> : <CreditCard size={16} />}
             </div>
             <p className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
               {payment.value}
@@ -1189,7 +1317,7 @@ export default function AdminDashboardPage() {
     queryFn: () => api.getInstansiDashboard(),
   });
 
-  // Tren nyata (hari ini vs kemarin), dihitung dari booking asli — dipakai
+  // Tren nyata (bulan ini vs bulan lalu), dihitung dari booking asli — dipakai
   // untuk badge persentase di StatCard, bukan angka statis lagi.
   const { data: trends } = useQuery<InstansiDashboardTrends>({
     queryKey: ['instansi-dashboard-trends'],
@@ -1229,14 +1357,51 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Info Refund Pending — informatif, bukan aksi admin */}
+      {data.refundStats && data.refundStats.pending > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 border ${
+            isDark ? 'bg-blue-500/10 border-blue-500/20 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-900'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-400 shrink-0">
+              <RotateCcw size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">
+                {data.refundStats.pending} pesanan memiliki permintaan pengembalian dana
+              </p>
+              <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
+                Total Selesai: {formatRupiah(data.refundStats.totalBerhasil ?? 0)} • Diproses oleh SuperAdmin (bukan admin rental)
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/admin/refunds"
+            className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 border ${
+              isDark
+                ? 'bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20'
+                : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'
+            }`}
+          >
+            <span>Pantau Status</span>
+            <ExternalLink size={14} />
+          </Link>
+        </motion.div>
+      )}
+
       {/* Section 1: Ringkasan Statistik */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Pendapatan Hari Ini"
-          value={formatRupiah(trends?.pendapatanHariIni ?? 0)}
-          rawValue={trends?.pendapatanHariIni ?? 0}
+          label="Pendapatan Bulan Ini"
+          value={formatRupiah(trends?.pendapatanBulanIni ?? 0)}
+          rawValue={trends?.pendapatanBulanIni ?? 0}
           change={trends?.trendPendapatan}
           sparklineData={trends?.sparklinePendapatan}
+          caption={`setelah komisi ${data.komisiPlatformPersen ?? 10}%`}
           index={0}
           isDark={isDark}
         />
@@ -1292,7 +1457,7 @@ export default function AdminDashboardPage() {
       {/* Section 4: Returns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <TodayReturnsCard isDark={isDark} />
-        <PaymentsCard isDark={isDark} bookingStats={data.bookingStats} />
+        <PaymentsCard isDark={isDark} bookingStats={data.bookingStats} refundStats={data.refundStats} />
       </div>
     </div>
   );

@@ -91,7 +91,7 @@ export function TodayBookings() {
               )}
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <p className={`text-4xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 {isLoading ? '...' : (bookings?.total ?? 0)}
               </p>
               <p className={`text-xs ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>Total</p>

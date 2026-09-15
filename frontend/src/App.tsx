@@ -41,12 +41,14 @@ const AdminPesananDetailPage = lazy(() => import('./pages/admin/AdminPesananDeta
 const AdminMessagesPage = lazy(() => import('./pages/admin/AdminMessagesPage'));
 const AdminCalendarPage = lazy(() => import('./pages/admin/AdminCalendarPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
+const AdminKeuanganPage = lazy(() => import('./pages/admin/AdminKeuanganPage'));
 
 // Super Admin Pages - Lazy loaded (only loaded when super admin visits)
 const SuperAdminLayout = lazy(() => import('./pages/superadmin/SuperAdminLayout'));
 const SuperAdminDashboardPage = lazy(() => import('./pages/superadmin/SuperAdminDashboardPage'));
 const SuperAdminBookingsPage = lazy(() => import('./pages/superadmin/SuperAdminBookingsPage'));
 const SuperAdminTransactionsPage = lazy(() => import('./pages/superadmin/SuperAdminTransactionsPage'));
+const SuperAdminRefundsPage = lazy(() => import('./pages/superadmin/SuperAdminRefundsPage'));
 const SuperAdminReportsPage = lazy(() => import('./pages/superadmin/SuperAdminReportsPage'));
 const SuperAdminInstansiPage = lazy(() => import('./pages/superadmin/SuperAdminInstansiPage'));
 const SuperAdminAdminPage = lazy(() => import('./pages/superadmin/SuperAdminAdminPage'));
@@ -98,6 +100,8 @@ function App() {
                         />
                         <Route path="admin/pesanan" element={<AdminPesananPage />} />
                         <Route path="admin/pesanan/:id" element={<AdminPesananDetailPage />} />
+                        <Route path="admin/keuangan" element={<AdminKeuanganPage />} />
+                        <Route path="admin/refunds" element={<Navigate to="/admin/keuangan" replace />} />
                         <Route path="admin/messages" element={<AdminMessagesPage />} />
                         <Route path="admin/calendar" element={<AdminCalendarPage />} />
                         <Route path="admin/settings" element={<AdminSettingsPage />} />
@@ -110,6 +114,7 @@ function App() {
                         <Route path="superadmin" element={<SuperAdminDashboardPage />} />
                         <Route path="superadmin/bookings" element={<SuperAdminBookingsPage />} />
                         <Route path="superadmin/transactions" element={<SuperAdminTransactionsPage />} />
+                        <Route path="superadmin/refunds" element={<SuperAdminRefundsPage />} />
                         <Route path="superadmin/reports" element={<SuperAdminReportsPage />} />
                         <Route path="superadmin/instansi" element={<SuperAdminInstansiPage />} />
                         <Route path="superadmin/admin" element={<SuperAdminAdminPage />} />

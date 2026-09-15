@@ -364,10 +364,12 @@ export default function SuperAdminBookingsPage() {
             >
               <div className="p-4 sm:p-5">
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                  {/* Car Image */}
-                  <div className={`w-full sm:w-20 h-24 sm:h-20 rounded-xl overflow-hidden shrink-0 ${isDark ? 'bg-white/5' : 'bg-slate-100'}`}>
+                  {/* Car Image - 16:9 Aspect Ratio & Transparent Clean Backdrop */}
+                  <div className={`w-full sm:w-28 h-20 sm:h-18 rounded-xl overflow-hidden shrink-0 aspect-video flex items-center justify-center p-1 ${
+                    isDark ? 'bg-slate-900/40 backdrop-blur-sm border border-white/10' : 'bg-slate-100/80 border border-slate-200'
+                  }`}>
                     {booking.car?.images?.[0]?.url ? (
-                      <img src={booking.car.images[0].url} alt={booking.car.nama} className="w-full h-full object-cover" />
+                      <img src={booking.car.images[0].url} alt={booking.car.nama} className="w-full h-full object-contain" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Car size={24} className={isDark ? 'text-white/20' : 'text-slate-300'} />

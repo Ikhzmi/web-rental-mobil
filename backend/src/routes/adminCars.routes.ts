@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireAdmin } from '../middleware/verifySupabaseToken';
 import { asyncHandler, AppError } from '../lib/errorHandler';
 import { notifySuperAdmins } from '../services/notification.service';
+import { logAdminActivity } from '../services/activity.service';
 
 export const adminCarsRouter = Router();
 
@@ -145,6 +146,15 @@ adminCarsRouter.post('/', asyncHandler(async (req, res) => {
     data: { actionUrl: '/superadmin/approval', carId: car.id },
   });
 
+  void logAdminActivity({
+    instansiId,
+    userId: req.user!.id,
+    action: 'create_car',
+    title: 'Penambahan Armada Baru',
+    description: `${(req.user as any)?.nama || req.user?.email || 'Admin'} menambahkan armada baru: ${car.nama} (${car.nomorPlat ?? 'Tanpa plat'})`,
+    metadata: { carId: car.id, nama: car.nama, detailUrl: '/admin/armada' },
+  });
+
   res.status(201).json({ data: car });
 }));
 
@@ -186,6 +196,16 @@ adminCarsRouter.patch('/:id', asyncHandler(async (req, res) => {
       }),
     },
   });
+
+  void logAdminActivity({
+    instansiId,
+    userId: req.user!.id,
+    action: 'update_car',
+    title: 'Pembaruan Data Armada',
+    description: `${(req.user as any)?.nama || req.user?.email || 'Admin'} memperbarui armada: ${car.nama}`,
+    metadata: { carId: car.id, nama: car.nama, detailUrl: '/admin/armada' },
+  });
+
   res.json({ data: car });
 }));
 
@@ -223,6 +243,16 @@ adminCarsRouter.delete('/:id', asyncHandler(async (req, res) => {
   // Jika tidak pernah memiliki riwayat booking sama sekali -> Hapus permanen
   if (existing.bookings.length === 0) {
     await prisma.car.delete({ where: { id } });
+
+    void logAdminActivity({
+      instansiId,
+      userId: req.user!.id,
+      action: 'update_car',
+      title: 'Armada Dihapus Permanen',
+      description: `${(req.user as any)?.nama || req.user?.email || 'Admin'} menghapus armada: ${existing.nama}`,
+      metadata: { carId: existing.id, nama: existing.nama, detailUrl: '/admin/armada' },
+    });
+
     res.json({
       message: `Armada "${existing.nama}" berhasil dihapus permanen`,
       deletedPermanently: true,
@@ -237,6 +267,16 @@ adminCarsRouter.delete('/:id', asyncHandler(async (req, res) => {
         alasanPenolakan: 'Dihapus oleh admin instansi',
       },
     });
+
+    void logAdminActivity({
+      instansiId,
+      userId: req.user!.id,
+      action: 'update_car',
+      title: 'Armada Dinonaktifkan',
+      description: `${(req.user as any)?.nama || req.user?.email || 'Admin'} menonaktifkan armada: ${existing.nama}`,
+      metadata: { carId: existing.id, nama: existing.nama, detailUrl: '/admin/armada' },
+    });
+
     res.json({
       data: car,
       message: `Armada "${existing.nama}" berhasil dinonaktifkan dan ditarik dari katalog`,

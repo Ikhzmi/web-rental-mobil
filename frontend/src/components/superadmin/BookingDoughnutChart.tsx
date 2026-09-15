@@ -68,8 +68,8 @@ export function BookingDoughnutChart() {
       </div>
       <div className="p-4 flex flex-1">
         {/* Left: Pie Chart */}
-        <div className="w-2/5 flex items-center justify-center">
-          <div className="relative w-36 h-36">
+        <div className="w-2/5 flex flex-col items-center justify-center">
+          <div className="relative w-32 h-32">
             {isLoading ? (
               <div className="w-full h-full flex items-center justify-center">
                 <div className={`w-28 h-28 rounded-full border-8 animate-pulse ${
@@ -83,8 +83,8 @@ export function BookingDoughnutChart() {
                     data={chartData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={28}
-                    outerRadius={50}
+                    innerRadius={30}
+                    outerRadius={48}
                     paddingAngle={2}
                     dataKey="value"
                     stroke="none"
@@ -102,7 +102,7 @@ export function BookingDoughnutChart() {
             )}
             {!isLoading && chartData.length > 0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{totalBookings}</p>
+                <p className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{totalBookings}</p>
                 <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>Total</p>
               </div>
             )}

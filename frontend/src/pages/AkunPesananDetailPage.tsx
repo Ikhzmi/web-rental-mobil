@@ -1,10 +1,10 @@
-import { useState, Fragment } from 'react';
+import { useState, Fragment, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, ArrowLeft, MessageCircle, Star, Check, Calendar as CalendarIcon, AlertTriangle, X } from 'lucide-react';
+import { Loader2, ArrowLeft, MessageCircle, Star, Check, Calendar as CalendarIcon, AlertTriangle, X, ShieldCheck, RefreshCw, Send, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DayPicker, type DateRange } from 'react-day-picker';
-import { api, ApiError, type StatusBooking } from '../lib/api';
+import { api, ApiError, type StatusBooking, type RefundData, type Booking } from '../lib/api';
 import { formatRupiah } from '../lib/pricing';
 import { useTheme } from '../hooks/useTheme';
 import { buildWhatsAppLink } from '../lib/businessConfig';
@@ -178,6 +178,169 @@ function ReviewSection({ bookingId, isDark }: { bookingId: string; isDark: boole
   );
 }
 
+function RefundTrackerCard({
+  booking,
+  refund,
+  isDark,
+  onOpenRefundForm,
+}: {
+  booking: Booking;
+  refund?: RefundData | null;
+  isDark: boolean;
+  onOpenRefundForm: () => void;
+}) {
+  if (!refund) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.23 }}
+        className={`mt-5 rounded-2xl p-5 border ${
+          isDark
+            ? 'bg-amber-500/10 border-amber-500/20 text-white'
+            : 'bg-amber-50/90 border-amber-200 text-slate-900 shadow-sm'
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={20} className="text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-sm">Pesanan Dibatalkan — Pengajuan Rekening Refund</h3>
+            <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-white/70' : 'text-slate-600'}`}>
+              Pesanan ini telah dibatalkan. Anda berhak mendapatkan <strong>pengembalian dana 100%</strong> senilai{' '}
+              <strong>{formatRupiah(Number(booking.totalHarga))}</strong> tanpa potongan biaya admin.
+            </p>
+            <button
+              onClick={onOpenRefundForm}
+              className="mt-3 inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+            >
+              <Send size={13} />
+              Isi Rekening Tujuan Refund
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  const steps = [
+    { label: 'Diajukan', desc: 'Menunggu review rental' },
+    { label: 'Disetujui', desc: 'Antrean proses transfer' },
+    { label: 'Diproses', desc: 'Dana sedang ditransfer' },
+    { label: 'Berhasil', desc: 'Dana masuk ke rekening' },
+  ];
+
+  let currentStep = 0;
+  if (refund.status === 'menunggu_persetujuan') currentStep = 0;
+  else if (refund.status === 'disetujui') currentStep = 1;
+  else if (refund.status === 'diproses') currentStep = 2;
+  else if (refund.status === 'berhasil') currentStep = 3;
+  else if (refund.status === 'ditolak') currentStep = -1;
+
+  const statusBadgeColor = {
+    menunggu_persetujuan: isDark ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-amber-100 text-amber-800 border-amber-200',
+    disetujui: isDark ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' : 'bg-sky-100 text-sky-800 border-sky-200',
+    diproses: isDark ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    berhasil: isDark ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    ditolak: isDark ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-100 text-red-800 border-red-200',
+  }[refund.status];
+
+  const statusLabel = {
+    menunggu_persetujuan: 'Menunggu Persetujuan Rental',
+    disetujui: 'Disetujui — Antre Transfer',
+    diproses: 'Sedang Ditransfer',
+    berhasil: 'Dana Berhasil Dikembalikan',
+    ditolak: 'Pengajuan Refund Ditolak',
+  }[refund.status];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.23 }}
+      className={`mt-5 rounded-2xl p-5 border overflow-hidden ${
+        isDark ? 'bg-white/[0.04] border-white/10' : 'bg-white/80 backdrop-blur-xl border-slate-200 shadow-sm'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+            isDark ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+          }`}>
+            <RefreshCw size={16} />
+          </div>
+          <div>
+            <h3 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Pengembalian Dana (Refund 100%)
+            </h3>
+            <p className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
+              Tidak dikenakan potongan biaya admin apapun
+            </p>
+          </div>
+        </div>
+        <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${statusBadgeColor}`}>
+          {statusLabel}
+        </span>
+      </div>
+
+      {refund.status !== 'ditolak' ? (
+        <div className="mb-5 pt-2">
+          <div className="grid grid-cols-4 gap-1 relative">
+            {steps.map((s, idx) => {
+              const isCompleted = idx <= currentStep;
+              const isCurrent = idx === currentStep;
+              return (
+                <div key={s.label} className="text-center">
+                  <div className={`w-7 h-7 mx-auto rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                    isCompleted
+                      ? 'bg-emerald-500 text-white'
+                      : isDark
+                      ? 'bg-white/10 text-white/40'
+                      : 'bg-slate-200 text-slate-500'
+                  } ${isCurrent ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-black' : ''}`}>
+                    {idx < currentStep ? <Check size={14} /> : idx + 1}
+                  </div>
+                  <p className={`text-[11px] font-medium mt-1.5 ${
+                    isCurrent ? (isDark ? 'text-white font-semibold' : 'text-slate-900 font-semibold') : isDark ? 'text-white/40' : 'text-slate-400'
+                  }`}>
+                    {s.label}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className={`p-3 rounded-xl mb-4 text-xs ${isDark ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          <strong>Alasan Penolakan:</strong> {refund.catatan || 'Pengajuan refund ditolak oleh pihak rental.'}
+        </div>
+      )}
+
+      <div className={`p-3.5 rounded-xl text-xs space-y-2 ${isDark ? 'bg-white/5' : 'bg-slate-50 border border-slate-200/60'}`}>
+        <div className="flex justify-between">
+          <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Jumlah Pengembalian:</span>
+          <span className="font-bold text-emerald-500">{formatRupiah(Number(refund.jumlahRefund))}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Biaya Potongan Admin:</span>
+          <span className="font-medium text-emerald-500">Rp 0 (0% — Tanpa Biaya)</span>
+        </div>
+        <div className="flex justify-between">
+          <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Rekening Tujuan:</span>
+          <span className={`font-mono text-right ${isDark ? 'text-white/90' : 'text-slate-800'}`}>
+            {refund.rekeningTujuan || booking.rekeningRefund || '-'}
+          </span>
+        </div>
+        {refund.catatan && refund.status !== 'ditolak' && (
+          <div className="flex justify-between border-t pt-2 border-white/10">
+            <span className={isDark ? 'text-white/50' : 'text-slate-500'}>Catatan Rental:</span>
+            <span className={`text-right italic ${isDark ? 'text-white/80' : 'text-slate-700'}`}>{refund.catatan}</span>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 export default function AkunPesananDetailPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -197,10 +360,55 @@ export default function AkunPesananDetailPage() {
   const [rescheduleRange, setRescheduleRange] = useState<DateRange | undefined>();
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
+  // Refund request state
+  const [showRefundInputModal, setShowRefundInputModal] = useState(false);
+  const [inputRekening, setInputRekening] = useState('');
+  const [refundInputError, setRefundInputError] = useState<string | null>(null);
+
   const { data: booking, isLoading, isError } = useQuery({
     queryKey: ['my-booking', id],
     queryFn: () => api.getBooking(id!),
     enabled: !!id,
+  });
+
+  const { data: refundResponse } = useQuery({
+    queryKey: ['refund-booking', id],
+    queryFn: () => api.getRefundByBooking(id!),
+    enabled: !!id,
+  });
+
+  const refundData = refundResponse?.refund ?? (booking as any)?.refund;
+
+  const canCancelDikonfirmasi = useMemo(() => {
+    if (!booking) return false;
+    if (booking.status === 'menunggu_pembayaran') return true;
+    if (booking.status === 'dikonfirmasi') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const start = new Date(booking.tanggalMulai);
+      start.setHours(0, 0, 0, 0);
+      const diffMs = start.getTime() - today.getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      return diffDays >= 1; // Maks H-1 (misal tgl 21, maks tgl 20)
+    }
+    return false;
+  }, [booking]);
+
+  const requestRefundMutation = useMutation({
+    mutationFn: () => api.createRefund({
+      bookingId: id!,
+      rekeningTujuan: inputRekening.trim(),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-booking', id] });
+      queryClient.invalidateQueries({ queryKey: ['refund-booking', id] });
+      setShowRefundInputModal(false);
+      setInputRekening('');
+      setRefundInputError(null);
+    },
+    onError: (err) => {
+      setRefundInputError(err instanceof ApiError ? err.message : 'Gagal mengajukan refund');
+    },
   });
 
   const cancelMutation = useMutation({
@@ -242,12 +450,8 @@ export default function AkunPesananDetailPage() {
 
   const statusBadge = isDark ? STATUS_BADGE_DARK : STATUS_BADGE_LIGHT;
 
-  // Calculate refund amount (3% deduction for dikonfirmasi cancellation)
-  const refundEstimasi = booking
-    ? booking.status === 'dikonfirmasi'
-      ? Math.round(Number(booking.totalHarga) * 0.97)
-      : Number(booking.totalHarga)
-    : 0;
+  // Calculate refund amount (100% full refund without deduction)
+  const refundEstimasi = booking ? Number(booking.totalHarga) : 0;
 
   if (isLoading) {
     return (
@@ -272,14 +476,6 @@ export default function AkunPesananDetailPage() {
       </main>
     );
   }
-
-  // Check H-1 rule: can only cancel dikonfirmasi if at least 1 day before start
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const mulai = new Date(booking.tanggalMulai);
-  mulai.setHours(0, 0, 0, 0);
-  const selisihHari = (mulai.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-  const canCancelDikonfirmasi = booking.status === 'dikonfirmasi' && selisihHari >= 1;
 
   return (
     <main className={`min-h-screen pt-24 pb-20 px-5 sm:px-10 md:px-14 transition-colors duration-300 ${
@@ -382,6 +578,19 @@ export default function AkunPesananDetailPage() {
           Tanya soal pesanan ini
         </motion.a>
 
+        {/* Refund Tracker (jika pesanan dibatalkan atau memiliki data refund) */}
+        {(booking.status === 'dibatalkan' || !!refundData) && (
+          <RefundTrackerCard
+            booking={booking}
+            refund={refundData}
+            isDark={isDark}
+            onOpenRefundForm={() => {
+              setInputRekening(booking.rekeningRefund || '');
+              setShowRefundInputModal(true);
+            }}
+          />
+        )}
+
         {/* Rating (selesai) */}
         {booking.status === 'selesai' && (
           <ReviewSection bookingId={booking.id} isDark={isDark} />
@@ -414,23 +623,34 @@ export default function AkunPesananDetailPage() {
         )}
 
         {/* Cancel (menunggu_pembayaran or dikonfirmasi with H-1 check) */}
-        {(booking.status === 'menunggu_pembayaran' || canCancelDikonfirmasi) && (
+        {(booking.status === 'menunggu_pembayaran' || booking.status === 'dikonfirmasi') && (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.27 }}
             className={`mt-5 rounded-2xl p-5 ${isDark ? 'bg-white/[0.04] border border-white/10' : 'bg-white/60 backdrop-blur-xl border border-white/80'}`}
           >
-            <button
-              onClick={() => { setShowCancelModal(true); setCancelError(null); }}
-              className="text-red-500 hover:text-red-400 text-sm font-medium transition-colors"
-            >
-              Batalkan Pesanan
-            </button>
-            {booking.status === 'dikonfirmasi' && (
-              <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
-                Pembatalan pesanan dikonfirmasi dikenakan potongan administrasi 3%. Refund diproses dalam 1×24 jam.
-              </p>
+            {canCancelDikonfirmasi ? (
+              <>
+                <button
+                  onClick={() => { setShowCancelModal(true); setCancelError(null); }}
+                  className="text-red-500 hover:text-red-400 text-sm font-medium transition-colors"
+                >
+                  Batalkan Pesanan
+                </button>
+                {booking.status === 'dikonfirmasi' && (
+                  <p className={`text-xs mt-1 ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
+                    Pembatalan pesanan H-1 mendapatkan refund dana 100% penuh tanpa potongan admin.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="flex items-start gap-2 text-xs">
+                <Info size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className={isDark ? 'text-amber-300/90' : 'text-amber-800'}>
+                  Pembatalan pesanan hanya dapat dilakukan maksimal <strong>H-1</strong> sebelum tanggal mulai sewa (misal booking tanggal 21, maksimal tanggal 20).
+                </p>
+              </div>
             )}
           </motion.div>
         )}
@@ -529,14 +749,14 @@ export default function AkunPesananDetailPage() {
 
               {/* Info refund jika status dikonfirmasi */}
               {booking.status === 'dikonfirmasi' && (
-                <div className={`flex gap-3 p-3.5 rounded-2xl mb-4 ${isDark ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-amber-50 border border-amber-200'}`}>
-                  <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                <div className={`flex gap-3 p-3.5 rounded-2xl mb-4 ${isDark ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-emerald-50 border border-emerald-200'}`}>
+                  <ShieldCheck size={18} className="text-emerald-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className={`text-xs font-semibold mb-1 ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>Info Refund</p>
-                    <p className={`text-xs leading-relaxed ${isDark ? 'text-amber-400/80' : 'text-amber-600'}`}>
-                      Pembatalan pesanan yang sudah dikonfirmasi dikenakan potongan administrasi <strong>3%</strong>.
-                      Estimasi refund: <strong>{formatRupiah(refundEstimasi)}</strong>.
-                      Refund akan diproses dalam <strong>1×24 jam</strong> ke rekening yang Anda cantumkan.
+                    <p className={`text-xs font-semibold mb-1 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>Pengembalian Dana Penuh 100%</p>
+                    <p className={`text-xs leading-relaxed ${isDark ? 'text-emerald-400/90' : 'text-emerald-700'}`}>
+                      Pembatalan pesanan <strong>tidak dikenakan biaya potongan admin</strong>.
+                      Jumlah refund: <strong>{formatRupiah(refundEstimasi)}</strong> (100% utuh).
+                      Refund akan diproses transfer dalam <strong>1×24 jam</strong> ke rekening tujuan Anda.
                     </p>
                   </div>
                 </div>
@@ -606,6 +826,82 @@ export default function AkunPesananDetailPage() {
                   className={`px-4 py-2.5 text-sm transition-colors rounded-full ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   Tidak
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── Refund Input Modal (Jika pesanan sudah dibatalkan tapi belum ada data rekening refund) ─── */}
+      <AnimatePresence>
+        {showRefundInputModal && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowRefundInputModal(false)} />
+            <motion.div
+              className={`relative z-10 w-full max-w-sm rounded-3xl p-6 shadow-2xl ${
+                isDark ? 'bg-[#141414] border border-white/10' : 'bg-white border border-slate-200'
+              }`}
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={`font-semibold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>Rekening Pengembalian Dana</h3>
+                <button onClick={() => setShowRefundInputModal(false)} className={isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-slate-700'}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className={`p-3 rounded-xl mb-4 text-xs ${isDark ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                Dana sebesar <strong>{formatRupiah(Number(booking.totalHarga))}</strong> akan ditransfer penuh 100% tanpa potongan biaya admin.
+              </div>
+
+              <div className="mb-4">
+                <label className={`text-xs mb-1.5 block ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
+                  Nama Bank & Nomor Rekening Tujuan <span className="text-red-400">*</span>
+                </label>
+                <input
+                  value={inputRekening}
+                  onChange={(e) => setInputRekening(e.target.value)}
+                  placeholder="Contoh: BCA - 1234567890 a.n. Budi Santoso"
+                  className={`w-full text-sm rounded-xl px-3.5 py-2.5 outline-none transition-all ${
+                    isDark
+                      ? 'bg-white/5 border border-white/15 text-white placeholder:text-white/30 focus:border-white/30'
+                      : 'bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
+                  }`}
+                />
+              </div>
+
+              {refundInputError && (
+                <p className={`text-xs px-3 py-2 rounded-lg mb-3 ${isDark ? 'bg-red-500/10 border border-red-500/20 text-red-400' : 'bg-red-50 border border-red-200 text-red-600'}`}>
+                  {refundInputError}
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => requestRefundMutation.mutate()}
+                  disabled={requestRefundMutation.isPending || !inputRekening.trim()}
+                  className={`flex-1 flex items-center justify-center gap-2 text-sm font-medium px-4 py-2.5 rounded-full transition-colors disabled:opacity-60 ${
+                    isDark
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`}
+                >
+                  {requestRefundMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  Ajukan Refund
+                </button>
+                <button
+                  onClick={() => setShowRefundInputModal(false)}
+                  className={`px-4 py-2.5 text-sm transition-colors rounded-full ${isDark ? 'text-white/50 hover:text-white' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Batal
                 </button>
               </div>
             </motion.div>

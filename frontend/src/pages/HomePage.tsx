@@ -12,10 +12,10 @@ const FaqPreview = lazy(() => import('../components/FaqPreview'));
 const CtaBanner = lazy(() => import('../components/CtaBanner'));
 const ModernFooter = lazy(() => import('../components/ModernFooter'));
 
-function SectionLoader() {
+function SectionLoader({ isDark }: { isDark: boolean }) {
   return (
-    <div className="min-h-[400px] flex items-center justify-center bg-black">
-      <div className="w-8 h-8 border-2 border-white/20 border-t-orange-500 rounded-full animate-spin" />
+    <div className={`min-h-[400px] flex items-center justify-center ${isDark ? 'bg-black' : 'bg-[#F9EFE8]'}`}>
+      <div className={`w-8 h-8 border-2 ${isDark ? 'border-white/20' : 'border-neutral-300'} border-t-orange-500 rounded-full animate-spin`} />
     </div>
   );
 }
@@ -25,30 +25,30 @@ export default function HomePage() {
   const isDark = theme === 'dark';
 
   return (
-    <main className="bg-black min-h-screen">
+    <main className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-black' : 'bg-[#F9EFE8]'}`}>
       <Hero />
       <SectionDivider type="hero-to-fleet" isDark={isDark} />
-      <Suspense fallback={<SectionLoader />}>
+      <Suspense fallback={<SectionLoader isDark={isDark} />}>
         <FleetConfigurator />
       </Suspense>
       <SectionDivider type="fleet-to-booking" isDark={isDark} />
-      <Suspense fallback={<SectionLoader />}>
+      <Suspense fallback={<SectionLoader isDark={isDark} />}>
         <HowItWorks />
       </Suspense>
-      <Suspense fallback={<SectionLoader />}>
+      <Suspense fallback={<SectionLoader isDark={isDark} />}>
         <FeaturesSection />
       </Suspense>
-      <Suspense fallback={<SectionLoader />}>
+      <Suspense fallback={<SectionLoader isDark={isDark} />}>
         <Testimonials />
       </Suspense>
-      <Suspense fallback={<SectionLoader />}>
+      <Suspense fallback={<SectionLoader isDark={isDark} />}>
         <FaqPreview />
       </Suspense>
-      <Suspense fallback={<SectionLoader />}>
+      <Suspense fallback={<SectionLoader isDark={isDark} />}>
         <CtaBanner />
       </Suspense>
       <SectionDivider type="cta-to-footer" isDark={isDark} />
-      <Suspense fallback={<SectionLoader />}>
+      <Suspense fallback={<SectionLoader isDark={isDark} />}>
         <ModernFooter />
       </Suspense>
     </main>

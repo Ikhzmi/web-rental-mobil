@@ -181,26 +181,53 @@ export default function Testimonials() {
                   "{active.komentar}"
                 </p>
 
-                {/* Author — avatar inisial, bukan foto stok, karena ini
-                    data ulasan asli (tidak ada foto profil di sistem) */}
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold shrink-0 ${
-                    isDark ? 'bg-white/10 text-white/80 border-2 border-white/10' : 'bg-zinc-100 text-zinc-600 border-2 border-zinc-200'
-                  }`}>
-                    {(active.profile?.nama ?? '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className={`font-medium ${
-                      isDark ? 'text-white' : 'text-zinc-900'
+                {/* Author & Mobil info — avatar inisial + foto 16:9 & label instansi */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold shrink-0 ${
+                      isDark ? 'bg-white/10 text-white/80 border-2 border-white/10' : 'bg-zinc-100 text-zinc-600 border-2 border-zinc-200'
                     }`}>
-                      {active.profile?.nama ?? 'Pelanggan'}
-                    </p>
-                    <p className={`text-sm ${
-                      isDark ? 'text-zinc-500' : 'text-zinc-500'
-                    }`}>
-                      {active.car?.nama ?? '-'} · {formatReviewDate(active.createdAt)}
-                    </p>
+                      {(active.profile?.nama ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className={`font-medium ${
+                        isDark ? 'text-white' : 'text-zinc-900'
+                      }`}>
+                        {active.profile?.nama ?? 'Pelanggan'}
+                      </p>
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                        <span className={`text-sm font-medium ${
+                          isDark ? 'text-zinc-300' : 'text-zinc-700'
+                        }`}>
+                          {active.car?.nama ?? '-'}
+                        </span>
+                        {active.car?.instansi?.namaInstansi && (
+                          <span className={`text-[11px] px-2 py-0.5 rounded-md font-medium ${
+                            isDark ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            {active.car.instansi.namaInstansi}
+                          </span>
+                        )}
+                        <span className={`text-xs ${
+                          isDark ? 'text-zinc-500' : 'text-zinc-400'
+                        }`}>
+                          · {formatReviewDate(active.createdAt)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+
+                  {active.car?.images?.[0]?.url && (
+                    <div className={`relative aspect-video w-28 sm:w-36 rounded-xl overflow-hidden shrink-0 flex items-center justify-center ${
+                      isDark ? 'bg-black/30 border border-white/10' : 'bg-white/60 border border-zinc-200/80'
+                    }`}>
+                      <img
+                        src={active.car.images[0].url}
+                        alt={active.car.nama}
+                        className="w-full h-full object-contain p-1"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -52,6 +52,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         message: 'Sesi login telah berakhir. Silakan login kembali.',
       };
       setToasts((prev) => [...prev, newToast]);
+
+      // Auto dismiss setelah 5 detik
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 5000);
     });
 
     return unsubscribe;
@@ -82,6 +87,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
 
     setToasts((prev) => [...prev, newToast]);
+
+    // Auto dismiss setelah 5 detik
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
   }, []);
 
   return (

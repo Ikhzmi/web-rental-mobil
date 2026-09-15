@@ -34,12 +34,17 @@ export function estimasiHarga(
   tanggalMulai: Date | undefined,
   tanggalSelesai: Date | undefined,
   sopirDipilih: boolean,
-  addonLain: { jenis: JenisAddon; harga: number }[]
+  addonLain: { jenis: JenisAddon; harga: number }[] = [],
 ): PriceEstimate | null {
   if (!tanggalMulai || !tanggalSelesai) return null;
 
+  const start = new Date(tanggalMulai);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(tanggalSelesai);
+  end.setHours(0, 0, 0, 0);
+
   const msPerDay = 1000 * 60 * 60 * 24;
-  const diffDays = Math.ceil((tanggalSelesai.getTime() - tanggalMulai.getTime()) / msPerDay);
+  const diffDays = Math.round((end.getTime() - start.getTime()) / msPerDay) + 1;
   const durasiHari = Math.max(1, diffDays);
 
   const hargaPerHari = Number(car.hargaPerHari);

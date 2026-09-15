@@ -163,17 +163,23 @@ export default function ArmadaDetailPage() {
     let from = range?.from;
     let to = range?.to;
 
-    // Jika user hanya memilih 1 tanggal, gunakan tanggal tersebut (Sewa 1 Hari Jam 08:00 - 20:00 WIB)
-    if (from && !to) {
+    // Jika user belum memilih tanggal di kalender detail armada, buat default hari ini
+    if (!from) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      from = today;
+      to = today;
+    } else if (from && !to) {
       to = from;
     }
 
-    const serializedRange = from && to ? {
+    const finalTo = to ?? from;
+    const serializedRange = {
       from: from.toISOString(),
-      to: to.toISOString(),
-    } : undefined;
+      to: finalTo.toISOString(),
+    };
 
-    if (serializedRange) {
+    if (id) {
       localStorage.setItem(`booking_range_${id}`, JSON.stringify(serializedRange));
     }
 
@@ -721,7 +727,7 @@ export default function ArmadaDetailPage() {
                     </div>
                     <p className={`text-[10px] ${isDark ? 'text-emerald-300/70' : 'text-emerald-700'}`}>
                       {range?.from?.toLocaleDateString('id-ID')}
-                      {rentalCalculation.days === 1 ? ' (Mulai 00:00 WIB)' : ` s/d ${range?.to?.toLocaleDateString('id-ID')}`}
+                      {rentalCalculation.days === 1 ? ' (Sewa 1 Hari: 01.00 - 23.00 WIB)' : ` s/d ${range?.to?.toLocaleDateString('id-ID')}`}
                     </p>
                   </motion.div>
                 )}

@@ -87,7 +87,7 @@ export default function Nav() {
           'fixed z-[100] flex items-center justify-between',
           // Gunakan glass saat scrolled ATAU saat sedang tersembunyi (agar tidak ada flash borderless)
           (scrolled || !visible)
-            ? `top-0 left-0 right-0 ${open ? 'rounded-b-none' : 'rounded-b-3xl'} p-3 md:p-4 shadow-xl md:shadow-2xl ${isDark ? 'nav-mobile-glass-dark nav-desktop-glass-dark' : 'nav-mobile-glass-light nav-desktop-glass-light'}`
+            ? `top-0 left-0 right-0 ${open ? 'rounded-b-none' : 'rounded-b-3xl'} p-3 md:p-4 shadow-xl md:shadow-2xl backdrop-blur-2xl ${isDark ? 'nav-mobile-glass-dark nav-desktop-glass-dark' : 'nav-mobile-glass-light nav-desktop-glass-light'}`
             : 'top-0 left-0 right-0 p-4 md:p-6 nav-desktop-transparent',
         ].join(' ')}
       >
@@ -102,7 +102,7 @@ export default function Nav() {
         {/* Desktop Navigation - Glass Pill Container (Always horizontally centered) */}
         <div className={`
           hidden md:flex items-center
-          glass-nav-links rounded-full px-3 py-2
+          glass-nav-links backdrop-blur-xl rounded-full px-3 py-2
           absolute left-1/2 -translate-x-1/2
         `}>
           {NAV_LINKS.map((link) => (
@@ -329,7 +329,7 @@ export default function Nav() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className={`md:hidden fixed left-0 right-0 z-[99] p-5 flex flex-col gap-2 rounded-b-2xl shadow-2xl ${
+            className={`md:hidden fixed left-0 right-0 z-[99] p-5 flex flex-col gap-2 rounded-b-2xl shadow-2xl backdrop-blur-2xl ${
               scrolled ? 'top-[59px]' : 'top-[72px]'
             } ${isDark ? 'nav-mobile-glass-dark' : 'nav-mobile-glass-light'}`}
           >

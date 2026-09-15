@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ClipboardList, Search, ChevronRight, Car, Clock, LayoutGrid, List, AlertTriangle, X, Loader2, CheckCircle } from 'lucide-react';
@@ -384,10 +384,33 @@ export default function AdminPesananPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
-  const [filterStatus, setFilterStatus] = useState<StatusBooking | ''>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const validStatuses: StatusBooking[] = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan', 'selesai', 'dibatalkan'];
+  const statusParam = searchParams.get('status') as StatusBooking | null;
+  const initialStatus = statusParam && validStatuses.includes(statusParam) ? statusParam : '';
+
+  const [filterStatus, setFilterStatus] = useState<StatusBooking | ''>(initialStatus);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'horizontal'>('grid');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
+
+  useEffect(() => {
+    const s = searchParams.get('status') as StatusBooking | null;
+    if (s && validStatuses.includes(s)) {
+      setFilterStatus(s);
+    } else if (!s) {
+      setFilterStatus('');
+    }
+  }, [searchParams]);
+
+  const handleStatusChange = (status: StatusBooking | '') => {
+    setFilterStatus(status);
+    if (status) {
+      setSearchParams({ status });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   const queryClient = useQueryClient();
 
@@ -487,7 +510,7 @@ export default function AdminPesananPage() {
         ].map((item) => (
           <button
             key={item.key}
-            onClick={() => setFilterStatus(item.key as StatusBooking | '')}
+            onClick={() => handleStatusChange(item.key as StatusBooking | '')}
             className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all border ${
               filterStatus === item.key
                 ? isDark

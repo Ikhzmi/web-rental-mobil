@@ -144,8 +144,10 @@ export function RecentTransactions() {
           transactions.slice(0, 5).map((txn) => (
           <div
             key={txn.id}
-            className={`flex items-center gap-3 p-3 rounded-xl transition-colors ${
-              isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-50 hover:bg-slate-100'
+            className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 ${
+              isDark
+                ? 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-white/20'
+                : 'sa-glass-light hover:bg-white/50 border-white/70 shadow-sm'
             }`}
           >
             {/* Icon */}

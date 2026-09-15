@@ -255,7 +255,7 @@ export default function Hero() {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full overflow-hidden bg-black"
+      className={`relative w-full overflow-hidden ${isDark ? 'bg-black' : 'bg-[#F9EFE8]'}`}
       style={{ height: '100vh' }}
     >
       {/* DEBUG: Show which device state is active */}

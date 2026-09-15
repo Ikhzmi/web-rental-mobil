@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { TrendingUp } from 'lucide-react';
 import { api, type AnalyticsPeriod } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
@@ -17,15 +16,9 @@ const TIME_FILTERS = [
 const DAYS_ID = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-const MOCK_CHART_DATA: Record<string, { days: string[]; values: number[] }> = {
-  today: { days: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:00'], values: [0, 0, 1500000, 3500000, 4500000, 3000000, 2000000] },
-  '7days': { days: DAYS_ID, values: [4500000, 6800000, 5200000, 7800000, 6500000, 8900000, 7200000] },
-  month: { days: ['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4'], values: [28000000, 32000000, 29000000, 35000000] },
-  year: { days: MONTHS_ID, values: [450000000, 520000000, 480000000, 550000000, 620000000, 680000000, 720000000, 750000000, 690000000, 780000000, 820000000, 950000000] },
-};
-
 function getPeriodForApi(filter: string): AnalyticsPeriod {
-  if (filter === 'today' || filter === '7days') return '7d';
+  if (filter === 'today') return 'today' as AnalyticsPeriod;
+  if (filter === '7days') return '7d';
   if (filter === 'month') return '30d';
   return '1y';
 }
@@ -40,30 +33,60 @@ export function RevenueChart() {
     queryKey: ['superadmin-analytics', selectedFilter],
     queryFn: () => api.getSuperAdminAnalytics(getPeriodForApi(selectedFilter)),
     staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 
-  // Use real API data if available, otherwise fall back to mock data
-  const hasRealData = data?.revenueData && data.revenueData.length > 0;
+  // Use real API data if available
+  const hasRealData = Boolean(data?.revenueData && data.revenueData.length > 0);
 
-  // Convert API data to chart format if available
+  // Convert API data to chart format (showing Platform Commission)
   const realChartData = hasRealData ? {
-    days: data!.revenueData.map((d: { date: string }) => {
-      // Format date based on filter
-      const date = new Date(d.date);
+    days: data!.revenueData.map((d: { date: string; revenue: number; commission?: number }) => {
       if (selectedFilter === 'today') {
-        return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        return d.date;
       } else if (selectedFilter === '7days') {
-        return date.toLocaleDateString('id-ID', { weekday: 'short' });
+        const parts = d.date.split('-');
+        if (parts.length === 3) {
+          const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+          return dt.toLocaleDateString('id-ID', { weekday: 'short' });
+        }
+        return d.date;
       } else if (selectedFilter === 'month') {
-        return `Minggu ${Math.ceil(date.getDate() / 7)}`;
+        const parts = d.date.split('-');
+        if (parts.length === 3) {
+          const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+          return `Minggu ${Math.ceil(dt.getDate() / 7)}`;
+        }
+        return d.date;
       } else {
-        return date.toLocaleDateString('id-ID', { month: 'short' });
+        const parts = d.date.split('-');
+        if (parts.length === 2) {
+          const mIdx = Number(parts[1]) - 1;
+          return MONTHS_ID[mIdx] || d.date;
+        } else if (parts.length === 3) {
+          const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+          return dt.toLocaleDateString('id-ID', { month: 'short' });
+        }
+        return d.date;
       }
     }),
-    values: data!.revenueData.map((d: { revenue: number }) => d.revenue),
+    values: data!.revenueData.map((d: { revenue: number; commission?: number }) =>
+      d.commission !== undefined ? d.commission : Math.round(d.revenue * 0.1)
+    ),
   } : null;
 
-  const chartData = realChartData || MOCK_CHART_DATA[selectedFilter] || MOCK_CHART_DATA['7days'];
+  const defaultDays = selectedFilter === 'today'
+    ? ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00']
+    : selectedFilter === '7days'
+    ? DAYS_ID
+    : selectedFilter === 'month'
+    ? ['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4']
+    : MONTHS_ID;
+
+  const chartData = realChartData || {
+    days: defaultDays,
+    values: new Array(defaultDays.length).fill(0),
+  };
   const values = chartData.values;
   const days = chartData.days;
 
@@ -105,7 +128,7 @@ export function RevenueChart() {
     return `Rp${value}`;
   };
 
-  const totalRevenue = data?.totalRevenue ?? values.reduce((a: number, b: number) => a + b, 0);
+  const totalCommission = (data as any)?.totalCommission ?? values.reduce((a: number, b: number) => a + b, 0);
 
   return (
     <motion.div
@@ -118,7 +141,7 @@ export function RevenueChart() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <h2 className={`font-semibold text-sm ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Grafik Pendapatan
+              Grafik Komisi Platform
             </h2>
             {isLoading && (
               <div className={`w-2 h-2 rounded-full animate-pulse ${isDark ? 'bg-blue-400' : 'bg-blue-500'}`} title="Memuat data..." />
@@ -144,15 +167,12 @@ export function RevenueChart() {
       <div className="p-4 flex flex-col h-full">
         <div className="flex items-center gap-3 mb-3">
           <div>
-            <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>Total Pendapatan</p>
-            <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              {formatRupiah(totalRevenue)}
+            <p className={`text-[10px] ${isDark ? 'text-white/50' : 'text-[#8B7355]/70'}`}>
+              Total Komisi ({TIME_FILTERS.find((f) => f.id === selectedFilter)?.label})
             </p>
-          </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20">
-            <TrendingUp size={10} className="text-emerald-400" />
-            <span className="text-[10px] font-medium text-emerald-400">+15%</span>
-            <span className="text-[10px] text-emerald-400/70">dari kemarin</span>
+            <p className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              {formatRupiah(totalCommission)}
+            </p>
           </div>
         </div>
 

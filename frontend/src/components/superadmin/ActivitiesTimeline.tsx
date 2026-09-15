@@ -1,21 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Clock, CheckCircle, AlertCircle, CreditCard, Building2, Car, User } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useTheme } from '../../hooks/useTheme';
 import { getGlassCardClass } from '../../hooks/useGlassStyles';
 
 function getActivityIcon(type: string, isDark: boolean) {
-  const iconMap: Record<string, { icon: typeof Clock; color: string }> = {
-    booking_confirmed: { icon: CheckCircle, color: 'text-emerald-400 bg-emerald-500/20' },
-    booking_completed: { icon: CheckCircle, color: 'text-emerald-400 bg-emerald-500/20' },
-    payment_received: { icon: CreditCard, color: 'text-white/60 bg-blue-500/20' },
-    instansi_registered: { icon: Building2, color: 'text-purple-400 bg-purple-500/20' },
-    vehicle_approved: { icon: Car, color: 'text-cyan-400 bg-cyan-500/20' },
-    customer_registered: { icon: User, color: 'text-amber-400 bg-amber-500/20' },
-    refund_processed: { icon: AlertCircle, color: 'text-red-400 bg-red-500/20' },
+  const iconMap: Record<string, { emoji: string; color: string }> = {
+    booking_created: { emoji: '📋', color: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
+    booking_confirmed: { emoji: '🚗', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' },
+    booking_completed: { emoji: '✅', color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' },
+    payment_received: { emoji: '💰', color: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' },
+    instansi_registered: { emoji: '🏢', color: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' },
+    instansi_approved: { emoji: '🏬', color: 'bg-purple-500/20 text-purple-400 border border-purple-500/30' },
+    vehicle_approved: { emoji: '🚗', color: 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' },
+    vehicle_registered: { emoji: '🚘', color: 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' },
+    customer_registered: { emoji: '👤', color: 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' },
+    refund_processed: { emoji: '🔄', color: 'bg-rose-500/20 text-rose-400 border border-rose-500/30' },
+    disbursement: { emoji: '💳', color: 'bg-blue-500/20 text-blue-400 border border-blue-500/30' },
+    admin_activity: { emoji: '🔔', color: 'bg-amber-500/20 text-amber-400 border border-amber-500/30' },
   };
-  return iconMap[type] || { icon: Clock, color: isDark ? 'text-white/40 bg-white/10' : 'text-slate-400 bg-slate-100' };
+  return iconMap[type] || { emoji: '📌', color: isDark ? 'bg-white/10 text-white/70 border border-white/10' : 'bg-slate-100 text-slate-600 border border-slate-200' };
 }
 
 function formatTimeAgo(dateStr: string) {
@@ -39,6 +43,7 @@ interface DashboardActivity {
   title: string;
   description?: string | null;
   createdAt: string;
+  instansiNama?: string | null;
 }
 
 export function ActivitiesTimeline() {
@@ -87,16 +92,25 @@ export function ActivitiesTimeline() {
           </p>
         ) : (
           activitiesList.slice(0, 5).map((activity) => {
-            const { icon: Icon, color } = getActivityIcon(activity.type, isDark);
+            const { emoji, color } = getActivityIcon(activity.type, isDark);
             return (
               <div key={activity.id} className="flex items-start gap-3">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
-                  <Icon size={14} />
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm ${color}`}>
+                  <span>{emoji}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {activity.title}
-                  </p>
+                  <div className="flex items-center justify-between gap-1 flex-wrap">
+                    <p className={`text-xs font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                      {activity.title}
+                    </p>
+                    {activity.instansiNama && (
+                      <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded ${
+                        isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}>
+                        {activity.instansiNama}
+                      </span>
+                    )}
+                  </div>
                   {activity.description && (
                     <p className={`text-[10px] mt-0.5 truncate ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
                       {activity.description}

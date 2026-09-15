@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, ArrowDownRight, RefreshCw, AlertTriangle, Clock, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, RefreshCw, AlertTriangle, Clock, ChevronRight, RotateCcw } from 'lucide-react';
 import { api } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
 import { useTheme } from '../../hooks/useTheme';
@@ -32,6 +32,12 @@ interface DashboardData {
   totalPendapatanPlatform: number;
   totalKomisiTerkumpul: number;
   bookingStats: Record<string, number>;
+  refundStats?: {
+    berhasilCount: number;
+    berhasilAmount: number;
+    pendingCount: number;
+    pendingAmount: number;
+  };
 }
 
 interface DashboardTrendData {
@@ -84,7 +90,7 @@ function StatCard({ label, value, trend, sparklineData, isDark, href }: StatCard
 
         {/* Sparkline */}
         <div className="h-8 w-20">
-          <Sparklines data={sparklineData} margin={2}>
+          <Sparklines data={sparklineData.length > 0 ? sparklineData : [5, 10, 8, 15, 12, 20]} margin={2}>
             <SparklinesLine
               style={{ strokeWidth: 2, fill: 'none' }}
               color={isPositive ? '#22c55e' : '#ef4444'}
@@ -247,6 +253,15 @@ export default function SuperAdminDashboardPage() {
                 <Clock size={12} />
                 {pendingInstansi} Instansi Pending
               </span>
+            )}
+            {((displayData as DashboardData).refundStats?.pendingCount ?? 0) > 0 && (
+              <Link
+                to="/superadmin/refunds"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30 transition-colors"
+              >
+                <RotateCcw size={12} />
+                {(displayData as DashboardData).refundStats?.pendingCount} Refund Perlu Dipantau
+              </Link>
             )}
             <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${isDark ? 'bg-white/10 text-white/60' : 'bg-slate-100 text-slate-600'}`}>
               <Clock size={12} />

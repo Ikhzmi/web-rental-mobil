@@ -38,6 +38,7 @@ export default defineConfig({
     assetsInlineLimit: 4096,
     // Target modern browsers for smaller bundles
     target: 'es2020',
+    cssTarget: ['chrome80', 'safari13', 'firefox75', 'edge80'],
     rollupOptions: {
       output: {
         // Manual chunk splitting for vendor optimization

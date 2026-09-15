@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, ArrowLeft, FileText, ExternalLink, CheckCircle, Car, User, Calendar, MapPin, ShieldCheck, Clock, AlertTriangle, X } from 'lucide-react';
+import { Loader2, ArrowLeft, FileText, ExternalLink, CheckCircle, Car, User, Calendar, MapPin, ShieldCheck, Clock, AlertTriangle, X, RefreshCw, CheckCircle2, Ban } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, ApiError, type StatusBooking, type Booking } from '../../lib/api';
 import { formatRupiah } from '../../lib/pricing';
@@ -225,10 +225,57 @@ export default function AdminPesananDetailPage() {
 
   const [confirmTargetStatus, setConfirmTargetStatus] = useState<StatusBooking | null>(null);
 
+  // Refund states & mutations
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [alasanTolak, setAlasanTolak] = useState('');
+
   const { data: booking, isLoading, isError } = useQuery({
     queryKey: ['admin-booking', id],
     queryFn: () => api.getBooking(id!),
     enabled: !!id,
+  });
+
+  const { data: refundResponse } = useQuery({
+    queryKey: ['admin-refund-booking', id],
+    queryFn: () => api.getRefundByBooking(id!),
+    enabled: !!id,
+  });
+
+  const refund = refundResponse?.refund ?? (booking as any)?.refund;
+
+  const approveRefundMutation = useMutation({
+    mutationFn: (refundId: string) => api.approveAdminRefund(refundId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-refund-booking', id] });
+      queryClient.invalidateQueries({ queryKey: ['admin-booking', id] });
+    },
+  });
+
+  const processRefundMutation = useMutation({
+    mutationFn: (refundId: string) => api.processAdminRefund(refundId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-refund-booking', id] });
+      queryClient.invalidateQueries({ queryKey: ['admin-booking', id] });
+    },
+  });
+
+  const completeRefundMutation = useMutation({
+    mutationFn: (refundId: string) => api.completeAdminRefund(refundId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-refund-booking', id] });
+      queryClient.invalidateQueries({ queryKey: ['admin-booking', id] });
+    },
+  });
+
+  const rejectRefundMutation = useMutation({
+    mutationFn: ({ refundId, alasan }: { refundId: string; alasan: string }) =>
+      api.rejectAdminRefund(refundId, alasan),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-refund-booking', id] });
+      queryClient.invalidateQueries({ queryKey: ['admin-booking', id] });
+      setShowRejectModal(false);
+      setAlasanTolak('');
+    },
   });
 
   const statusMutation = useMutation({
@@ -241,8 +288,12 @@ export default function AdminPesananDetailPage() {
   });
 
   const cardClass = isDark
-    ? 'rounded-3xl bg-white/[0.04] border border-white/12 p-6 shadow-xl backdrop-blur-xl'
-    : 'rounded-3xl bg-white/90 backdrop-blur-xl border border-white/80 shadow-lg p-6';
+    ? 'sa-glass-dark rounded-3xl p-6 shadow-2xl border border-white/15'
+    : 'sa-glass-light rounded-3xl p-6 shadow-xl border border-slate-200/80';
+
+  const innerCardClass = isDark
+    ? 'bg-white/[0.03] backdrop-blur-md border border-white/10'
+    : 'bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-sm';
 
   const textClass = isDark ? 'text-white' : 'text-slate-900';
   const textMutedClass = isDark ? 'text-white/50' : 'text-slate-500';
@@ -370,14 +421,14 @@ export default function AdminPesananDetailPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className={`p-3.5 rounded-2xl border ${isDark ? 'bg-white/[0.03] border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+              <div className={`p-4 rounded-2xl ${innerCardClass}`}>
                 <span className={`block font-medium mb-1 ${textMutedClass}`}>Penyewa</span>
                 <span className={`font-semibold text-sm block ${textClass}`}>{booking.profile?.nama ?? '-'}</span>
                 <span className={`block mt-1 ${textMutedClass}`}>{booking.profile?.email}</span>
                 <span className={`block ${textMutedClass}`}>{booking.profile?.noHp ?? '-'}</span>
               </div>
 
-              <div className={`p-3.5 rounded-2xl border ${isDark ? 'bg-white/[0.03] border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+              <div className={`p-4 rounded-2xl ${innerCardClass}`}>
                 <span className={`block font-medium mb-1 ${textMutedClass}`}>Tanggal Sewa</span>
                 <div className="flex items-center gap-1.5 text-xs font-semibold mb-1">
                   <Calendar size={13} className="text-emerald-500 shrink-0" />
@@ -389,7 +440,7 @@ export default function AdminPesananDetailPage() {
                 </div>
               </div>
 
-              <div className={`p-3.5 rounded-2xl border sm:col-span-2 ${isDark ? 'bg-white/[0.03] border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+              <div className={`p-4 rounded-2xl sm:col-span-2 ${innerCardClass}`}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <span className={`flex items-center gap-1 text-[11px] font-medium mb-1 ${textMutedClass}`}>
@@ -451,10 +502,122 @@ export default function AdminPesananDetailPage() {
               Periksa keabsahan KTP dan SIM penyewa sebelum menyetujui penyerahan armada
             </p>
             <div className="flex flex-wrap gap-3">
-              <DokumenButton userId={booking.userId} tipe="ktp" isDark={isDark} />
-              <DokumenButton userId={booking.userId} tipe="sim" isDark={isDark} />
+              <DokumenButton userId={booking.userId} tipe="ktp" isDark={isDark} isVerified={booking.profile?.dokumenVerified} />
+              <DokumenButton userId={booking.userId} tipe="sim" isDark={isDark} isVerified={booking.profile?.dokumenVerified} />
             </div>
           </motion.section>
+
+          {/* Refund Management Card */}
+          {(booking.status === 'dibatalkan' || refund) && (
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.22 }}
+              className={`p-6 rounded-3xl border shadow-xl backdrop-blur-xl ${
+                isDark ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50/80 border-amber-200'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <RefreshCw size={18} className="text-amber-500" />
+                  <h2 className={`font-bold text-sm uppercase tracking-wider ${textClass}`}>Pengembalian Dana (Refund 100%)</h2>
+                </div>
+                {refund && (
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                    refund.status === 'berhasil' ? 'bg-emerald-500 text-white' :
+                    refund.status === 'ditolak' ? 'bg-rose-500 text-white' :
+                    refund.status === 'diproses' ? 'bg-indigo-500 text-white' :
+                    refund.status === 'disetujui' ? 'bg-sky-500 text-white' : 'bg-amber-500 text-white'
+                  }`}>
+                    {refund.status.replace('_', ' ').toUpperCase()}
+                  </span>
+                )}
+              </div>
+
+              <div className={`p-4 rounded-2xl space-y-2 text-xs mb-4 ${innerCardClass}`}>
+                <div className="flex justify-between">
+                  <span className={textMutedClass}>Jumlah Pengembalian:</span>
+                  <span className="font-extrabold text-sm text-emerald-500">
+                    {formatRupiah(Number(refund?.jumlahRefund || booking.totalHarga))}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={textMutedClass}>Potongan Biaya Admin:</span>
+                  <span className="font-medium text-emerald-500">Rp 0 (0% — Bebas Biaya)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className={textMutedClass}>Rekening Tujuan Pelanggan:</span>
+                  <span className={`font-mono font-bold ${textClass}`}>
+                    {refund?.rekeningTujuan || booking.rekeningRefund || 'Belum diisi oleh pelanggan'}
+                  </span>
+                </div>
+                {(refund?.alasan || booking.alasanPembatalan) && (
+                  <div className={`flex justify-between border-t pt-2 ${borderClass}`}>
+                    <span className={textMutedClass}>Alasan:</span>
+                    <span className={`text-right italic ${textClass}`}>
+                      {refund?.alasan || booking.alasanPembatalan}
+                    </span>
+                  </div>
+                )}
+                {refund?.catatan && (
+                  <div className={`flex justify-between border-t pt-2 ${borderClass}`}>
+                    <span className={textMutedClass}>Catatan Admin:</span>
+                    <span className={`text-right ${textClass}`}>{refund.catatan}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons for Admin */}
+              {refund && refund.status === 'menunggu_persetujuan' && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => approveRefundMutation.mutate(refund.id)}
+                    disabled={approveRefundMutation.isPending}
+                    className="flex-1 py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                  >
+                    {approveRefundMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                    Setujui Refund
+                  </button>
+                  <button
+                    onClick={() => setShowRejectModal(true)}
+                    className="py-2.5 px-3 rounded-xl text-xs font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 border border-rose-500/30 flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Ban size={13} />
+                    Tolak
+                  </button>
+                </div>
+              )}
+
+              {refund && refund.status === 'disetujui' && (
+                <button
+                  onClick={() => processRefundMutation.mutate(refund.id)}
+                  disabled={processRefundMutation.isPending}
+                  className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                >
+                  {processRefundMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                  Tandai Sedang Ditransfer
+                </button>
+              )}
+
+              {refund && refund.status === 'diproses' && (
+                <button
+                  onClick={() => completeRefundMutation.mutate(refund.id)}
+                  disabled={completeRefundMutation.isPending}
+                  className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                >
+                  {completeRefundMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                  Tandai Selesai (Dana Sudah Ditransfer)
+                </button>
+              )}
+
+              {refund && refund.status === 'berhasil' && (
+                <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-500/10 text-emerald-500 text-xs font-semibold">
+                  <CheckCircle size={15} />
+                  Dana telah berhasil ditransfer ke rekening pelanggan
+                </div>
+              )}
+            </motion.section>
+          )}
 
         </div>
 
@@ -474,9 +637,7 @@ export default function AdminPesananDetailPage() {
             </div>
 
             {nextOptions.length === 0 ? (
-              <div className={`p-4 rounded-2xl text-center text-xs border ${
-                isDark ? 'bg-white/[0.03] border-white/10 text-white/50' : 'bg-slate-50 border-slate-200 text-slate-500'
-              }`}>
+              <div className={`p-4 rounded-2xl text-center text-xs ${innerCardClass}`}>
                 Status <strong className="underline">{STATUS_LABEL[booking.status]}</strong> adalah status akhir transaksi ini.
               </div>
             ) : (
@@ -513,9 +674,7 @@ export default function AdminPesananDetailPage() {
               {booking.statusLogs && booking.statusLogs.length > 0 ? (
                 <div className="space-y-2">
                   {booking.statusLogs.map((log) => (
-                    <div key={log.id} className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${
-                      isDark ? 'bg-white/[0.03] border-white/10' : 'bg-slate-50 border-slate-200'
-                    }`}>
+                    <div key={log.id} className={`p-3 rounded-xl text-xs flex items-center justify-between ${innerCardClass}`}>
                       <span className={isDark ? 'text-white/70' : 'text-slate-700'}>
                         {log.statusLama} → <strong className={textClass}>{log.statusBaru}</strong>
                       </span>
@@ -546,6 +705,63 @@ export default function AdminPesananDetailPage() {
             isPending={statusMutation.isPending}
             isDark={isDark}
           />
+        )}
+
+        {/* Reject Refund Modal */}
+        {showRejectModal && refund && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowRejectModal(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={`relative z-10 w-full max-w-sm rounded-3xl p-6 shadow-2xl border ${
+                isDark ? 'bg-[#141414] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-base">Tolak Pengajuan Refund</h3>
+                <button onClick={() => setShowRejectModal(false)} className={isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-slate-700'}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <p className={`text-xs mb-3 ${textMutedClass}`}>
+                Silakan tuliskan alasan penolakan yang jelas agar pelanggan memahami mengapa pengajuan refund tidak dapat disetujui:
+              </p>
+
+              <textarea
+                value={alasanTolak}
+                onChange={(e) => setAlasanTolak(e.target.value)}
+                rows={3}
+                placeholder="Contoh: Unit sudah diserahterimakan dan masa sewa telah dimulai..."
+                className={`w-full text-xs rounded-xl p-3 outline-none resize-none mb-4 border ${
+                  isDark
+                    ? 'bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:border-white/30'
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400'
+                }`}
+              />
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => rejectRefundMutation.mutate({ refundId: refund.id, alasan: alasanTolak.trim() })}
+                  disabled={rejectRefundMutation.isPending || !alasanTolak.trim()}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60"
+                >
+                  {rejectRefundMutation.isPending && <Loader2 size={13} className="animate-spin" />}
+                  Tolak Refund
+                </button>
+                <button
+                  onClick={() => setShowRejectModal(false)}
+                  className={`py-2.5 px-4 rounded-xl text-xs font-medium transition-colors ${
+                    isDark ? 'text-white/60 hover:text-white' : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  Batal
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

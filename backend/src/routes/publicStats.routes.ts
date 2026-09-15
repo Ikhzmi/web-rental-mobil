@@ -49,7 +49,8 @@ publicStatsRouter.get('/', asyncHandler(async (_req, res) => {
       totalLokasi,
       totalBookingSelesai,
       totalReview,
-      kepuasanPersen: kepuasanPersen > 0 ? kepuasanPersen : 98, // fallback jika belum ada review
+      avgRating: Number(avgRating.toFixed(1)),
+      kepuasanPersen: totalReview > 0 ? kepuasanPersen : 100,
     },
   });
 }));

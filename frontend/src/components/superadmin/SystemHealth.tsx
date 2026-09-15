@@ -30,10 +30,7 @@ export function SystemHealth() {
     refetchInterval: 60 * 1000,
   });
 
-  const hasAlerts = health && (
-    (health.alerts?.failedDisbursements ?? 0) > 0 ||
-    (health.alerts?.pendingDisbursements ?? 0) > 0
-  );
+  const isHealthy = health?.system.status === 'healthy';
 
   return (
     <div className={`p-5 rounded-2xl ${getGlassCardClass(isDark)}`}>
@@ -42,9 +39,9 @@ export function SystemHealth() {
           System Health
         </h3>
         {health && (
-          <div className={`flex items-center gap-1 text-xs ${hasAlerts ? 'text-amber-400' : 'text-emerald-400'}`}>
-            {hasAlerts ? <AlertTriangle size={12} /> : <CheckCircle size={12} />}
-            <span>{hasAlerts ? 'Peringatan' : 'Normal'}</span>
+          <div className={`flex items-center gap-1 text-xs ${isHealthy ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {isHealthy ? <CheckCircle size={12} /> : <AlertTriangle size={12} />}
+            <span>{isHealthy ? 'Normal' : health.system.detail}</span>
           </div>
         )}
       </div>
@@ -61,28 +58,11 @@ export function SystemHealth() {
           </>
         ) : health ? (
           <>
-            <HealthIndicator label="Server" status={health.server.status} value={health.server.uptime} isDark={isDark} />
-            <HealthIndicator label="Database" status={health.database.status} value={health.database.latency} isDark={isDark} />
-            <HealthIndicator label="Storage" status={health.storage.status} value={health.storage.usage} isDark={isDark} />
-            <HealthIndicator label="API" status={health.api.status} value={`${health.api.requestsPerMinute} rpm`} isDark={isDark} />
-            <HealthIndicator label="System" status={health.cpu.status} value={health.cpu.usage} isDark={isDark} />
-
-            {hasAlerts && (
-              <div className={`mt-3 pt-2 border-t ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-                {health.alerts.failedDisbursements > 0 && (
-                  <p className={`text-xs flex items-center gap-1 ${isDark ? 'text-red-400' : 'text-red-500'}`}>
-                    <AlertTriangle size={10} />
-                    {health.alerts.failedDisbursements} pencairan gagal
-                  </p>
-                )}
-                {health.alerts.pendingDisbursements > 0 && (
-                  <p className={`text-xs flex items-center gap-1 ${isDark ? 'text-amber-400' : 'text-amber-500'}`}>
-                    <AlertTriangle size={10} />
-                    {health.alerts.pendingDisbursements} pencairan diproses
-                  </p>
-                )}
-              </div>
-            )}
+            <HealthIndicator label="Backend Server" status={health.server.status} value={`${health.server.uptime} (${health.server.memory})`} isDark={isDark} />
+            <HealthIndicator label="Supabase DB" status={health.database.status} value={health.database.latency} isDark={isDark} />
+            <HealthIndicator label="Supabase Storage" status={health.storage.status} value={health.storage.latency} isDark={isDark} />
+            <HealthIndicator label="Pakasir Gateway" status={health.pakasir?.status || health.midtrans?.status || 'online'} value={health.pakasir?.latency || health.midtrans?.latency || 'Terhubung'} isDark={isDark} />
+            <HealthIndicator label="Status Infrastruktur" status={health.system.status} value={health.system.detail} isDark={isDark} />
           </>
         ) : (
           <p className={`text-sm text-center py-4 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>Data tidak tersedia</p>

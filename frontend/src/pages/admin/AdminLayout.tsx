@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Calendar,
   Settings,
+  Wallet,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../hooks/useTheme';
@@ -29,6 +30,7 @@ const ADMIN_LINKS = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/armada', label: 'Armada', icon: Car },
   { to: '/admin/pesanan', label: 'Pesanan', icon: ClipboardList },
+  { to: '/admin/keuangan', label: 'Keuangan', icon: Wallet },
   { to: '/admin/messages', label: 'Messages', icon: MessageSquare },
   { to: '/admin/calendar', label: 'Calendar', icon: Calendar },
 ];

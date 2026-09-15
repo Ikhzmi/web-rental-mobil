@@ -94,7 +94,7 @@ export default function SuperAdminTransactionsPage() {
   });
 
   const transactions: SuperAdminTransactionItem[] = data?.data || [];
-  const summary = data?.summary || { totalMasuk: 0, totalRefund: 0 };
+  const summary = data?.summary || { totalMasuk: 0, totalRefund: 0, totalKomisi: 0 };
   const totalItems = data?.pagination?.total || 0;
   const totalPages = data?.pagination?.totalPages || 1;
 
@@ -105,7 +105,7 @@ export default function SuperAdminTransactionsPage() {
 
   const totalAmount = summary.totalMasuk;
   const totalRefund = summary.totalRefund;
-  const totalCommission = transactions
+  const totalCommission = summary.totalKomisi ?? transactions
     .filter((t) => t.type === 'commission' && t.status === 'success')
     .reduce((sum, t) => sum + t.amount, 0);
 
@@ -115,14 +115,16 @@ export default function SuperAdminTransactionsPage() {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6"
       >
-        <h1 className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-          Riwayat Transaksi
-        </h1>
-        <p className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
-          Kelola semua transaksi di platform
-        </p>
+        <div>
+          <h1 className={`text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+            Riwayat Transaksi
+          </h1>
+          <p className={`text-sm ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+            Kelola semua transaksi di platform
+          </p>
+        </div>
       </motion.div>
 
       {/* Summary Cards */}
@@ -148,7 +150,7 @@ export default function SuperAdminTransactionsPage() {
       </div>
 
       {/* Filters Container */}
-      <div className={`p-4 rounded-2xl mb-6 space-y-4 border ${isDark ? 'bg-white/[0.03] border-white/10' : 'bg-white/80 border-slate-200'}`}>
+      <div className={`p-4 rounded-2xl mb-6 space-y-4 ${getGlassCardClass(isDark)}`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           {/* Type Filter */}
           <div className="space-y-1.5 flex-1">

@@ -11,6 +11,7 @@ import { formatRupiah, formatCompactRupiah } from '../../lib/pricing';
 import { supabase } from '../../lib/supabase';
 import { SkeletonList } from '../../components/Skeleton';
 import { useTheme } from '../../hooks/useTheme';
+import { getGlassCardClass } from '../../hooks/useGlassStyles';
 import { compressImage, isImageFile } from '../../lib/imageCompression';
 
 const KATEGORI_LABELS: Record<string, string> = {
@@ -193,7 +194,10 @@ function PhotoManager({ car, isDark }: { car: Car; isDark: boolean }) {
   );
 }
 
-function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: () => void; isDark?: boolean }) {
+function EditCarModal({ car, onClose, isDark: propIsDark }: { car: Car; onClose: () => void; isDark?: boolean }) {
+  const { theme } = useTheme();
+  const themeIsDark = theme === 'dark';
+  const isDark = propIsDark ?? themeIsDark;
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<StatusMobil>(car.status);
   const [nomorPlat, setNomorPlat] = useState(car.nomorPlat ?? '');
@@ -219,14 +223,18 @@ function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: ()
     },
   });
 
-  const inputClass = "w-full text-sm rounded-xl px-4 py-3 focus:outline-none transition-all bg-white/[0.05] border border-white/15 text-white placeholder:text-white/30 focus:border-white/35 focus:ring-2 focus:ring-white/10 focus:bg-white/[0.08]";
+  const inputClass = `w-full text-sm rounded-xl px-4 py-3 focus:outline-none transition-all ${
+    isDark
+      ? 'bg-white/[0.05] border border-white/15 text-white placeholder:text-white/30 focus:border-white/35 focus:ring-2 focus:ring-white/10 focus:bg-white/[0.08]'
+      : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-400/20'
+  }`;
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
       onClick={onClose}
     >
       <motion.div
@@ -234,21 +242,29 @@ function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: ()
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 50, scale: 0.95 }}
         transition={{ duration: 0.25 }}
-        className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/80 border border-white/15 bg-zinc-950/85 backdrop-blur-2xl text-white flex flex-col max-h-[90vh] overflow-hidden"
+        className={`w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden ${
+          isDark
+            ? 'border border-white/15 bg-zinc-950/85 backdrop-blur-2xl text-white shadow-black/80'
+            : 'border border-slate-200 bg-white text-slate-900 shadow-slate-300/50'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between shrink-0 bg-white/[0.02]">
+        <div className={`p-4 sm:p-5 border-b flex items-center justify-between shrink-0 ${
+          isDark ? 'border-white/10 bg-white/[0.02]' : 'border-slate-100 bg-slate-50/50'
+        }`}>
           <div>
-            <h2 className="font-bold text-lg sm:text-xl text-white">Kelola {car.nama}</h2>
-            <p className="text-xs text-white/50">
+            <h2 className={`font-bold text-lg sm:text-xl ${isDark ? 'text-white' : 'text-slate-900'}`}>Kelola {car.nama}</h2>
+            <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
               Perbarui status operasional, harga sewa, atau foto armada
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl transition-colors text-white/50 hover:text-white hover:bg-white/10"
+            className={`p-2 rounded-xl transition-colors ${
+              isDark ? 'text-white/50 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+            }`}
           >
             <X size={18} />
           </button>
@@ -257,7 +273,7 @@ function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: ()
         {/* Modal Scrollable Body */}
         <div className="p-4 sm:p-5 space-y-5 overflow-y-auto flex-1">
           {/* Photo Management Section */}
-          <PhotoManager car={car} isDark={true} />
+          <PhotoManager car={car} isDark={isDark} />
 
           <div className="border-t border-white/10 pt-4" />
 
@@ -270,7 +286,7 @@ function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: ()
               type="text"
               value={nomorPlat}
               onChange={(e) => setNomorPlat(e.target.value.toUpperCase())}
-              placeholder="Contoh: B 1234 XYZ"
+              placeholder="Contoh: BK 1234 XYZ"
               maxLength={12}
               className="w-full text-sm rounded-xl px-4 py-3 focus:outline-none transition-all bg-white/[0.05] border border-white/15 text-white placeholder:text-white/30 focus:border-white/35 focus:ring-2 focus:ring-white/10 focus:bg-white/[0.08] font-mono tracking-widest"
             />
@@ -455,9 +471,10 @@ function EditCarModal({ car, onClose, isDark: _isDark }: { car: Car; onClose: ()
       </motion.div>
     </motion.div>
   );
-}
-
-function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; isDark?: boolean }) {
+}function AvailabilityModal({ car, onClose, isDark: propIsDark }: { car: Car; onClose: () => void; isDark?: boolean }) {
+  const { theme } = useTheme();
+  const themeIsDark = theme === 'dark';
+  const isDark = propIsDark ?? themeIsDark;
   const queryClient = useQueryClient();
   const [range, setRange] = useState<DateRange | undefined>();
   const [alasan, setAlasan] = useState('');
@@ -532,25 +549,20 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
   ];
 
   // Helper: parse tanggal UTC dari backend tanpa timezone shift
-  // Backend mengirim ISO string (e.g. "2024-01-15T00:00:00.000Z").
-  // new Date(isoString) di browser timezone WIB (UTC+7) akan shift ke
-  // "2024-01-15T07:00:00+07:00" — masih hari yang sama. Aman.
-  // Namun jika backend kirim hanya "2024-01-15" (tanpa waktu), new Date()
-  // akan parse sebagai UTC midnight = "2024-01-14T17:00:00 WIB" (geser 1 hari).
-  // Solusi: ekstrak YYYY-MM-DD dan buat Date dari local timezone.
   const parseLocalDate = (dateStr: string) => {
-    // Ambil bagian tanggal saja (YYYY-MM-DD) agar tidak ada timezone shift
     const datePart = dateStr.split('T')[0];
     const [year, month, day] = datePart.split('-').map(Number);
     return new Date(year, month - 1, day);
   };
 
-  // Matchers untuk kalender admin: HANYA dari getCarAvailability
-  // (sudah mencakup booking aktif + manual block — tidak duplikat)
   const blockedMatchers = availabilityRanges.map((a) => ({
     from: parseLocalDate(a.tanggalMulai),
     to: parseLocalDate(a.tanggalSelesai),
   }));
+
+  // Tanggal sebelum hari ini tidak bisa diblokir
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
 
   const totalDays = range?.from
     ? Math.round(
@@ -566,7 +578,7 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[220] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+      className="fixed inset-0 z-[220] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
       onClick={onClose}
     >
       <motion.div
@@ -574,27 +586,37 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 15 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl rounded-3xl border border-white/15 bg-zinc-950/95 backdrop-blur-2xl text-white p-5 sm:p-7 shadow-2xl shadow-black/90 space-y-6 max-h-[92vh] overflow-y-auto"
+        className={`w-full max-w-4xl rounded-3xl border p-5 sm:p-7 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto ${
+          isDark
+            ? 'border-white/15 bg-zinc-950/95 backdrop-blur-2xl text-white shadow-black/90'
+            : 'border-slate-200 bg-white text-slate-900 shadow-slate-300/50'
+        }`}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div className={`flex items-center justify-between border-b pb-4 ${
+          isDark ? 'border-white/10' : 'border-slate-100'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 ${
+              isDark ? 'bg-amber-500/15 border-amber-500/30 text-amber-400' : 'bg-amber-100 border-amber-200 text-amber-700'
+            }`}>
               <CalendarIcon size={22} />
             </div>
             <div>
-              <h3 className="font-bold text-lg sm:text-xl text-white flex items-center gap-2">
+              <h3 className={`font-bold text-lg sm:text-xl flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                 Kelola Kalender Ketersediaan
               </h3>
-              <p className="text-xs text-white/60">
-                Pilih tanggal pada datepicker untuk memblokir ketersediaan <span className="font-semibold text-white">{car.nama}</span>
+              <p className={`text-xs ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
+                Pilih tanggal pada datepicker untuk memblokir ketersediaan <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>{car.nama}</span>
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            className={`p-2 rounded-xl transition-colors ${
+              isDark ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+            }`}
           >
             <X size={20} />
           </button>
@@ -603,13 +625,17 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
         {/* 2-Column Responsive Layout: Left Calendar / Right Actions & List */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Interactive DayPicker Calendar */}
-          <div className="lg:col-span-7 flex flex-col justify-between p-4 sm:p-5 rounded-2xl bg-white/[0.03] border border-white/10">
+          <div className={`lg:col-span-7 flex flex-col justify-between p-4 sm:p-5 rounded-2xl border ${
+            isDark ? 'bg-white/[0.03] border-white/10' : 'bg-slate-50 border-slate-200'
+          }`}>
             <div>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                <span className={`text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5 ${
+                  isDark ? 'text-amber-400' : 'text-amber-700'
+                }`}>
                   <CalendarIcon size={14} /> Kalender Datepicker
                 </span>
-                <span className="text-[11px] text-white/50">
+                <span className={`text-[11px] ${isDark ? 'text-white/50' : 'text-slate-400'}`}>
                   Klik tanggal mulai & selesai
                 </span>
               </div>
@@ -619,48 +645,53 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
                   mode="range"
                   selected={range}
                   onSelect={setRange}
+                  disabled={{ before: todayMidnight }}
                   modifiers={{
                     blocked: blockedMatchers,
                   }}
                   modifiersClassNames={{
-                    blocked: '!bg-rose-500/25 !text-rose-300 font-bold border !border-rose-500/50',
+                    blocked: '!bg-rose-500/25 !text-rose-400 font-bold border !border-rose-500/50',
                   }}
                   classNames={{
                     months: 'flex flex-col w-full',
                     month: 'w-full',
-                    month_caption: 'flex items-center justify-between w-full text-white font-bold text-sm mb-3',
+                    month_caption: `flex items-center justify-between w-full font-bold text-sm mb-3 ${isDark ? 'text-white' : 'text-slate-900'}`,
                     nav: 'flex items-center gap-1',
                     month_grid: 'w-full border-collapse',
                     weekdays: 'w-full',
-                    weekday: 'text-white/40 text-[10px] uppercase font-bold tracking-wider text-center pb-2',
+                    weekday: `text-[10px] uppercase font-bold tracking-wider text-center pb-2 ${isDark ? 'text-white/40' : 'text-slate-400'}`,
                     weeks: 'w-full',
                     week: 'w-full',
                     day: 'transition-all duration-150 p-0.5',
-                    day_button: 'w-full h-full aspect-square rounded-xl flex items-center justify-center text-xs font-semibold hover:bg-white/15 transition-all text-white/90',
+                    day_button: `w-full h-full aspect-square rounded-xl flex items-center justify-center text-xs font-semibold transition-all ${
+                      isDark ? 'hover:bg-white/15 text-white/90' : 'hover:bg-slate-200 text-slate-800'
+                    }`,
                     selected: '!bg-amber-500 !text-black !font-bold rounded-xl shadow-md',
-                    range_middle: '!bg-amber-500/20 !text-amber-200 rounded-none',
+                    range_middle: '!bg-amber-500/20 !text-amber-300 rounded-none',
                     range_start: '!bg-amber-500 !text-black !font-bold rounded-r-none rounded-l-xl',
                     range_end: '!bg-amber-500 !text-black !font-bold rounded-l-none rounded-r-xl',
-                    today: 'underline ring-1 ring-white/60 rounded-xl',
-                    outside: 'text-white/15 opacity-30',
+                    today: `underline ring-1 rounded-xl ${isDark ? 'ring-white/60' : 'ring-slate-400'}`,
+                    outside: isDark ? 'text-white/15 opacity-30' : 'text-slate-300 opacity-30',
                   }}
                 />
               </div>
             </div>
 
             {/* Calendar Legend */}
-            <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-4 text-[11px]">
+            <div className={`mt-4 pt-3 border-t flex flex-wrap items-center gap-4 text-[11px] ${
+              isDark ? 'border-white/10' : 'border-slate-200'
+            }`}>
               <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-md bg-white/10 border border-white/20" />
-                <span className="text-white/70">Tersedia</span>
+                <span className={`w-3 h-3 rounded-md border ${isDark ? 'bg-white/10 border-white/20' : 'bg-slate-100 border-slate-300'}`} />
+                <span className={isDark ? 'text-white/70' : 'text-slate-600'}>Tersedia</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-amber-500 text-black font-bold flex items-center justify-center text-[8px]">✓</span>
-                <span className="text-white/90">Dipilih</span>
+                <span className={isDark ? 'text-white/90' : 'text-slate-800'}>Dipilih</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-rose-500/30 border border-rose-500/50" />
-                <span className="text-rose-400">Tidak Tersedia / Diblokir</span>
+                <span className="text-rose-500 font-medium">Tidak Tersedia / Diblokir</span>
               </div>
             </div>
           </div>
@@ -668,30 +699,38 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
           {/* Right Column: Date Selection Details & Manual Block Form */}
           <div className="lg:col-span-5 flex flex-col space-y-4">
             {/* Form Box */}
-            <form onSubmit={handleSave} className="p-4 rounded-2xl bg-white/[0.04] border border-white/10 space-y-3.5">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-white/80">
+            <form onSubmit={handleSave} className={`p-4 rounded-2xl border space-y-3.5 ${
+              isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-white/80' : 'text-slate-700'}`}>
                 Atur Blokir Tanggal
               </h4>
 
               {/* Selected Dates Display */}
-              <div className="p-3 rounded-xl bg-white/[0.04] border border-white/10 space-y-1">
-                <div className="text-[10px] uppercase font-semibold text-white/40 tracking-wider">
+              <div className={`p-3 rounded-xl border space-y-1 ${
+                isDark ? 'bg-white/[0.04] border-white/10' : 'bg-white border-slate-200'
+              }`}>
+                <div className={`text-[10px] uppercase font-semibold tracking-wider ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                   Rentang Terpilih
                 </div>
                 {range?.from ? (
-                  <div className="text-xs font-bold text-amber-300 flex items-center justify-between">
+                  <div className={`text-xs font-bold flex items-center justify-between ${
+                    isDark ? 'text-amber-300' : 'text-amber-700'
+                  }`}>
                     <span>
                       {range.from.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      {range.to && (
+                      {range.to && range.to.getTime() !== range.from.getTime() && (
                         <> — {range.to.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</>
                       )}
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] border ${
+                      isDark ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-amber-100 text-amber-800 border-amber-300'
+                    }`}>
                       {totalDays} Hari
                     </span>
                   </div>
                 ) : (
-                  <div className="text-xs text-white/40 italic">
+                  <div className={`text-xs italic ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                     Belum memilih tanggal di kalender
                   </div>
                 )}
@@ -699,7 +738,7 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
 
               {/* Reason / Keterangan */}
               <div>
-                <label className="text-[11px] font-medium text-white/70 block mb-1">
+                <label className={`text-[11px] font-medium block mb-1 ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
                   Keterangan / Alasan
                 </label>
                 <input
@@ -707,7 +746,11 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
                   placeholder="Misal: Servis Rutin, Perbaikan Bengkel..."
                   value={alasan}
                   onChange={(e) => setAlasan(e.target.value)}
-                  className="w-full text-xs rounded-xl px-3 py-2.5 bg-white/[0.05] border border-white/15 text-white placeholder:text-white/30 focus:outline-none focus:border-amber-500 transition-colors"
+                  className={`w-full text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-colors ${
+                    isDark
+                      ? 'bg-white/[0.05] border border-white/15 text-white placeholder:text-white/30 focus:border-amber-500'
+                      : 'bg-white border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-amber-600'
+                  }`}
                 />
               </div>
 
@@ -720,8 +763,12 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
                     onClick={() => setAlasan(reason)}
                     className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition-all border ${
                       alasan === reason
-                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
-                        : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white'
+                        ? isDark
+                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                          : 'bg-amber-100 border-amber-300 text-amber-800'
+                        : isDark
+                          ? 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
                     {reason}
@@ -751,20 +798,22 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
             </form>
 
             {/* Existing Blocked Dates Management List */}
-            <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 flex-1 overflow-hidden flex flex-col">
+            <div className={`p-4 rounded-2xl border space-y-2 flex-1 overflow-hidden flex flex-col ${
+              isDark ? 'bg-white/[0.02] border-white/10' : 'bg-slate-50 border-slate-200'
+            }`}>
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                <h4 className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-white/70' : 'text-slate-700'}`}>
                   Daftar Blokir Manual ({blockedDates.length})
                 </h4>
               </div>
 
               {isLoadingBlocked ? (
-                <div className="p-4 text-center text-xs text-white/40">
+                <div className={`p-4 text-center text-xs ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                   <Loader2 size={16} className="animate-spin mx-auto mb-1" />
                   Memuat data...
                 </div>
               ) : blockedDates.length === 0 ? (
-                <div className="py-6 text-center text-xs text-white/40 italic">
+                <div className={`py-6 text-center text-xs italic ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
                   Belum ada tanggal yang diblokir manual
                 </div>
               ) : (
@@ -772,19 +821,24 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
                   {blockedDates.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-xs hover:border-white/20 transition-colors"
+                      className={`flex items-center justify-between p-2.5 rounded-xl border text-xs transition-colors ${
+                        isDark
+                          ? 'bg-white/[0.04] border-white/10 hover:border-white/20'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
                     >
                       <div className="min-w-0 flex-1 mr-2">
-                        <div className="font-semibold text-rose-300 flex items-center gap-1.5 truncate">
+                        <div className="font-semibold text-rose-500 flex items-center gap-1.5 truncate">
                           <Clock size={11} className="shrink-0" />
                           <span>
                             {new Date(item.tanggalMulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            {' — '}
-                            {new Date(item.tanggalSelesai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {new Date(item.tanggalMulai).getTime() !== new Date(item.tanggalSelesai).getTime() && (
+                              <> — {new Date(item.tanggalSelesai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</>
+                            )}
                           </span>
                         </div>
                         {item.alasan && (
-                          <div className="text-[10px] text-white/50 truncate mt-0.5">
+                          <div className={`text-[10px] truncate mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
                             {item.alasan}
                           </div>
                         )}
@@ -794,10 +848,10 @@ function AvailabilityModal({ car, onClose }: { car: Car; onClose: () => void; is
                         type="button"
                         onClick={() => deleteMutation.mutate(item.id)}
                         disabled={deleteMutation.isPending}
-                        className="p-1.5 rounded-lg text-rose-400 hover:text-white hover:bg-rose-500/20 transition-all shrink-0"
+                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/20 transition-all shrink-0"
                         title="Buka blokir tanggal ini"
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   ))}
@@ -1026,12 +1080,12 @@ function CreateCarModal({ onClose, onCreated, isDark }: { onClose: () => void; o
               required
               value={nomorPlat}
               onChange={(e) => setNomorPlat(e.target.value.toUpperCase())}
-              placeholder="Contoh: B 1234 XYZ"
+              placeholder="Contoh: BK 1234 XYZ"
               maxLength={12}
               className={`${inputClass} font-mono tracking-widest`}
             />
             <p className={`text-[11px] mt-1 ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-              Otomatis uppercase. Contoh: B 1234 XYZ
+              Otomatis uppercase. Contoh: BK 1234 XYZ
             </p>
           </div>
 
@@ -1324,11 +1378,16 @@ function DeleteCarModal({
   car,
   onClose,
   onDeleted,
+  isDark: propIsDark,
 }: {
   car: Car;
   onClose: () => void;
   onDeleted: () => void;
+  isDark?: boolean;
 }) {
+  const { theme } = useTheme();
+  const themeIsDark = theme === 'dark';
+  const isDark = propIsDark ?? themeIsDark;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
@@ -1352,7 +1411,7 @@ function DeleteCarModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[220] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      className="fixed inset-0 z-[220] bg-black/75 backdrop-blur-md flex items-center justify-center p-4"
       onClick={onClose}
     >
       <motion.div
@@ -1360,54 +1419,70 @@ function DeleteCarModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-3xl border border-white/15 bg-zinc-950/90 backdrop-blur-2xl text-white p-6 shadow-2xl shadow-black/90 space-y-5"
+        className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl space-y-5 ${
+          isDark
+            ? 'border-white/15 bg-zinc-950/90 backdrop-blur-2xl text-white shadow-black/90'
+            : 'border-slate-200 bg-white text-slate-900 shadow-slate-300/50'
+        }`}
       >
         {/* Header Icon */}
         <div className="flex items-center justify-between">
-          <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-lg shadow-rose-500/10">
+          <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center shadow-lg ${
+            isDark ? 'bg-rose-500/15 border-rose-500/30 text-rose-400 shadow-rose-500/10' : 'bg-rose-100 border-rose-200 text-rose-600 shadow-rose-100'
+          }`}>
             <Trash2 size={22} />
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+            className={`p-2 rounded-xl transition-colors ${
+              isDark ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+            }`}
           >
             <X size={18} />
           </button>
         </div>
 
         <div>
-          <h3 className="text-lg font-bold text-white">Hapus Armada?</h3>
-          <p className="text-xs text-white/50 mt-1">
+          <h3 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Hapus Armada?</h3>
+          <p className={`text-xs mt-1 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
             Konfirmasi tindakan penghapusan armada dari sistem rental Anda.
           </p>
         </div>
 
         {/* Car preview card */}
-        <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.04] border border-white/10">
+        <div className={`flex items-center gap-3 p-3 rounded-2xl border ${
+          isDark ? 'bg-white/[0.04] border-white/10' : 'bg-slate-50 border-slate-200'
+        }`}>
           {mainImage ? (
             <img
               src={mainImage}
               alt={car.nama}
-              className="w-14 h-14 rounded-xl object-cover bg-black/40 border border-white/10 shrink-0"
+              className={`w-14 h-14 rounded-xl object-cover border shrink-0 ${
+                isDark ? 'bg-black/40 border-white/10' : 'bg-slate-200 border-slate-300'
+              }`}
             />
           ) : (
-            <div className="w-14 h-14 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/30 shrink-0">
+            <div className={`w-14 h-14 rounded-xl border flex items-center justify-center shrink-0 ${
+              isDark ? 'bg-white/5 border-white/10 text-white/30' : 'bg-slate-100 border-slate-200 text-slate-400'
+            }`}>
               <CarIcon size={20} />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <h4 className="font-semibold text-sm text-white truncate">{car.nama}</h4>
-            <p className="text-xs text-white/50">{KATEGORI_LABELS[car.kategori] ?? car.kategori} • {formatRupiah(Number(car.hargaPerHari))}/hari</p>
+            <h4 className={`font-semibold text-sm truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{car.nama}</h4>
+            <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{KATEGORI_LABELS[car.kategori] ?? car.kategori} • {formatRupiah(Number(car.hargaPerHari))}/hari</p>
           </div>
         </div>
 
         {/* Notice Info */}
-        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 flex items-start gap-2.5">
-          <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-400" />
+        <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+          isDark ? 'bg-amber-500/10 border-amber-500/20 text-amber-200/90' : 'bg-amber-50 border-amber-200 text-amber-800'
+        }`}>
+          <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-500" />
           <div className="space-y-1">
             <p className="font-medium">Ketentuan Penghapusan:</p>
-            <p className="text-white/60 text-[11px] leading-relaxed">
+            <p className={`text-[11px] leading-relaxed ${isDark ? 'text-white/60' : 'text-slate-600'}`}>
               Jika armada belum pernah disewa, akan dihapus permanen. Jika pernah memiliki riwayat pesanan, armada akan dinonaktifkan secara aman agar histori transaksi tetap terjaga.
             </p>
           </div>
@@ -1426,7 +1501,9 @@ function DeleteCarModal({
             type="button"
             onClick={onClose}
             disabled={deleteMutation.isPending}
-            className="flex-1 py-3 px-4 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white font-medium text-sm transition-all"
+            className={`flex-1 py-3 px-4 rounded-xl border font-medium text-sm transition-all ${
+              isDark ? 'border-white/15 bg-white/5 hover:bg-white/10 text-white' : 'border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700'
+            }`}
           >
             Batal
           </button>
@@ -1512,7 +1589,7 @@ function CarCard({ car, onEdit, onDelete, onManageAvailability, isDark }: {
         )}
 
         {/* Top Vignette Gradient for Badges Legibility */}
-        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/55 via-black/10 to-transparent opacity-90" />
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/25 via-transparent to-transparent opacity-90" />
 
         {/* Floating Badges (Top Bar) */}
         <div className="absolute top-3 inset-x-3 flex items-start justify-between gap-2 z-10">
@@ -1848,8 +1925,8 @@ export default function AdminArmadaPage() {
           <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Silakan refresh halaman</p>
         </motion.div>
       ) : !cars?.length ? (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`text-center py-16 sm:py-20 rounded-2xl border ${
-          isDark ? 'bg-white/5 border-white/10' : 'bg-white border-slate-200 shadow-sm'
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`text-center py-16 sm:py-20 rounded-3xl border ${getGlassCardClass(isDark)} ${
+          isDark ? 'border-white/10' : 'border-slate-200'
         }`}>
           <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl mx-auto mb-4 flex items-center justify-center ${
             isDark ? 'bg-white/5 border border-white/10' : 'bg-slate-100 border border-slate-200'

@@ -27,7 +27,7 @@ adminDashboardRouter.get('/summary', async (req, res) => {
   const STATUS_DIHITUNG_PENDAPATAN = ['dikonfirmasi', 'berjalan', 'selesai'] as const;
   const STATUS_PESANAN_AKTIF = ['menunggu_pembayaran', 'dikonfirmasi', 'berjalan'] as const;
 
-  const [pendapatanBulanIni, jumlahPesananAktif, totalMobilTersedia, mobilSedangBerjalan, mobilTerlaris] =
+  const [pendapatanBulanIni, jumlahPesananAktif, totalMobilTersedia, mobilSedangBerjalan, mobilTerlaris, instansiInfo] =
     await Promise.all([
       // Total pendapatan bulan berjalan
       prisma.booking.aggregate({
@@ -56,10 +56,16 @@ adminDashboardRouter.get('/summary', async (req, res) => {
       // Mobil terlaris (hanya booking yang sudah dibayar)
       prisma.booking.groupBy({
         by: ['carId'],
-        where: { car: { instansiId }, status: { notIn: ['dibatalkan', 'menunggu_pembayaran'] } },
+        where: { car: { instansiId }, status: { in: [...STATUS_DIHITUNG_PENDAPATAN] } },
         _count: { carId: true },
         orderBy: { _count: { carId: 'desc' } },
         take: 1,
+      }),
+
+      // Fetch instansi commission rate
+      prisma.instansi.findUnique({
+        where: { id: instansiId },
+        select: { komisiPlatformPersen: true },
       }),
     ]);
 
@@ -77,9 +83,17 @@ adminDashboardRouter.get('/summary', async (req, res) => {
       ? Math.round((mobilSedangBerjalan.length / totalMobilTersedia) * 100)
       : 0;
 
+  const grossRevenue = Number(pendapatanBulanIni._sum.totalHarga ?? 0);
+  const komisiPersen = Number(instansiInfo?.komisiPlatformPersen ?? 10);
+  const komisiAmount = Math.round((grossRevenue * komisiPersen) / 100);
+  const netRevenue = grossRevenue - komisiAmount;
+
   res.json({
     data: {
-      totalPendapatanBulanIni: pendapatanBulanIni._sum.totalHarga ?? 0,
+      totalPendapatanBulanIni: grossRevenue,
+      komisiPlatformPersen: komisiPersen,
+      potonganKomisiBulanIni: komisiAmount,
+      totalPendapatanBersihBulanIni: netRevenue,
       jumlahPesananAktif,
       tingkatOkupansiArmada: tingkatOkupansi,
       mobilSedangBerjalan: mobilSedangBerjalan.length,

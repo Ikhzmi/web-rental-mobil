@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { BadgeCheck, Wallet, Headset, ArrowRight } from 'lucide-react';
+import { BadgeCheck, Wallet, Headset, ArrowRight, Star } from 'lucide-react';
 import { useScrollReveal } from '../hooks/useScrollReveal';
 import { useTheme } from '../hooks/useTheme';
 import { api } from '../lib/api';
@@ -25,7 +25,7 @@ const VALUES = [
   {
     icon: Headset,
     title: 'Dukungan Cepat',
-    desc: 'Tim kami siap membantu lewat WhatsApp untuk pertanyaan seputar booking, jadwal, maupun kendala di lapangan.',
+    desc: 'Tim kami siap membantu 24 Jam penuh untuk pertanyaan seputar booking, jadwal, maupun kendala di lapangan.',
   },
 ];
 
@@ -49,7 +49,7 @@ export default function TentangPage() {
     { value: stats?.totalArmada ?? 0, suffix: '+', label: 'Unit Armada' },
     { value: stats?.totalLokasi ?? 0, suffix: '+', label: 'Mitra Rental' },
     { value: stats?.totalBookingSelesai ?? 0, suffix: '+', label: 'Penyewaan Sukses' },
-    { value: stats?.kepuasanPersen ?? 98, suffix: '%', label: 'Kepuasan' },
+    { value: stats?.kepuasanPersen ?? 98, suffix: '%', label: 'Kepuasan Ulasan' },
   ];
 
   useGSAP(
@@ -98,10 +98,36 @@ export default function TentangPage() {
           </p>
         </div>
 
+        {/* Tingkat Kepuasan Ulasan User Card */}
+        <div className={`mt-8 p-5 rounded-2xl flex items-center justify-between backdrop-blur-xl ${glassCard}`}>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+              <Star className="w-6 h-6 text-amber-400 fill-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {stats?.avgRating ? stats.avgRating.toFixed(1) : '5.0'} / 5.0
+                </span>
+                <div className="flex items-center text-amber-400 text-xs">
+                  {'★'.repeat(Math.round(stats?.avgRating ?? 5))}
+                </div>
+              </div>
+              <p className={`text-xs ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                Tingkat kepuasan tinggi berdasarkan rating bintang & ulasan pengguna terverifikasi
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:block text-right">
+            <span className="text-xl font-bold text-emerald-400">{stats?.kepuasanPersen ?? 100}%</span>
+            <p className={`text-[11px] ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Ulasan Positif</p>
+          </div>
+        </div>
+
         {/* Stats */}
         <div
           ref={statsRef}
-          className={`grid grid-cols-2 sm:grid-cols-4 gap-4 mt-10 rounded-2xl p-6 backdrop-blur-xl ${glassCard}`}
+          className={`grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 rounded-2xl p-6 backdrop-blur-xl ${glassCard}`}
         >
           {displayStats.map((stat, i) => (
             <div key={stat.label} className="text-center py-2">

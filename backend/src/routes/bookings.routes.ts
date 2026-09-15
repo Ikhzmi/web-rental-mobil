@@ -221,7 +221,13 @@ bookingsRouter.post('/', async (req, res) => {
 bookingsRouter.get('/mine', async (req, res) => {
   const bookings = await prisma.booking.findMany({
     where: { userId: req.user!.id },
-    include: { car: { include: { images: { orderBy: { urutan: 'asc' }, take: 1 } } }, addons: true },
+    include: {
+      car: { include: { images: { orderBy: { urutan: 'asc' }, take: 1 } } },
+      addons: true,
+      payment: true,
+      refund: true,
+      review: true,
+    },
     orderBy: { createdAt: 'desc' },
   });
   res.json({ data: bookings });
@@ -240,20 +246,26 @@ bookingsRouter.get('/:id', async (req, res) => {
     .findUnique({
       where: { id: req.params.id },
       include: {
-        car: true,
+        car: { include: { images: { orderBy: { urutan: 'asc' } } } },
         addons: true,
         statusLogs: { orderBy: { createdAt: 'asc' } },
         profile: { select: { nama: true, email: true, noHp: true, dokumenVerified: true } },
+        payment: true,
+        refund: true,
+        review: true,
       },
     })
     .catch(async () => {
       return await prisma.booking.findUnique({
         where: { id: req.params.id },
         include: {
-          car: true,
+          car: { include: { images: { orderBy: { urutan: 'asc' } } } },
           addons: true,
           statusLogs: { orderBy: { createdAt: 'asc' } },
           profile: { select: { nama: true, email: true, noHp: true } },
+          payment: true,
+          refund: true,
+          review: true,
         },
       });
     });
@@ -262,7 +274,7 @@ bookingsRouter.get('/:id', async (req, res) => {
     res.status(404).json({ error: 'Booking tidak ditemukan' });
     return;
   }
-  if (booking.userId !== req.user!.id && req.user!.role !== 'admin') {
+  if (booking.userId !== req.user!.id && req.user!.role !== 'admin' && req.user!.role !== 'super_admin') {
     res.status(403).json({ error: 'Tidak berhak melihat booking ini' });
     return;
   }
@@ -284,7 +296,10 @@ bookingsRouter.patch('/:id/cancel', async (req, res) => {
     rekeningRefund?: string;
   };
 
-  const booking = await prisma.booking.findUnique({ where: { id: req.params.id } });
+  const booking = await prisma.booking.findUnique({
+    where: { id: req.params.id },
+    include: { payment: true, car: true, refund: true },
+  });
 
   if (!booking) {
     res.status(404).json({ error: 'Booking tidak ditemukan' });
@@ -301,21 +316,19 @@ bookingsRouter.patch('/:id/cancel', async (req, res) => {
     return;
   }
 
-  // Untuk status dikonfirmasi: cek syarat H-1
-  if (booking.status === 'dikonfirmasi') {
-    const hariIni = new Date();
-    hariIni.setHours(0, 0, 0, 0);
-    const mulai = new Date(booking.tanggalMulai);
-    mulai.setHours(0, 0, 0, 0);
-    const selisihMs = mulai.getTime() - hariIni.getTime();
-    const selisihHari = selisihMs / (1000 * 60 * 60 * 24);
-    if (selisihHari < 1) {
-      res.status(409).json({ error: 'Pembatalan hanya bisa dilakukan maksimal H-1 sebelum tanggal mulai sewa' });
-      return;
-    }
+  // Cek syarat H-1: Pembatalan hanya bisa dilakukan maksimal H-1 sebelum tanggal mulai sewa
+  const hariIni = new Date();
+  hariIni.setHours(0, 0, 0, 0);
+  const mulai = new Date(booking.tanggalMulai);
+  mulai.setHours(0, 0, 0, 0);
+  const selisihMs = mulai.getTime() - hariIni.getTime();
+  const selisihHari = selisihMs / (1000 * 60 * 60 * 24);
+  if (selisihHari < 1) {
+    res.status(409).json({ error: 'Pembatalan hanya bisa dilakukan maksimal H-1 sebelum tanggal mulai sewa (misal booking tgl 21, batalkan maks tgl 20)' });
+    return;
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const b = await tx.booking.update({
       where: { id: booking.id },
       data: {
@@ -330,12 +343,40 @@ bookingsRouter.patch('/:id/cancel', async (req, res) => {
         statusLama: booking.status,
         statusBaru: 'dibatalkan',
         diubahOleh: req.user!.id,
+        catatan: alasanPembatalan || 'Dibatalkan oleh pelanggan',
       },
     });
-    return b;
+
+    // Buat record Refund jika berstatus dikonfirmasi atau payment sudah dibayar (paid)
+    let refund = booking.refund;
+    if (!refund && (booking.status === 'dikonfirmasi' || booking.payment?.status === 'paid')) {
+      refund = await tx.refund.create({
+        data: {
+          bookingId: booking.id,
+          paymentId: booking.payment?.id,
+          jumlahAsli: booking.totalHarga,
+          potonganAdmin: 0, // 100% full refund tanpa potongan admin
+          jumlahRefund: booking.totalHarga,
+          rekeningTujuan: rekeningRefund || null,
+          alasan: alasanPembatalan || null,
+          status: 'menunggu_persetujuan',
+        },
+      });
+    }
+
+    return { booking: b, refund };
   });
 
-  res.json({ data: updated });
+  if (result.refund) {
+    void notifyInstansi(booking.car.instansiId, {
+      type: 'booking',
+      title: 'Pengajuan Refund Baru',
+      message: `Pesanan #${booking.id.slice(0, 8)} (${booking.car.nama}) dibatalkan dan membutuhkan pengembalian dana 100%.`,
+      data: { actionUrl: `/admin/refunds`, bookingId: booking.id },
+    });
+  }
+
+  res.json({ data: result.booking, refund: result.refund });
 });
 
 /**

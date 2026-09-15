@@ -126,7 +126,51 @@ export interface Booking {
   profile?: { nama: string; email: string; noHp: string; dokumenVerified?: boolean };
   // expiresAt from checkout API response
   expiresAt?: string;
+  rekeningRefund?: string | null;
+  alasanPembatalan?: string | null;
+  refund?: RefundData;
+  payment?: {
+    id: string;
+    jumlah: string | number;
+    status: string;
+    metodeBayar: string;
+    paidAt?: string | null;
+  };
 }
+
+export type StatusRefund = 'menunggu_persetujuan' | 'disetujui' | 'diproses' | 'berhasil' | 'ditolak';
+
+export interface RefundData {
+  id: string;
+  bookingId: string;
+  paymentId?: string | null;
+  jumlahAsli: number | string;
+  potonganAdmin: number | string;
+  jumlahRefund: number | string;
+  rekeningTujuan?: string | null;
+  alasan?: string | null;
+  status: StatusRefund;
+  disetujuiOleh?: string | null;
+  disetujuiPada?: string | null;
+  diprosesOleh?: string | null;
+  selesaiPada?: string | null;
+  catatan?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  booking?: Booking;
+}
+
+export interface RefundStats {
+  menunggu_persetujuan: number;
+  disetujui: number;
+  diproses: number;
+  berhasil: number;
+  ditolak: number;
+  totalNilaiRefund?: number;
+  totalNilaiRefundBerhasil?: number;
+  totalNilaiRefundPending?: number;
+}
+
 
 export interface Review {
   id: string;
@@ -137,7 +181,11 @@ export interface Review {
   komentar: string | null;
   createdAt: string;
   profile?: { nama: string };
-  car?: { nama: string };
+  car?: {
+    nama: string;
+    images?: { url: string; isPrimary?: boolean }[];
+    instansi?: { id: string; namaInstansi: string };
+  };
 }
 
 export interface CreateBookingInput {
@@ -173,14 +221,19 @@ export interface InstansiDashboardData {
     status: string;
     dicairkanPada: string | null;
   }>;
+  refundStats?: {
+    pending: number;
+    diproses: number;
+    totalBerhasil: number;
+  };
 }
 
-// Data tren nyata (hari ini vs kemarin) + 7-day sparklines untuk StatCard di Admin Dashboard
+// Data tren nyata (bulan ini vs bulan lalu) + 7-day sparklines untuk StatCard di Admin Dashboard
 export interface InstansiDashboardTrends {
-  pendapatanHariIni: number;
-  bookingAktifHariIni: number;
-  armadaTersediaHariIni: number;
-  saldoTertundaHariIni: number;
+  pendapatanBulanIni: number;
+  bookingAktifBulanIni: number;
+  armadaTersediaBulanIni: number;
+  saldoTertundaBulanIni: number;
   trendPendapatan: number;
   trendBookingAktif: number;
   trendArmadaTersedia: number;
@@ -391,16 +444,80 @@ export interface DashboardActivity {
   metadata: Record<string, unknown> | null;
   createdBy: string | null;
   createdAt: string;
+  instansiNama?: string | null;
 }
 
 export interface InstansiActivity {
   id: string;
-  tipe: 'pesanan' | 'armada';
+  tipe: 'pesanan' | 'armada' | 'admin_activity' | string;
   judul: string;
   deskripsi: string;
   status: string;
   waktu: string;
   detailUrl?: string;
+  instansiNama?: string;
+}
+
+export interface InstansiFinancialItemRefund {
+  id: string;
+  bookingId: string;
+  carNama: string;
+  carPlat: string;
+  customerNama: string;
+  jumlahRefund: number;
+  rekeningTujuan: string;
+  alasan: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface InstansiFinancialData {
+  instansi: {
+    namaInstansi: string;
+    komisiPlatformPersen: number;
+    rekeningBank: string;
+  };
+  summary: {
+    totalGrossRevenue: number;
+    totalPlatformCommission: number;
+    totalNetRevenue: number;
+    saldoSiapDicairkanGross: number;
+    saldoSiapDicairkanNett: number;
+    saldoSudahDicairkanNett: number;
+    saldoDalamProsesNett: number;
+    totalRefundAmount?: number;
+    countRefundPending?: number;
+  };
+  disbursements: {
+    id: string;
+    status: string;
+    jumlahKotor: number;
+    komisiPlatform: number;
+    jumlahBersih: number;
+    rekeningTujuan: string;
+    catatan?: string | null;
+    createdAt: string;
+    dicairkanPada?: string | null;
+    itemCount: number;
+  }[];
+  bookings: {
+    id: string;
+    createdAt: string;
+    tanggalMulai: string;
+    tanggalSelesai: string;
+    statusBooking: string;
+    carNama: string;
+    carPlat: string;
+    customerNama: string;
+    gross: number;
+    komisiPlatform: number;
+    nett: number;
+    disbursementStatus: string;
+    disbursementId?: string | null;
+    refundStatus?: string | null;
+    refundJumlah?: number | null;
+  }[];
+  refunds?: InstansiFinancialItemRefund[];
 }
 
 export interface ApprovalSummary {
@@ -443,6 +560,7 @@ export interface TopCompany {
   totalRevenue: number;
   memberSince: string;
   growth: number;
+  percentageShare?: number;
 }
 
 export interface PopularVehicle {
@@ -465,20 +583,12 @@ export interface CommissionStats {
 }
 
 export interface SystemHealth {
-  server: { status: string; uptime: string };
+  server: { status: string; uptime: string; memory: string };
   database: { status: string; latency: string };
-  storage: { status: string; usage: string };
-  api: { status: string; requestsPerMinute: number };
-  cpu: { status: string; usage: string };
-  alerts: {
-    failedDisbursements: number;
-    pendingDisbursements: number;
-  };
-  stats?: {
-    totalBookings: number;
-    totalInstansi: number;
-    totalUsers: number;
-  };
+  storage: { status: string; latency: string };
+  pakasir?: { status: string; latency: string };
+  midtrans?: { status: string; latency: string };
+  system: { status: string; detail: string };
 }
 
 export interface PlatformSummary {
@@ -533,6 +643,7 @@ export interface SuperAdminTransactionItem {
 export interface TransactionSummary {
   totalMasuk: number;
   totalRefund: number;
+  totalKomisi?: number;
 }
 
 export interface SuperAdminReportsData {
@@ -563,6 +674,7 @@ export interface SuperAdminReportsData {
   };
   commission: {
     total: number;
+    disbursed?: number;
     pending: number;
     rate: number;
   };
@@ -842,6 +954,7 @@ export const api = {
       totalLokasi: number;
       totalBookingSelesai: number;
       totalReview: number;
+      avgRating?: number;
       kepuasanPersen: number;
     }>('/api/public/stats'),
 
@@ -870,6 +983,8 @@ export const api = {
     ),
   getInstansiActivities: () =>
     apiFetch<InstansiActivity[]>('/api/instansi/activities'),
+  getInstansiFinancials: () =>
+    apiFetch<InstansiFinancialData>('/api/instansi/financials'),
 
   // ── Unified Notifications (All Roles: Customer, Admin, SuperAdmin) ──
   getNotifications: (params?: { unreadOnly?: boolean; page?: number; limit?: number }) => {
@@ -1340,6 +1455,83 @@ export const api = {
   sendAdminMessage: (id: string, data: { pesan: string }) =>
     apiFetch<ChatMessage>(`/api/admin/messages/conversations/${id}/messages`, {
       method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
+  // ==========================================
+  // Refunds API
+  // ==========================================
+  getRefundByBooking: (bookingId: string) =>
+    apiFetch<{ refund: RefundData | null; booking: any }>(`/api/refunds/booking/${bookingId}`),
+
+  createRefund: (data: { bookingId: string; rekeningTujuan: string; alasan?: string }) =>
+    apiFetch<RefundData>('/api/refunds', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
+  listAdminRefunds: (params?: { page?: number; limit?: number; status?: StatusRefund; cari?: string; dari?: string; sampai?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', String(params.page));
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.cari) searchParams.set('cari', params.cari);
+    if (params?.dari) searchParams.set('dari', params.dari);
+    if (params?.sampai) searchParams.set('sampai', params.sampai);
+    const qs = searchParams.toString();
+    return apiFetch<{ data: RefundData[]; stats: RefundStats; meta: { page: number; limit: number; total: number; totalPages: number } }>(
+      `/api/refunds/admin${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  approveAdminRefund: (id: string, catatan?: string) =>
+    apiFetch<RefundData>(`/api/refunds/admin/${id}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ catatan }),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
+  processAdminRefund: (id: string, catatan?: string) =>
+    apiFetch<RefundData>(`/api/refunds/admin/${id}/process`, {
+      method: 'PATCH',
+      body: JSON.stringify({ catatan }),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
+  completeAdminRefund: (id: string, catatan?: string) =>
+    apiFetch<RefundData>(`/api/refunds/admin/${id}/complete`, {
+      method: 'PATCH',
+      body: JSON.stringify({ catatan }),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
+  rejectAdminRefund: (id: string, alasan: string) =>
+    apiFetch<RefundData>(`/api/refunds/admin/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ alasan }),
+      headers: { 'Content-Type': 'application/json' },
+    }),
+
+  listSuperAdminRefunds: (params?: { page?: number; limit?: number; instansiId?: string; status?: StatusRefund; cari?: string; dari?: string; sampai?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', String(params.page));
+    if (params?.limit) searchParams.set('limit', String(params.limit));
+    if (params?.instansiId) searchParams.set('instansiId', params.instansiId);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.cari) searchParams.set('cari', params.cari);
+    if (params?.dari) searchParams.set('dari', params.dari);
+    if (params?.sampai) searchParams.set('sampai', params.sampai);
+    const qs = searchParams.toString();
+    return apiFetch<{ data: RefundData[]; stats: RefundStats; meta: { page: number; limit: number; total: number; totalPages: number } }>(
+      `/api/refunds/superadmin${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  actionSuperAdminRefund: (id: string, data: { status: StatusRefund; catatan?: string }) =>
+    apiFetch<RefundData>(`/api/refunds/superadmin/${id}/action`, {
+      method: 'PATCH',
       body: JSON.stringify(data),
       headers: { 'Content-Type': 'application/json' },
     }),

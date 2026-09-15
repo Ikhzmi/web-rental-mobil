@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma';
 import { verifySupabaseToken, requireAdmin } from '../middleware/verifySupabaseToken';
 import { sendBookingConfirmedEmail, sendBookingCancelledEmail } from '../services/email.service';
 import { notifyUser, notifyInstansi } from '../services/notification.service';
+import { logAdminActivity } from '../services/activity.service';
 
 export const adminBookingsRouter = Router();
 
@@ -63,6 +64,8 @@ adminBookingsRouter.get('/', async (req, res) => {
           },
         },
         profile: { select: { nama: true, email: true, noHp: true } },
+        payment: true,
+        refund: true,
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -124,8 +127,10 @@ adminBookingsRouter.patch('/:id/status', async (req, res) => {
   const booking = await prisma.booking.findFirst({
     where: { id: req.params.id, car: { instansiId } },
     include: {
-      car: { select: { nama: true } },
+      car: { select: { nama: true, instansiId: true } },
       profile: { select: { nama: true, email: true } },
+      payment: true,
+      refund: true,
     },
   });
   if (!booking) {
@@ -152,8 +157,32 @@ adminBookingsRouter.patch('/:id/status', async (req, res) => {
         statusLama: booking.status,
         statusBaru: parsed.data.status,
         diubahOleh: req.user!.id,
+        catatan: `Status diubah oleh admin rental menjadi ${parsed.data.status}`,
       },
     });
+
+    // Jika dibatalkan dan pesanan sudah dibayar, otomatis buat refund dengan status disetujui
+    if (
+      parsed.data.status === 'dibatalkan' &&
+      !booking.refund &&
+      (booking.status === 'dikonfirmasi' || booking.payment?.status === 'paid')
+    ) {
+      await tx.refund.create({
+        data: {
+          bookingId: booking.id,
+          paymentId: booking.payment?.id,
+          jumlahAsli: booking.totalHarga,
+          potonganAdmin: 0,
+          jumlahRefund: booking.totalHarga,
+          rekeningTujuan: booking.rekeningRefund,
+          alasan: 'Dibatalkan oleh pihak rental',
+          status: 'disetujui',
+          disetujuiOleh: req.user!.id,
+          disetujuiPada: new Date(),
+        },
+      });
+    }
+
     return b;
   });
 
@@ -203,6 +232,15 @@ adminBookingsRouter.patch('/:id/status', async (req, res) => {
       data: { actionUrl: `/akun/pesanan/${booking.id}`, bookingId: booking.id },
     });
   }
+
+  void logAdminActivity({
+    instansiId,
+    userId: req.user!.id,
+    action: 'update_booking_status',
+    title: `Status Pesanan Diubah: ${parsed.data.status.toUpperCase()}`,
+    description: `${(req.user as any)?.nama || req.user?.email || 'Admin'} mengubah status pesanan #${booking.id.slice(0, 8)} (${booking.car?.nama ?? 'Armada'}) menjadi ${parsed.data.status}`,
+    metadata: { bookingId: booking.id, carNama: booking.car?.nama, newStatus: parsed.data.status, detailUrl: `/admin/pesanan/${booking.id}` },
+  });
 
   res.json({ data: updated });
 });

@@ -71,7 +71,7 @@ export function PlatformSummary() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-1.5">
-                  <span className={`text-xs ${isDark ? 'text-white/60' : 'text-slate-500'}`}>Commission</span>
+                  <span className={`text-xs ${isDark ? 'text-white/60' : 'text-slate-500'}`}>Komisi Platform</span>
                   <span className={`text-xs font-bold ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
                     {formatRupiah(summary.platformCommission)}
                   </span>

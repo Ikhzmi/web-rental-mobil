@@ -143,7 +143,7 @@ export default function ModernFooter() {
             <div className="space-y-3">
               <div className={`flex items-start gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
                 <MapPin className={`w-5 h-5 shrink-0 mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
-                <span className="text-sm">Jl. Sudirman No. 123, Jakarta</span>
+                <span className="text-sm">Desa Lengau Seprang Dusun 3, Kecamatan Tanjung Morawa, Kabupaten Deli Serdang, Sumatera Utara</span>
               </div>
               <div className={`flex items-center gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
                 <Phone className={`w-5 h-5 shrink-0 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
@@ -155,7 +155,7 @@ export default function ModernFooter() {
               </div>
               <div className={`flex items-center gap-3 ${isDark ? 'text-white/50' : 'text-slate-600'}`}>
                 <Clock className={`w-5 h-5 shrink-0 ${isDark ? 'text-white/50' : 'text-slate-500'}`} />
-                <span className="text-sm">24/7 Siap Melayani</span>
+                <span className="text-sm">24 Jam (Setiap Hari 24/7)</span>
               </div>
             </div>
           </div>
@@ -250,7 +250,7 @@ export default function ModernFooter() {
               <div className={`flex items-center gap-2 ${
                 isDark ? '' : 'bg-white rounded-lg px-2 py-1 shadow-sm border border-slate-100'
               }`}>
-                {['BCA', 'Mandiri', 'BNI', 'BRI', 'GoPay', 'OVO'].map((bank) => (
+                {['QRIS', 'BCA', 'Mandiri', 'BNI', 'BRI', 'Permata', 'GoPay', 'ShopeePay', 'DANA', 'Visa / Mastercard'].map((bank) => (
                   <div
                     key={bank}
                     className={`px-3 py-1 rounded-lg ${

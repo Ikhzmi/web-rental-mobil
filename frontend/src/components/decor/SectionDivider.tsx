@@ -6,7 +6,7 @@ interface SectionDividerProps {
 export default function SectionDivider({ type, isDark }: SectionDividerProps) {
   if (type === 'hero-to-fleet') {
     return (
-      <div className="relative w-full overflow-hidden leading-none z-10 -mt-1 pointer-events-none">
+      <div className={`relative w-full overflow-hidden leading-none z-10 -mt-1 pointer-events-none ${isDark ? 'bg-black' : 'bg-[#F9EFE8]'}`}>
         <svg
           viewBox="0 0 1440 80"
           fill="none"
@@ -14,7 +14,10 @@ export default function SectionDivider({ type, isDark }: SectionDividerProps) {
           className="w-full h-12 sm:h-16 md:h-20 block"
           preserveAspectRatio="none"
         >
-          {/* Latar Belakang Kurva Utama */}
+          {/* Latar Belakang Kurva Atas (Hero section transition) */}
+          <rect width="1440" height="80" fill={isDark ? '#000000' : '#F9EFE8'} />
+
+          {/* Latar Belakang Kurva Utama (Fleet section entrance) */}
           <path
             d="M0 0C360 55 1080 55 1440 0V80H0V0Z"
             fill={isDark ? '#0a0a0a' : '#f4f4f5'}
@@ -48,7 +51,7 @@ export default function SectionDivider({ type, isDark }: SectionDividerProps) {
 
   if (type === 'fleet-to-booking') {
     return (
-      <div className="relative w-full overflow-hidden leading-none z-10 -mt-1 pointer-events-none">
+      <div className={`relative w-full overflow-hidden leading-none z-10 -mt-1 pointer-events-none ${isDark ? 'bg-[#0a0a0a]' : 'bg-white'}`}>
         <svg
           viewBox="0 0 1440 90"
           fill="none"
@@ -56,6 +59,9 @@ export default function SectionDivider({ type, isDark }: SectionDividerProps) {
           className="w-full h-14 sm:h-18 md:h-24 block"
           preserveAspectRatio="none"
         >
+          {/* Latar Belakang Kurva Atas (Fleet section bottom) */}
+          <rect width="1440" height="90" fill={isDark ? '#0a0a0a' : '#ffffff'} />
+
           {/* Latar Belakang Kurva Masuk ke Cara Booking */}
           <path
             d="M0 20C480 85 960 -20 1440 45V90H0V20Z"
@@ -90,7 +96,7 @@ export default function SectionDivider({ type, isDark }: SectionDividerProps) {
 
   if (type === 'cta-to-footer') {
     return (
-      <div className="relative w-full overflow-hidden leading-none z-10 -mt-1 pointer-events-none">
+      <div className={`relative w-full overflow-hidden leading-none z-10 -mt-1 pointer-events-none ${isDark ? 'bg-[#0f0f12]' : 'bg-[#F9EFE8]'}`}>
         <svg
           viewBox="0 0 1440 80"
           fill="none"
@@ -98,6 +104,9 @@ export default function SectionDivider({ type, isDark }: SectionDividerProps) {
           className="w-full h-12 sm:h-16 md:h-20 block"
           preserveAspectRatio="none"
         >
+          {/* Latar Belakang Kurva Atas (CTA bottom) */}
+          <rect width="1440" height="80" fill={isDark ? '#0f0f12' : '#F9EFE8'} />
+
           {/* Latar Belakang Kurva Menuju Footer */}
           <path
             d="M0 50C360 5 1080 5 1440 50V80H0V50Z"

@@ -31,8 +31,8 @@ export default function SuperAdminReportsPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Export CSV generator
-  const handleExportCSV = () => {
+  // Export Excel generator with rich formatting & styles
+  const handleExportExcel = () => {
     if (!data) return;
 
     const periodLabel =
@@ -41,45 +41,204 @@ export default function SuperAdminReportsPage() {
       : selectedPeriod === '90d' ? '90 Hari Terakhir'
       : '1 Tahun Terakhir';
 
-    const rows = [
-      ['LAPORAN KINERJA PLATFORM KERENTAL KITA'],
-      [`Periode: ${periodLabel}`],
-      [`Tanggal Ekspor: ${new Date().toLocaleString('id-ID')}`],
-      [''],
-      ['KATEGORI', 'METRIK', 'NILAI', 'PERUBAHAN TREN'],
-      // Finansial
-      ['Finansial', 'Total Pendapatan Transaksi', formatRupiah(data.revenue.total), `${data.trends.revenue}%`],
-      ['Finansial', 'Pendapatan Bulan Ini', formatRupiah(data.revenue.thisMonth), '-'],
-      ['Finansial', 'Rata-rata Pendapatan Harian', formatRupiah(data.revenue.daily), '-'],
-      ['Finansial', 'Total Komisi Platform', formatRupiah(data.commission.total), `${data.trends.revenue}%`],
-      ['Finansial', 'Komisi Belum Dicairkan (Pending)', formatRupiah(data.commission.pending), '-'],
-      ['Finansial', 'Rata-rata Komisi Platform', `${data.commission.rate}%`, '-'],
-      // Pemesanan
-      ['Pemesanan', 'Total Pemesanan', data.booking.total, `${data.trends.booking}%`],
-      ['Pemesanan', 'Pemesanan Selesai', data.booking.total - data.booking.active, '-'],
-      ['Pemesanan', 'Pemesanan Sedang Aktif', data.booking.active, '-'],
-      ['Pemesanan', 'Tingkat Penyelesaian (Completion Rate)', `${data.booking.completionRate}%`, '-'],
-      // Pelanggan & Mitra
-      ['Pengguna & Mitra', 'Total Pelanggan Terdaftar', data.customer.total, '-'],
-      ['Pengguna & Mitra', 'Pelanggan Baru Periode Ini', data.customer.newThisPeriod, '-'],
-      ['Pengguna & Mitra', 'Tingkat Retensi Pelanggan', `${data.customer.retentionRate}%`, '-'],
-      ['Pengguna & Mitra', 'Total Instansi Rental Terdaftar', data.rental.total, '-'],
-      ['Pengguna & Mitra', 'Instansi Rental Aktif', data.rental.active, '-'],
-      ['Pengguna & Mitra', 'Rata-rata Pendapatan per Rental', formatRupiah(data.rental.avgRevenue), '-'],
-      // Armada
-      ['Armada', 'Total Armada Kendaraan', data.fleet.total, '-'],
-      ['Armada', 'Armada Tersedia', data.fleet.available, '-'],
-      ['Armada', 'Tingkat Utilisasi Armada', `${data.fleet.utilization}%`, '-'],
-    ];
+    const dateStr = new Date().toLocaleString('id-ID');
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const htmlContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Laporan Superadmin</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+          .title { font-size: 16pt; font-weight: bold; color: #065f46; text-align: left; padding: 10px 0; }
+          .meta { font-size: 10pt; color: #475569; margin-bottom: 15px; }
+          table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+          th { background-color: #065f46; color: #ffffff; font-weight: bold; text-align: left; padding: 10px; border: 1px solid #047857; }
+          td { padding: 8px 10px; border: 1px solid #cbd5e1; font-size: 10pt; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+          .category { font-weight: bold; color: #0f172a; background-color: #e2e8f0; }
+          .currency { text-align: right; font-family: monospace; font-weight: 600; }
+          .number { text-align: right; }
+          .bold { font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="title">LAPORAN KINERJA PLATFORM KERENTAL KITA</div>
+        <div class="meta">
+          <strong>Periode:</strong> ${periodLabel} &nbsp;&nbsp;|&nbsp;&nbsp;
+          <strong>Tanggal Ekspor:</strong> ${dateStr}
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Kategori</th>
+              <th>Metrik / Indikator</th>
+              <th style="text-align: right;">Nilai</th>
+              <th style="text-align: center;">Perubahan Tren</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- FINANSIAL -->
+            <tr>
+              <td class="category" colspan="4">1. KINERJA FINANSIAL & KOMISI PLATFORM</td>
+            </tr>
+            <tr>
+              <td>Finansial</td>
+              <td>Total Komisi Platform (Pendapatan Bersih Platform)</td>
+              <td class="currency">${formatRupiah(data.commission.total)}</td>
+              <td style="text-align: center;">${data.trends.revenue !== undefined ? (data.trends.revenue >= 0 ? '+' + data.trends.revenue + '%' : data.trends.revenue + '%') : '-'}</td>
+            </tr>
+            <tr>
+              <td>Finansial</td>
+              <td>Total Volume Transaksi Kotor Rental</td>
+              <td class="currency">${formatRupiah(data.revenue.total)}</td>
+              <td style="text-align: center;">${data.trends.revenue !== undefined ? (data.trends.revenue >= 0 ? '+' + data.trends.revenue + '%' : data.trends.revenue + '%') : '-'}</td>
+            </tr>
+            <tr>
+              <td>Finansial</td>
+              <td>Pendapatan Transaksi Bulan Berjalan</td>
+              <td class="currency">${formatRupiah(data.revenue.thisMonth)}</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Finansial</td>
+              <td>Rata-rata Pendapatan Transaksi Harian</td>
+              <td class="currency">${formatRupiah(data.revenue.daily)}</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Finansial</td>
+              <td>Komisi Belum Dicairkan (Pending)</td>
+              <td class="currency">${formatRupiah(data.commission.pending)}</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Finansial</td>
+              <td>Efektif Rate Komisi Platform</td>
+              <td class="number">${data.commission.rate}%</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+
+            <!-- PEMESANAN -->
+            <tr>
+              <td class="category" colspan="4">2. OPERASIONAL & PEMESANAN</td>
+            </tr>
+            <tr>
+              <td>Pemesanan</td>
+              <td>Total Pemesanan (Volume Booking)</td>
+              <td class="number">${data.booking.total} transaksi</td>
+              <td style="text-align: center;">${data.trends.booking !== undefined ? (data.trends.booking >= 0 ? '+' + data.trends.booking + '%' : data.trends.booking + '%') : '-'}</td>
+            </tr>
+            <tr>
+              <td>Pemesanan</td>
+              <td>Pemesanan Selesai</td>
+              <td class="number">${data.booking.total - data.booking.active} transaksi</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Pemesanan</td>
+              <td>Pemesanan Sedang Aktif</td>
+              <td class="number">${data.booking.active} transaksi</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Pemesanan</td>
+              <td>Tingkat Penyelesaian (Completion Rate)</td>
+              <td class="number">${data.booking.completionRate}%</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+
+            <!-- PENGGUNA & MITRA -->
+            <tr>
+              <td class="category" colspan="4">3. MITRA & PELANGGAN</td>
+            </tr>
+            <tr>
+              <td>Pengguna & Mitra</td>
+              <td>Total Pelanggan Terdaftar</td>
+              <td class="number">${data.customer.total} pengguna</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Pengguna & Mitra</td>
+              <td>Pelanggan Baru Periode Ini</td>
+              <td class="number">+${data.customer.newThisPeriod} pengguna</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Pengguna & Mitra</td>
+              <td>Tingkat Retensi Pelanggan (Retention Rate)</td>
+              <td class="number">${data.customer.retentionRate}%</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Pengguna & Mitra</td>
+              <td>Total Instansi Rental Terdaftar</td>
+              <td class="number">${data.rental.total} instansi</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Pengguna & Mitra</td>
+              <td>Instansi Rental Aktif</td>
+              <td class="number">${data.rental.active} instansi</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Pengguna & Mitra</td>
+              <td>Rata-rata Nilai per Rental</td>
+              <td class="currency">${formatRupiah(data.rental.avgRevenue)}</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+
+            <!-- ARMADA -->
+            <tr>
+              <td class="category" colspan="4">4. ARMADA KENDARAAN</td>
+            </tr>
+            <tr>
+              <td>Armada</td>
+              <td>Total Armada Kendaraan</td>
+              <td class="number">${data.fleet.total} unit</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Armada</td>
+              <td>Armada Tersedia Saat Ini</td>
+              <td class="number">${data.fleet.available} unit</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+            <tr>
+              <td>Armada</td>
+              <td>Tingkat Utilisasi Armada</td>
+              <td class="number">${data.fleet.utilization}%</td>
+              <td style="text-align: center;">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `laporan_superadmin_${selectedPeriod}_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.href = url;
+    link.setAttribute('download', `laporan_superadmin_${selectedPeriod}_${new Date().toISOString().slice(0, 10)}.xls`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -128,7 +287,7 @@ export default function SuperAdminReportsPage() {
 
           {/* Export Button */}
           <button
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             disabled={isLoading || !data}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-sm disabled:opacity-50 ${
               isDark
@@ -137,7 +296,7 @@ export default function SuperAdminReportsPage() {
             }`}
           >
             <Download size={15} />
-            Export CSV
+            Export Excel
           </button>
         </div>
       </motion.div>
@@ -185,16 +344,16 @@ export default function SuperAdminReportsPage() {
         <div className="space-y-6">
           {/* Executive Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Card 1: Total Pendapatan */}
+            {/* Card 1: Total Komisi Platform (Pendapatan Platform) */}
             <div className={`p-5 rounded-2xl border ${getGlassCardClass(isDark)}`}>
               <div className="flex items-center justify-between mb-2">
-                <span className={`text-xs font-medium ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Total Pendapatan</span>
+                <span className={`text-xs font-medium ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Total Komisi Platform</span>
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-500/15 text-emerald-400">
-                  <DollarSign size={16} />
+                  <CreditCard size={16} />
                 </div>
               </div>
               <p className={`text-xl sm:text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {formatRupiah(data.revenue.total)}
+                {formatRupiah(data.commission.total)}
               </p>
               {data.trends.revenue !== undefined && (
                 <div className={`flex items-center gap-1 text-xs font-semibold ${
@@ -207,16 +366,16 @@ export default function SuperAdminReportsPage() {
               )}
             </div>
 
-            {/* Card 2: Total Komisi */}
+            {/* Card 2: Total Volume Transaksi Kotor */}
             <div className={`p-5 rounded-2xl border ${getGlassCardClass(isDark)}`}>
               <div className="flex items-center justify-between mb-2">
-                <span className={`text-xs font-medium ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Total Komisi Platform</span>
+                <span className={`text-xs font-medium ${isDark ? 'text-white/50' : 'text-slate-500'}`}>Total Transaksi Kotor</span>
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-500/15 text-blue-400">
-                  <CreditCard size={16} />
+                  <DollarSign size={16} />
                 </div>
               </div>
               <p className={`text-xl sm:text-2xl font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {formatRupiah(data.commission.total)}
+                {formatRupiah(data.revenue.total)}
               </p>
               <p className={`text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}>
                 Pending: <span className="font-semibold text-amber-400">{formatRupiah(data.commission.pending)}</span>
