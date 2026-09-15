@@ -836,7 +836,7 @@ instansiRouter.get('/activities', async (req, res) => {
       const actionType = (act.data as any)?.action || 'admin';
       activities.push({
         id: `admin-${act.id}`,
-        tipe: 'admin_activity',
+        tipe: 'admin',
         judul: act.title,
         deskripsi: act.message,
         status: actionType,
